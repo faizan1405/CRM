@@ -28,6 +28,7 @@ export type NotificationFilter =
   | "ai_suggestions"
   | "resolved";
 
+<<<<<<< HEAD
 export const NOTIFICATION_TYPE_MAP: Record<NotificationTypeKey, PrismaNotificationType> = {
   overdue_followup: "OVERDUE_FOLLOWUP",
   followup_due_today: "FOLLOWUP_DUE_TODAY",
@@ -90,6 +91,7 @@ export const PRISMA_TO_STATUS_MAP: Record<PrismaNotificationStatus, Notification
   DISMISSED: "dismissed",
 };
 
+
 export interface SmartNotification {
   id: string;
   leadId: string;
@@ -97,15 +99,15 @@ export interface SmartNotification {
   business?: string | null;
   phone?: string | null;
   type: NotificationTypeKey;
-  rawType: PrismaNotificationType;
+  rawType?: PrismaNotificationType;
   typeLabel: string;
   priority: NotificationPriorityKey;
-  rawPriority: PrismaNotificationPriority;
-  reason: string;
+  rawPriority?: PrismaNotificationPriority;
+  reason: string; // Explains WHY this notification exists
   timestamp: string;
-  recommendedAction: string;
+  recommendedAction: string; // e.g. "Call today", "Follow up at 2:00 PM"
   status: NotificationStatusKey;
-  rawStatus: PrismaNotificationStatus;
+  rawStatus?: PrismaNotificationStatus;
   amount?: number | null;
   stage?: string | null;
   dueDate?: string | null;
@@ -117,4 +119,13 @@ export interface NotificationActionResult<T> {
   success: boolean;
   data?: T;
   error?: string;
+}
+
+export interface NotificationsProps {
+  initialNotifications?: SmartNotification[];
+  onMarkRead?: (id: string) => Promise<void> | void;
+  onMarkDone?: (id: string) => Promise<void> | void;
+  onDismiss?: (id: string) => Promise<void> | void;
+  onAddFollowUp?: (notification: SmartNotification) => void;
+  onOpenLead?: (leadId: string) => void;
 }
