@@ -24,9 +24,34 @@ export type Lead = {
   nextFollowUpDate: string | null;
   notes: string;
   createdAt: string;
+  updatedAt: string;
 };
 
 export type NewLeadInput = Pick<
   Lead,
   "name" | "phone" | "email" | "business" | "industry" | "source" | "budget" | "status"
 >;
+
+export type LeadActionResult<T = undefined> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+export const statusToDatabase = {
+  New: "NEW",
+  Contacted: "CONTACTED",
+  Qualified: "QUALIFIED",
+  "Proposal Sent": "PROPOSAL_SENT",
+  Won: "WON",
+  Lost: "LOST",
+} as const;
+
+export type DatabaseLeadStatus = (typeof statusToDatabase)[LeadStatus];
+
+export const statusFromDatabase: Record<DatabaseLeadStatus, LeadStatus> = {
+  NEW: "New",
+  CONTACTED: "Contacted",
+  QUALIFIED: "Qualified",
+  PROPOSAL_SENT: "Proposal Sent",
+  WON: "Won",
+  LOST: "Lost",
+};
