@@ -2,7 +2,7 @@
 
 import { getSession } from "@/lib/auth";
 import { getFollowUps } from "./follow-ups";
-import { FollowUp } from "@/features/follow-ups/types";
+import type { FollowUp } from "@/features/followups/types";
 
 class UserFacingError extends Error {}
 

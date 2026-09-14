@@ -1,0 +1,57 @@
+export type FollowUpType = "Call" | "WhatsApp" | "Email" | "Other";
+
+export type FollowUpStatus = "Pending" | "Completed" | "Cancelled";
+
+export const typeToDatabase: Record<string, "CALL" | "WHATSAPP" | "EMAIL" | "OTHER"> = {
+  Call: "CALL",
+  WhatsApp: "WHATSAPP",
+  Email: "EMAIL",
+  Other: "OTHER",
+};
+
+export const statusFromDatabase: Record<"PENDING" | "COMPLETED" | "CANCELLED", FollowUpStatus> = {
+  PENDING: "Pending",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+};
+
+export const typeFromDatabase: Record<"CALL" | "WHATSAPP" | "EMAIL" | "OTHER", FollowUpType> = {
+  CALL: "Call",
+  WHATSAPP: "WhatsApp",
+  EMAIL: "Email",
+  OTHER: "Other",
+};
+
+export type FollowUp = {
+  id: string;
+  leadId: string;
+  scheduledAt: string;
+  type: FollowUpType;
+  status: FollowUpStatus;
+  note: string;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lead?: {
+    id: string;
+    name: string;
+    business: string;
+    phone: string | null;
+    status: string;
+  };
+};
+
+export type NewFollowUpInput = {
+  leadId: string;
+  scheduledAt: string;
+  type: string;
+  note: string;
+};
+
+export type FollowUpActionResult<T = undefined> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+export const followUpTypes: FollowUpType[] = ["Call", "WhatsApp", "Email", "Other"];
+
+export const followUpStatuses: FollowUpStatus[] = ["Pending", "Completed", "Cancelled"];

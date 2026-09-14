@@ -9,7 +9,7 @@ import {
   typeToDatabase,
   statusFromDatabase,
   typeFromDatabase,
-} from "@/features/follow-ups/types";
+} from "@/features/followups/types";
 
 class UserFacingError extends Error {}
 
