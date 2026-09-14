@@ -39,6 +39,7 @@ export const SUPPORTED_PLACEHOLDERS: PlaceholderInfo[] = [
   },
 ];
 
+
 export const ALLOWED_PLACEHOLDER_KEYS = new Set(SUPPORTED_PLACEHOLDERS.map((p) => p.key));
 
 /**
@@ -176,4 +177,38 @@ export function renderWhatsAppMessage(
     .trim();
 
   return rendered;
+/**
+ * Sample preview map for visual demonstration in template manager
+ */
+export const SAMPLE_PREVIEW_VALUES: Record<string, string> = {
+  "{name}": "Rahul",
+  "{business}": "Apex Logistics",
+  "{requirement}": "Custom CRM System",
+  "{budget}": "₹45,000",
+  "{followUpDate}": "Tomorrow (16 Sep)",
+  "{followUpTime}": "11:30 AM",
+};
+
+/**
+ * Replaces placeholders with values from a given lead or fallback preview values
+ */
+export function interpolatePlaceholders(
+  templateText: string,
+  lead?: WhatsAppComposerLead | null,
+  fallbackToSamples = true
+): string {
+  if (!templateText) return "";
+
+  if (lead) {
+     return renderWhatsAppMessage(templateText, lead);
+  }
+
+  if (fallbackToSamples) {
+    let result = templateText;
+    for (const [key, value] of Object.entries(SAMPLE_PREVIEW_VALUES)) {
+      result = result.replaceAll(key, value);
+    }
+    return result;
+  }
+  return templateText;
 }

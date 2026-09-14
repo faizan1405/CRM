@@ -1,0 +1,88 @@
+import type { WhatsAppTemplate } from "./types";
+
+/**
+ * Isolated mock templates for WhatsApp Messages.
+ * Can be safely deleted once connected to backend database.
+ */
+export const initialMockWhatsAppTemplates: WhatsAppTemplate[] = [
+  {
+    id: "tpl-1",
+    title: "Initial Outreach & Intro",
+    category: "first_contact",
+    categoryLabel: "First Contact",
+    body: "Hi {name}, thank you for reaching out regarding {requirement} for {business}! I wanted to introduce myself and share how we can assist. Would you be open for a quick 5-minute call today?",
+    active: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+  },
+  {
+    id: "tpl-2",
+    title: "Post-Call Summary & Highlights",
+    category: "after_call",
+    categoryLabel: "After Call",
+    body: "Hi {name}, great speaking with you today! As discussed, I've noted down your requirements for {requirement}. I am preparing the details tailored to your budget of {budget}. I will share them shortly.",
+    active: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 36).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 36).toISOString(),
+  },
+  {
+    id: "tpl-3",
+    title: "Standard Pipeline Follow-up",
+    category: "follow_up",
+    categoryLabel: "Follow-up",
+    body: "Hi {name}, just checking in regarding our conversation about {business}. As scheduled, I'm following up on {followUpDate} at {followUpTime}. Let me know if you have any questions!",
+    active: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+  },
+  {
+    id: "tpl-4",
+    title: "Official Proposal Delivery",
+    category: "quotation_sent",
+    categoryLabel: "Quotation Sent",
+    body: "Hi {name}, I have just sent over the formal quotation for {business} covering {requirement} (Quoted: {budget}). Please review the document and let me know your thoughts.",
+    active: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 20).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 20).toISOString(),
+  },
+  {
+    id: "tpl-5",
+    title: "Quotation Review & Feedback",
+    category: "quotation_followup",
+    categoryLabel: "Quotation Follow-up",
+    body: "Hi {name}, following up on the quotation of {budget} sent for {business}. Did you get a chance to review the scope? We are ready to adjust terms or answer any technical questions.",
+    active: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 16).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 16).toISOString(),
+  },
+  {
+    id: "tpl-6",
+    title: "Friendly Check-in / No Response",
+    category: "no_response",
+    categoryLabel: "No Response",
+    body: "Hi {name}, I hope you are having a productive week! I understand you might be busy. Whenever you have a moment, please let me know if you are still looking to proceed with {requirement}.",
+    active: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
+  },
+  {
+    id: "tpl-7",
+    title: "Final Follow-up & Closing File",
+    category: "final_followup",
+    categoryLabel: "Final Follow-up",
+    body: "Hi {name}, I haven't heard back regarding {business}, so I assume priorities may have shifted. I'll pause follow-ups for now so I don't crowd your inbox. Feel free to reach out anytime when you're ready to revisit!",
+    active: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
+  },
+  {
+    id: "tpl-8",
+    title: "Welcome & Thank You Onboarding",
+    category: "converted",
+    categoryLabel: "Converted / Thank You",
+    body: "Hi {name}, exciting news! 🎉 Welcome to the family. We are thrilled to partner with {business} on {requirement}. Our onboarding team will connect with you on {followUpDate} at {followUpTime}.",
+    active: true,
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
+  },
+];

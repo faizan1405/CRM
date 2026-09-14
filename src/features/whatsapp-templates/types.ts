@@ -10,6 +10,7 @@ export type WhatsAppTemplateCategoryKey =
   | "final_followup"
   | "converted";
 
+
 export const CATEGORY_MAP: Record<WhatsAppTemplateCategoryKey, PrismaWhatsAppTemplateCategory> = {
   first_contact: "FIRST_CONTACT",
   after_call: "AFTER_CALL",
@@ -47,7 +48,7 @@ export interface WhatsAppTemplate {
   id: string;
   title: string;
   category: WhatsAppTemplateCategoryKey;
-  rawCategory: PrismaWhatsAppTemplateCategory;
+  rawCategory?: PrismaWhatsAppTemplateCategory;
   categoryLabel: string;
   body: string;
   active: boolean;
@@ -86,4 +87,13 @@ export interface TemplateActionResult<T> {
   success: boolean;
   data?: T;
   error?: string;
+}
+
+export interface WhatsAppTemplatesProps {
+  initialTemplates?: WhatsAppTemplate[];
+  onCreateTemplate?: (template: Omit<WhatsAppTemplate, "id" | "createdAt" | "updatedAt">) => Promise<WhatsAppTemplate | void> | void;
+  onUpdateTemplate?: (id: string, updates: Partial<WhatsAppTemplate>) => Promise<WhatsAppTemplate | void> | void;
+  onDeleteTemplate?: (id: string) => Promise<void> | void;
+  onDuplicateTemplate?: (template: WhatsAppTemplate) => Promise<WhatsAppTemplate | void> | void;
+  onAIPersonalize?: (lead: WhatsAppComposerLead, templateBody: string) => Promise<string> | string;
 }
