@@ -15,10 +15,18 @@ import type { Lead, LeadStatus } from "@/features/leads/types";
 import { useLeadActivities } from "@/features/activity/use-activities";
 import { FollowUpForm } from "@/features/followups/follow-up-form";
 import type { NewFollowUpInput } from "@/features/followups/types";
+import type { DuplicateLeadCandidate, StructuredLeadDraft, StructureLeadCallback } from "@/features/leads/ai-entry-types";
+import { structureLeadAction, updateExistingLeadWithDraftAction } from "@/app/actions/ai-lead-entry";
 
 type Feedback = { tone: "success" | "error"; message: string } | null;
 
-export function LeadsWorkspace({ initialLeads, initialError }: { initialLeads: Lead[]; initialError: string | null }) {
+type LeadsWorkspaceProps = {
+  initialLeads: Lead[];
+  initialError: string | null;
+  onStructureLead?: StructureLeadCallback;
+};
+
+export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: LeadsWorkspaceProps) {
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<LeadStatus | "All">("All");
@@ -56,8 +64,8 @@ export function LeadsWorkspace({ initialLeads, initialError }: { initialLeads: L
   }, [leads, query, status]);
 
   function replaceLead(updatedLead: Lead) {
-    setLeads((current) => current.map((lead) => lead.id === updatedLead.id ? updatedLead : lead));
-    setSelectedLead((current) => current?.id === updatedLead.id ? updatedLead : current);
+    setLeads((current) => current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead)));
+    setSelectedLead((current) => (current?.id === updatedLead.id ? updatedLead : current));
   }
 
   async function saveLead(formData: FormData) {
@@ -84,6 +92,37 @@ export function LeadsWorkspace({ initialLeads, initialError }: { initialLeads: L
     else setFeedback({ tone: "error", message: result.error });
   }
 
+  function findDuplicate(candidate: DuplicateLeadCandidate) {
+    return leads.find((lead) => lead.id === candidate.id);
+  }
+
+  function openDuplicate(candidate: DuplicateLeadCandidate) {
+    const existing = findDuplicate(candidate);
+    if (!existing) {
+      setFeedback({ tone: "error", message: "That existing lead is not available in this list." });
+      return;
+    }
+    setFormOpen(false);
+    setEditingLead(null);
+    void selectLead(existing);
+  }
+
+  async function updateDuplicate(candidate: DuplicateLeadCandidate, draft: StructuredLeadDraft) {
+    setSaving(true);
+    setFeedback(null);
+    const result = await updateExistingLeadWithDraftAction(candidate.id, draft);
+    setSaving(false);
+    if (!result.success) {
+      setFeedback({ tone: "error", message: result.error });
+      return;
+    }
+    replaceLead(result.data);
+    setFormOpen(false);
+    setEditingLead(null);
+    setFeedback({ tone: "success", message: "Existing lead updated with AI details." });
+    void selectLead(result.data);
+  }
+
   async function saveFollowUp(data: NewFollowUpInput) {
     setSaving(true);
     setFeedback(null);
@@ -100,8 +139,18 @@ export function LeadsWorkspace({ initialLeads, initialError }: { initialLeads: L
     }
 
     const nextDate = new Date(result.data.scheduledAt).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-    setLeads((current) => current.map((lead) => lead.id === data.leadId && (!lead.nextFollowUpDate || nextDate < lead.nextFollowUpDate) ? { ...lead, nextFollowUpDate: nextDate } : lead));
-    setSelectedLead((current) => current?.id === data.leadId && (!current.nextFollowUpDate || nextDate < current.nextFollowUpDate) ? { ...current, nextFollowUpDate: nextDate } : current);
+    setLeads((current) =>
+      current.map((lead) =>
+        lead.id === data.leadId && (!lead.nextFollowUpDate || nextDate < lead.nextFollowUpDate)
+          ? { ...lead, nextFollowUpDate: nextDate }
+          : lead
+      )
+    );
+    setSelectedLead((current) =>
+      current?.id === data.leadId && (!current.nextFollowUpDate || nextDate < current.nextFollowUpDate)
+        ? { ...current, nextFollowUpDate: nextDate }
+        : current
+    );
     if (selectedLead?.id === data.leadId) await refreshActivities();
     setFollowUpLead(null);
     setFeedback({ tone: "success", message: "Follow-up added." });
@@ -138,31 +187,102 @@ export function LeadsWorkspace({ initialLeads, initialError }: { initialLeads: L
       <PageHeader
         title="Leads"
         description="Review prospects, priorities and next steps."
-        actions={<button type="button" onClick={() => { setEditingLead(null); setFormOpen(true); }} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 sm:w-auto"><Plus aria-hidden="true" size={18} /> Add Lead</button>}
+        actions={
+          <button
+            type="button"
+            onClick={() => {
+              setEditingLead(null);
+              setFormOpen(true);
+            }}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 sm:w-auto"
+          >
+            <Plus aria-hidden="true" size={18} /> Add Lead
+          </button>
+        }
       />
 
-      {feedback && <div role={feedback.tone === "error" ? "alert" : "status"} className={`flex items-center justify-between gap-4 rounded-lg border px-4 py-3 text-sm font-medium ${feedback.tone === "error" ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}><span>{feedback.message}</span><button type="button" onClick={() => setFeedback(null)} className="shrink-0 font-semibold">Dismiss</button></div>}
+      {feedback && (
+        <div
+          role={feedback.tone === "error" ? "alert" : "status"}
+          className={`flex items-center justify-between gap-4 rounded-lg border px-4 py-3 text-sm font-medium ${
+            feedback.tone === "error"
+              ? "border-rose-200 bg-rose-50 text-rose-800"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800"
+          }`}
+        >
+          <span>{feedback.message}</span>
+          <button type="button" onClick={() => setFeedback(null)} className="shrink-0 font-semibold">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <LeadFilters query={query} status={status} onQueryChange={setQuery} onStatusChange={setStatus} onClear={clearFilters} />
 
-      <section aria-label="Lead list" className="overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3.5 sm:px-5"><p className="text-sm font-semibold text-slate-900">{filteredLeads.length} {filteredLeads.length === 1 ? "lead" : "leads"}</p><p className="text-xs font-medium text-slate-500">Saved CRM records</p></div>
+      <section
+        aria-label="Lead list"
+        className="overflow-hidden rounded-xl border border-[var(--border)] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.04)]"
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3.5 sm:px-5">
+          <p className="text-sm font-semibold text-slate-900">
+            {filteredLeads.length} {filteredLeads.length === 1 ? "lead" : "leads"}
+          </p>
+          <p className="text-xs font-medium text-slate-500">Saved CRM records</p>
+        </div>
         {leads.length === 0 ? (
-          <div className="p-4 sm:p-6"><EmptyState title="No leads yet" description="Add your first lead to begin building the pipeline." icon={UsersRound} /></div>
+          <div className="p-4 sm:p-6">
+            <EmptyState title="No leads yet" description="Add your first lead to begin building the pipeline." icon={UsersRound} />
+          </div>
         ) : filteredLeads.length === 0 ? (
-          <div className="p-4 sm:p-6"><EmptyState title="No leads match your filters." description="Try changing your search or clearing the filters." icon={SearchX} /></div>
+          <div className="p-4 sm:p-6">
+            <EmptyState
+              title="No leads match your filters."
+              description="Try changing your search or clearing the filters."
+              icon={SearchX}
+            />
+          </div>
         ) : (
-          <><LeadTable leads={filteredLeads} onSelect={selectLead} /><div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4 lg:hidden">{filteredLeads.map((lead) => <LeadCard key={lead.id} lead={lead} onSelect={selectLead} onAddFollowUp={setFollowUpLead} />)}</div></>
+          <>
+            <LeadTable leads={filteredLeads} onSelect={selectLead} />
+            <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4 lg:hidden">
+              {filteredLeads.map((lead) => (
+                <LeadCard key={lead.id} lead={lead} onSelect={selectLead} onAddFollowUp={setFollowUpLead} />
+              ))}
+            </div>
+          </>
         )}
       </section>
 
-      <LeadForm open={formOpen} lead={editingLead} saving={saving} onClose={() => { if (!saving) { setFormOpen(false); setEditingLead(null); } }} onSubmit={saveLead} />
-      <LeadDetailPanel 
-        lead={selectedLead} 
-        saving={saving} 
-        onClose={() => { setSelectedLead(null); setDetailAction(null); }}
-        onEdit={() => { if (selectedLead) { setEditingLead(selectedLead); setSelectedLead(null); setFormOpen(true); } }} 
-        onStatusChange={setLeadStatus} 
+      <LeadForm
+        open={formOpen}
+        lead={editingLead}
+        saving={saving}
+        onClose={() => {
+          if (!saving) {
+            setFormOpen(false);
+            setEditingLead(null);
+          }
+        }}
+        onSubmit={saveLead}
+        onStructureLead={onStructureLead || structureLeadAction}
+        onOpenDuplicate={openDuplicate}
+        onUpdateDuplicate={updateDuplicate}
+      />
+      <LeadDetailPanel
+        lead={selectedLead}
+        saving={saving}
+        onClose={() => {
+          setSelectedLead(null);
+          setDetailAction(null);
+        }}
+        onEdit={() => {
+          if (selectedLead) {
+            setEditingLead(selectedLead);
+            setSelectedLead(null);
+            setFormOpen(true);
+          }
+        }}
+        onStatusChange={setLeadStatus}
         onDelete={removeLead}
         activities={activities}
         activityFilter={activityFilter}
@@ -173,7 +293,16 @@ export function LeadsWorkspace({ initialLeads, initialError }: { initialLeads: L
         onEditNote={handleEditNote}
         onDeleteNote={handleDeleteNote}
       />
-      <FollowUpForm isOpen={Boolean(followUpLead)} defaultLeadId={followUpLead?.id} leads={followUpLead ? [{ id: followUpLead.id, name: followUpLead.name }] : []} saving={saving} onClose={() => { if (!saving) setFollowUpLead(null); }} onSubmit={saveFollowUp} />
+      <FollowUpForm
+        isOpen={Boolean(followUpLead)}
+        defaultLeadId={followUpLead?.id}
+        leads={followUpLead ? [{ id: followUpLead.id, name: followUpLead.name }] : []}
+        saving={saving}
+        onClose={() => {
+          if (!saving) setFollowUpLead(null);
+        }}
+        onSubmit={saveFollowUp}
+      />
     </div>
   );
 }
