@@ -1,27 +1,33 @@
 import { TrendingUp, CircleDollarSign, BarChart3 } from "lucide-react";
 
-export function RevenueSnapshot() {
-  const data = [
+export function RevenueSnapshot({ data }: { data: { won: number; openPipeline: number; avgWonDeal: number } }) {
+  const formatCurrency = (val: number) => new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0
+  }).format(val);
+
+  const displayData = [
     {
       label: "Won Revenue",
-      value: "$84,500",
-      trend: "+15% from last month",
+      value: formatCurrency(data.won),
+      trend: "Total to date",
       icon: CircleDollarSign,
       color: "text-emerald-600",
       bg: "bg-emerald-50",
     },
     {
       label: "Open Pipeline Value",
-      value: "$142,000",
-      trend: "24 active deals",
+      value: formatCurrency(data.openPipeline),
+      trend: "Active stages",
       icon: TrendingUp,
       color: "text-blue-600",
       bg: "bg-blue-50",
     },
     {
       label: "Average Won Deal",
-      value: "$3,520",
-      trend: "+2% from last month",
+      value: formatCurrency(data.avgWonDeal),
+      trend: "Based on won deals",
       icon: BarChart3,
       color: "text-purple-600",
       bg: "bg-purple-50",
@@ -30,7 +36,7 @@ export function RevenueSnapshot() {
 
   return (
     <div className="flex flex-col gap-3">
-      {data.map((item, i) => (
+      {displayData.map((item, i) => (
         <div key={i} className="flex items-center justify-between rounded-xl border bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-4">
             <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${item.bg}`}>

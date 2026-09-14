@@ -53,6 +53,13 @@ export function FollowUpsWorkspace({
     setFollowUps(initialFollowUps);
   }, [initialFollowUps]);
 
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search.includes("new=true")) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFormOpen(true);
+    }
+  }, []);
+
   const stats = useMemo(() => {
     const pending = followUps.filter((f) => f.status === "Pending");
     return {

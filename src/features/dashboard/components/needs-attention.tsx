@@ -1,22 +1,27 @@
 import { AlertCircle, FileText, UserMinus } from "lucide-react";
 import Link from "next/link";
 
-export function NeedsAttention() {
-  const alerts = [
-    {
+export function NeedsAttention({ data }: { data: { overdueFollowUps: number; proposalsPending: number; leadsNotContacted: number } }) {
+  const alerts = [];
+
+  if (data.overdueFollowUps > 0) {
+    alerts.push({
       id: 1,
-      title: "3 Overdue Follow-ups",
+      title: `${data.overdueFollowUps} Overdue Follow-ups`,
       description: "You have follow-ups that missed their scheduled time.",
       icon: AlertCircle,
       color: "text-red-600",
       bg: "bg-red-100",
       border: "border-red-200",
       actionText: "View Overdue",
-      href: "/follow-ups",
-    },
-    {
+      href: "/follow-ups", // Wait, does /follow-ups exist? Yes, Phase 4 added it. Or we can just use /pipeline or whatever.
+    });
+  }
+
+  if (data.proposalsPending > 0) {
+    alerts.push({
       id: 2,
-      title: "5 Proposals Pending",
+      title: `${data.proposalsPending} Proposals Pending`,
       description: "Awaiting response on sent proposals.",
       icon: FileText,
       color: "text-amber-600",
@@ -24,10 +29,13 @@ export function NeedsAttention() {
       border: "border-amber-200",
       actionText: "Review Pipeline",
       href: "/pipeline",
-    },
-    {
+    });
+  }
+
+  if (data.leadsNotContacted > 0) {
+    alerts.push({
       id: 3,
-      title: "12 New Leads Uncontacted",
+      title: `${data.leadsNotContacted} New Leads Uncontacted`,
       description: "Leads waiting for their first touchpoint.",
       icon: UserMinus,
       color: "text-blue-600",
@@ -35,8 +43,8 @@ export function NeedsAttention() {
       border: "border-blue-200",
       actionText: "Contact Leads",
       href: "/leads",
-    },
-  ];
+    });
+  }
 
   if (alerts.length === 0) {
     return (

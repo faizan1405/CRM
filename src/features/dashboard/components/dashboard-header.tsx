@@ -14,14 +14,14 @@ export function DashboardHeader() {
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-3">
         <Link
-          href="/leads"
+          href="/leads?new=true"
           className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-white px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-blue-700 transition-colors"
         >
           <PlusCircle className="h-4 w-4" />
           Add Lead
         </Link>
         <Link
-          href="/follow-ups"
+          href="/follow-ups?new=true"
           className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-800/40 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-blue-700 transition-colors backdrop-blur-sm border border-blue-400/30"
         >
           <CalendarPlus className="h-4 w-4" />

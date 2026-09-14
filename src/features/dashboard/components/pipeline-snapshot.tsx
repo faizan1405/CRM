@@ -1,13 +1,12 @@
 import Link from "next/link";
 
-
-export function PipelineSnapshot() {
+export function PipelineSnapshot({ data }: { data: { new: number; contacted: number; qualified: number; proposal: number; won: number; lost: number } }) {
   const pipelineStages = [
-    { name: "New", count: 18, color: "bg-blue-500", text: "text-blue-700" },
-    { name: "Contacted", count: 24, color: "bg-cyan-500", text: "text-cyan-700" },
-    { name: "Qualified", count: 12, color: "bg-purple-500", text: "text-purple-700" },
-    { name: "Proposal", count: 8, color: "bg-amber-500", text: "text-amber-700" },
-    { name: "Won", count: 32, color: "bg-green-500", text: "text-green-700" },
+    { name: "New", count: data.new, color: "bg-blue-500", text: "text-blue-700" },
+    { name: "Contacted", count: data.contacted, color: "bg-cyan-500", text: "text-cyan-700" },
+    { name: "Qualified", count: data.qualified, color: "bg-purple-500", text: "text-purple-700" },
+    { name: "Proposal", count: data.proposal, color: "bg-amber-500", text: "text-amber-700" },
+    { name: "Won", count: data.won, color: "bg-green-500", text: "text-green-700" },
   ];
 
   const total = pipelineStages.reduce((sum, stage) => sum + stage.count, 0);

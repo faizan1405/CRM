@@ -38,15 +38,21 @@ export function KPICard({ label, value, icon: Icon, colorScheme, supportText }: 
   );
 }
 
-export function KPICards({ data }: { data?: { total: number; new: number; qualified: number; won: number; followUps: number; revenue: string } }) {
-  // Using static fallbacks for mock data when real data is unavailable
+export function KPICards({ data }: { data: { totalLeads: number; newLeads: number; qualifiedLeads: number; wonClients: number; followUpsToday: number; wonRevenue: number } }) {
+  
+  const formattedRevenue = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0
+  }).format(data.wonRevenue);
+
   const stats = [
-    { label: "Total Leads", value: data?.total ?? 142, icon: UsersRound, colorScheme: "default" as const, supportText: "+12 this month" },
-    { label: "New Leads", value: data?.new ?? 18, icon: UserPlus, colorScheme: "blue" as const, supportText: "Needs contact" },
-    { label: "Qualified", value: data?.qualified ?? 45, icon: BadgeCheck, colorScheme: "purple" as const, supportText: "Active pipeline" },
-    { label: "Won Clients", value: data?.won ?? 32, icon: Handshake, colorScheme: "green" as const, supportText: "Last 30 days" },
-    { label: "Follow-ups Today", value: data?.followUps ?? 8, icon: CalendarClock, colorScheme: "orange" as const, supportText: "3 overdue" },
-    { label: "Revenue", value: data?.revenue ?? "$84,500", icon: CircleDollarSign, colorScheme: "emerald" as const, supportText: "+15% vs last month" },
+    { label: "Total Leads", value: data.totalLeads, icon: UsersRound, colorScheme: "default" as const },
+    { label: "New Leads", value: data.newLeads, icon: UserPlus, colorScheme: "blue" as const },
+    { label: "Qualified", value: data.qualifiedLeads, icon: BadgeCheck, colorScheme: "purple" as const },
+    { label: "Won Clients", value: data.wonClients, icon: Handshake, colorScheme: "green" as const },
+    { label: "Follow-ups Today", value: data.followUpsToday, icon: CalendarClock, colorScheme: "orange" as const },
+    { label: "Revenue", value: formattedRevenue, icon: CircleDollarSign, colorScheme: "emerald" as const },
   ];
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, SearchX, UsersRound } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { changeLeadStatus, createLead, deleteLead, getLead, updateLead } from "@/app/actions/leads";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -25,6 +25,13 @@ export function LeadsWorkspace({ initialLeads, initialError }: { initialLeads: L
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(initialError ? { tone: "error", message: initialError } : null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search.includes("new=true")) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFormOpen(true);
+    }
+  }, []);
 
   const {
     activities,
