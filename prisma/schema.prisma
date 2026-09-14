@@ -45,10 +45,41 @@ model Lead {
   lastContactDate  DateTime?  @db.Date
   nextFollowUpDate DateTime?  @db.Date
   notes            String?    @db.Text
+  followUps        FollowUp[]
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
   @@index([status])
   @@index([leadSource])
   @@index([createdAt])
+}
+
+enum FollowUpType {
+  CALL
+  WHATSAPP
+  EMAIL
+  OTHER
+}
+
+enum FollowUpStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model FollowUp {
+  id          String         @id @default(uuid())
+  leadId      String
+  lead        Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  scheduledAt DateTime
+  type        FollowUpType
+  status      FollowUpStatus @default(PENDING)
+  note        String?        @db.Text
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([leadId])
+  @@index([scheduledAt])
+  @@index([status])
 }
