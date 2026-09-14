@@ -1,84 +1,62 @@
-"use client";
+import { Info } from "lucide-react";
+import type { AnalyticsData, AnalyticsDateRange } from "../types";
+import { AnalyticsDateFilter } from "./analytics-date-filter";
+import { AnalyticsKpis } from "./analytics-kpis";
+import { FollowUpPerformance } from "./follow-up-performance";
+import { LeadTrend } from "./lead-trend";
+import { PipelineHealth } from "./pipeline-health";
+import { RevenueTrend } from "./revenue-trend";
+import { SalesFunnel } from "./sales-funnel";
+import { WinLossCard } from "./win-loss-card";
 
-import { useState } from "react";
-import type { DateRange, AnalyticsData } from "@/features/analytics/types";
-import { AnalyticsPageHeader } from "@/features/analytics/components/analytics-date-filter";
-import { AnalyticsKpis } from "@/features/analytics/components/analytics-kpis";
-import { SalesFunnel } from "@/features/analytics/components/sales-funnel";
-import { RevenueTrend } from "@/features/analytics/components/revenue-trend";
-import { LeadTrend } from "@/features/analytics/components/lead-trend";
-
-import { WinLossCard } from "@/features/analytics/components/win-loss-card";
-import { PipelineHealth } from "@/features/analytics/components/pipeline-health";
-import { FollowUpPerformance } from "@/features/analytics/components/follow-up-performance";
-
-type Props = {
-  /**
-   * AGENT A: Replace this with the real AnalyticsData object returned by your
-   * server action. The prop shape is defined in @/features/analytics/types.ts.
-   *
-   * Pass in the data for the currently selected DateRange by calling your
-   * action when `dateRange` changes (via useEffect / transition / etc.).
-   */
-  initialData: AnalyticsData;
-  /**
-   * AGENT A: Optionally accept a server-side callback so date-range changes
-   * can refetch. For now the client filters from the same initial snapshot.
-   */
-  onDateRangeChange?: (range: DateRange) => void;
-};
-
-export function AnalyticsDashboard({ initialData, onDateRangeChange }: Props) {
-  const [dateRange, setDateRange] = useState<DateRange>("30d");
-  const [data] = useState<AnalyticsData>(initialData);
-
-  function handleRangeChange(range: DateRange) {
-    setDateRange(range);
-    onDateRangeChange?.(range);
-    // AGENT A: trigger refetch here (e.g. router.push with search param, or a
-    //          Server Action call that updates data state).
-  }
+export function AnalyticsDashboard({
+  data,
+  selectedRange,
+}: {
+  data: AnalyticsData;
+  selectedRange: AnalyticsDateRange;
+}) {
+  const showCoverageWarning = Boolean(data.dataCoverageWarning || data.dataCoverage?.funnelWarning);
+  const warningText =
+    data.dataCoverageWarning ??
+    "Historical stage tracking began after some existing leads were created, so older funnel data may be incomplete.";
 
   return (
-    <div className="space-y-6 pb-16">
-      {/* ── Top Bar ─────────────────────────────────────────────────────────── */}
-      <AnalyticsPageHeader
-        dateRange={dateRange}
-        onDateRangeChange={handleRangeChange}
-      />
+    <div className="space-y-5 pb-10 sm:space-y-6">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
+            Performance & diagnosis
+          </p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Sales Analytics</h1>
+          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-500">
+            See where deals slow down, what drives revenue, and where your team needs to follow through.
+          </p>
+        </div>
+        <AnalyticsDateFilter selected={selectedRange} />
+      </header>
 
-      {/* ── KPIs ────────────────────────────────────────────────────────────── */}
+      {showCoverageWarning ? (
+        <div
+          role="note"
+          className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-5 text-amber-900"
+        >
+          <Info aria-hidden="true" className="mt-0.5 shrink-0 text-amber-600" size={17} />
+          <p>{warningText}</p>
+        </div>
+      ) : null}
+
       <AnalyticsKpis data={data.kpis} />
-
-      {/* ── Main Grid ───────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-
-        {/* Left column: Funnel + Pipeline Health + Follow-up */}
-        <div className="space-y-6 xl:col-span-1">
-          <SalesFunnel dataCoverage={data.dataCoverage} stages={data.funnel} />
-          <PipelineHealth data={data.pipelineHealth.stages} />
-        </div>
-
-        {/* Right column: Trends + Source + Win/Loss + Follow-up */}
-        <div className="space-y-6 xl:col-span-2">
-          {/* Revenue & Lead trends side-by-side on large screens */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <RevenueTrend data={data.revenueTrend} />
-            <LeadTrend data={data.leadTrend.points} />
-          </div>
-
-
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            <WinLossCard 
-              wonLeads={data.winLoss.won} 
-              lostLeads={data.winLoss.lost} 
-              winRate={data.winLoss.winRate} 
-              lostRate={data.winLoss.lostRate} 
-            />
-            <FollowUpPerformance data={data.followUpPerformance} />
-          </div>
-        </div>
+      <div className="grid min-w-0 gap-5 xl:grid-cols-3">
+        <SalesFunnel stages={data.funnel} />
+        <WinLossCard data={data.winLoss} />
       </div>
+      <div className="grid min-w-0 gap-5 xl:grid-cols-3">
+        <RevenueTrend data={data.revenueTrend} />
+        <LeadTrend data={data.leadTrend.points} />
+      </div>
+      <PipelineHealth stages={data.pipelineHealth.stages} />
+      <FollowUpPerformance data={data.followUpPerformance} />
     </div>
   );
 }

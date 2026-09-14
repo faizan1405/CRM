@@ -1,71 +1,20 @@
-"use client";
+import Link from "next/link";
+import type { AnalyticsDateRange } from "../types";
 
-import type { DateRange } from "@/features/analytics/types";
-import { BarChart2 } from "lucide-react";
-
-type Props = {
-  value: DateRange;
-  onChange: (range: DateRange) => void;
-};
-
-const RANGES: { label: string; value: DateRange }[] = [
-  { label: "7 Days", value: "7d" },
-  { label: "30 Days", value: "30d" },
-  { label: "90 Days", value: "90d" },
-  { label: "All Time", value: "all" },
+const ranges: { value: AnalyticsDateRange; label: string }[] = [
+  { value: "7d", label: "7 Days" }, { value: "30d", label: "30 Days" },
+  { value: "90d", label: "90 Days" }, { value: "all", label: "All Time" },
 ];
 
-export function AnalyticsDateFilter({ value, onChange }: Props) {
+export function AnalyticsDateFilter({ selected }: { selected: AnalyticsDateRange }) {
   return (
-    <div
-      role="group"
-      aria-label="Select date range"
-      className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm"
-    >
-      {RANGES.map((r) => {
-        const isActive = r.value === value;
-        return (
-          <button
-            key={r.value}
-            type="button"
-            onClick={() => onChange(r.value)}
-            aria-pressed={isActive}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-all focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
-              isActive
-                ? "bg-blue-600 text-white shadow-sm"
-                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-            }`}
-          >
-            {r.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-type HeaderProps = {
-  dateRange: DateRange;
-  onDateRangeChange: (range: DateRange) => void;
-};
-
-export function AnalyticsPageHeader({ dateRange, onDateRangeChange }: HeaderProps) {
-  return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
-          <BarChart2 aria-hidden="true" size={20} />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
-            Sales Analytics
-          </h1>
-          <p className="text-sm text-slate-500">
-            Performance diagnosis &amp; insights
-          </p>
-        </div>
-      </div>
-      <AnalyticsDateFilter value={dateRange} onChange={onDateRangeChange} />
-    </div>
+    <nav aria-label="Analytics date range" className="grid w-full min-w-0 grid-cols-4 rounded-xl border border-slate-200 bg-white p-1 shadow-sm sm:flex sm:w-auto">
+      {ranges.map((range) => (
+        <Link key={range.value} href={`/analytics?range=${range.value}`} aria-current={selected === range.value ? "page" : undefined}
+          className={`flex min-h-10 min-w-0 items-center justify-center whitespace-nowrap rounded-lg px-1 text-xs font-semibold transition-colors sm:flex-none sm:px-3 sm:text-sm ${selected === range.value ? "bg-slate-900 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"}`}>
+          {range.label}
+        </Link>
+      ))}
+    </nav>
   );
 }

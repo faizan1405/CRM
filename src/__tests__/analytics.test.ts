@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
@@ -63,18 +63,20 @@ async function createFollowUp(leadId: string, overrides: Record<string, unknown>
 // ─── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("Analytics Data Layer", () => {
-  const ids = { leads: [] as string[], activities: [] as string[], followUps: [] as string[] };
-
-  beforeEach(() => {
-    ids.leads = [];
-    ids.activities = [];
-    ids.followUps = [];
-  });
+  const allIds = { leads: [] as string[], activities: [] as string[], followUps: [] as string[] };
+  const ids = allIds;
 
   afterAll(async () => {
-    await db.followUp.deleteMany({ where: { id: { in: ids.followUps } } });
-    await db.leadActivity.deleteMany({ where: { id: { in: ids.activities } } });
-    await db.lead.deleteMany({ where: { id: { in: ids.leads } } });
+    if (allIds.followUps.length > 0) {
+      await db.followUp.deleteMany({ where: { id: { in: allIds.followUps } } }).catch(() => {});
+    }
+    if (allIds.activities.length > 0) {
+      await db.leadActivity.deleteMany({ where: { id: { in: allIds.activities } } }).catch(() => {});
+    }
+    if (allIds.leads.length > 0) {
+      await db.lead.deleteMany({ where: { id: { in: allIds.leads } } }).catch(() => {});
+    }
+    await db.$disconnect().catch(() => {});
   });
 
   // ── 1. Zero-data state ───────────────────────────────────────────────────────
