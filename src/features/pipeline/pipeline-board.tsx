@@ -10,6 +10,7 @@ import { PipelineCard } from "./pipeline-card";
 import { PipelineSummary } from "./pipeline-summary";
 import { PipelineColumnHeader, PipelineEmptyState } from "./pipeline-column";
 import { PipelineMobileView } from "./pipeline-mobile-view";
+import { useLeadActivities } from "@/features/activity/use-activities";
 
 const COLUMNS: LeadStatus[] = [
   "New",
@@ -27,6 +28,15 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const {
+    activities,
+    filter: activityFilter,
+    setFilter: setActivityFilter,
+    handleAddNote,
+    handleEditNote,
+    handleDeleteNote,
+  } = useLeadActivities(selectedLead?.id);
 
   const grouped = useMemo(() => {
     const map: Record<LeadStatus, Lead[]> = {
@@ -221,6 +231,12 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         }}
         onStatusChange={handleStatusChange}
         onDelete={handleRemoveLead}
+        activities={activities}
+        activityFilter={activityFilter}
+        onActivityFilterChange={setActivityFilter}
+        onAddNote={handleAddNote}
+        onEditNote={handleEditNote}
+        onDeleteNote={handleDeleteNote}
       />
       
       <LeadForm 

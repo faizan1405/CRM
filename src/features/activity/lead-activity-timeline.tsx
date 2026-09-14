@@ -88,7 +88,7 @@ export function LeadActivityTimeline({
       {/* Activity list */}
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
-          <ActivityEmptyState hasNotes={activities.some((a) => a.type.startsWith("NOTE"))} />
+          <ActivityEmptyState filter={filter} hasNotes={activities.some((a) => a.type.startsWith("NOTE"))} />
         ) : (
           <ol className="px-4 py-3 sm:px-6" aria-label="Activity timeline">
             {filtered.map((activity) => (

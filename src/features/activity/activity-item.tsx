@@ -1,6 +1,6 @@
 "use client";
 
-import type { Activity, NoteAddedActivity, NoteEditedActivity, StatusChangedActivity, FollowUpCreatedActivity, FollowUpRescheduledActivity, FollowUpCompletedActivity, FollowUpCancelledActivity, LeadCreatedActivity, LeadUpdatedActivity } from "./types";
+import type { Activity, NoteAddedActivity, NoteEditedActivity, StatusChangedActivity, FollowUpCreatedActivity, FollowUpRescheduledActivity, FollowUpCompletedActivity, FollowUpCancelledActivity, LeadUpdatedActivity } from "./types";
 import { ActivityIcon } from "./activity-icon";
 import { formatActivityTimestamp, formatFollowUpDateShort } from "./formatters";
 
@@ -39,7 +39,7 @@ function ActivityNoteEdited({ activity }: { activity: NoteEditedActivity }) {
   );
 }
 
-function ActivityNoteDeleted({ activity }: { activity: { id: string; type: "NOTE_DELETED"; createdAt: string; actor: { id: string; name: string } | null; noteId: string } }) {
+function ActivityNoteDeleted() {
   return (
     <p className="text-sm text-slate-500 italic">A note was removed</p>
   );
@@ -185,7 +185,7 @@ export function ActivityItem({ activity, onEditNote, onDeleteNote }: ActivityIte
         <div className="mt-1.5">
           {activity.type === "NOTE_ADDED" && <ActivityNoteAdded activity={activity} />}
           {activity.type === "NOTE_EDITED" && <ActivityNoteEdited activity={activity} />}
-          {activity.type === "NOTE_DELETED" && <ActivityNoteDeleted activity={activity} />}
+          {activity.type === "NOTE_DELETED" && <ActivityNoteDeleted />}
           {activity.type === "STATUS_CHANGED" && <ActivityStatusChanged activity={activity} />}
           {activity.type === "FOLLOWUP_CREATED" && <ActivityFollowUpCreated activity={activity} />}
           {activity.type === "FOLLOWUP_RESCHEDULED" && <ActivityFollowUpRescheduled activity={activity} />}

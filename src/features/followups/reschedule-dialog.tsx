@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import type { FollowUp } from "./types";
 import { formatTime } from "./formatters";
 
@@ -12,6 +12,18 @@ type RescheduleDialogProps = {
   saving?: boolean;
 };
 
+function toDateValue(iso: string | undefined | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+
+function toTimeValue(iso: string | undefined | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return d.toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
+}
+
 export function RescheduleDialog({
   isOpen,
   followUp,
@@ -19,19 +31,21 @@ export function RescheduleDialog({
   onConfirm,
   saving = false,
 }: RescheduleDialogProps) {
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
+  const dateRef = useRef<HTMLInputElement>(null);
+  const timeRef = useRef<HTMLInputElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Reset form when a different followUp is selected
+  const followUpKey = followUp?.id ?? "none";
+  const [resetKey, setResetKey] = useState(0);
+  const prevFollowUpKeyRef = useRef(followUpKey);
+  if (followUpKey !== prevFollowUpKeyRef.current) {
+    prevFollowUpKeyRef.current = followUpKey;
+    setResetKey((k) => k + 1);
+  }
 
   useEffect(() => {
     if (!isOpen) return;
-    if (followUp?.scheduledAt) {
-      const d = new Date(followUp.scheduledAt);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDate(d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTime(d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit' }));
-    }
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeButtonRef.current?.focus();
@@ -43,13 +57,15 @@ export function RescheduleDialog({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen, followUp, onClose, saving]);
+  }, [isOpen, onClose, saving]);
 
   if (!isOpen || !followUp) return null;
 
   const handleConfirm = () => {
-    if (!date || !time) return;
-    onConfirm({ date, time });
+    const dateVal = dateRef.current?.value;
+    const timeVal = timeRef.current?.value;
+    if (!dateVal || !timeVal) return;
+    onConfirm({ date: dateVal, time: timeVal });
   };
 
   const inputClass =
@@ -100,7 +116,7 @@ export function RescheduleDialog({
             <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm">
               <span className="text-[var(--muted)]">Currently:</span>
               <span className="font-medium text-slate-900">
-                {followUp.scheduledAt ? new Date(followUp.scheduledAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) : ""} at {followUp.scheduledAt ? formatTime(followUp.scheduledAt) : ""}
+                {followUp.scheduledAt ? new Date(followUp.scheduledAt).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) : ""} at {followUp.scheduledAt ? formatTime(followUp.scheduledAt) : ""}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -109,9 +125,10 @@ export function RescheduleDialog({
                   New Date <span className="text-red-500">*</span>
                 </label>
                 <input
+                  key={`rd-${resetKey}`}
+                  ref={dateRef}
                   type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  defaultValue={toDateValue(followUp.scheduledAt)}
                   className={inputClass}
                   required
                   disabled={saving}
@@ -122,9 +139,10 @@ export function RescheduleDialog({
                   New Time <span className="text-red-500">*</span>
                 </label>
                 <input
+                  key={`rt-${resetKey}`}
+                  ref={timeRef}
                   type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
+                  defaultValue={toTimeValue(followUp.scheduledAt)}
                   className={inputClass}
                   required
                   disabled={saving}
@@ -147,7 +165,7 @@ export function RescheduleDialog({
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={saving || !date || !time}
+              disabled={saving}
               className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "Saving..." : "Reschedule"}

@@ -1,6 +1,6 @@
 "use server";
 
-import { ActivityType, Prisma } from "@prisma/client";
+import { ActivityType } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { ActivityActionResult, LeadActivity } from "@/features/activities/types";

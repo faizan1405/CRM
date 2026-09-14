@@ -11,6 +11,7 @@ import { LeadFilters } from "@/features/leads/lead-filters";
 import { LeadForm } from "@/features/leads/lead-form";
 import { LeadTable } from "@/features/leads/lead-table";
 import type { Lead, LeadStatus } from "@/features/leads/types";
+import { useLeadActivities } from "@/features/activity/use-activities";
 
 type Feedback = { tone: "success" | "error"; message: string } | null;
 
@@ -24,6 +25,15 @@ export function LeadsWorkspace({ initialLeads, initialError }: { initialLeads: L
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(initialError ? { tone: "error", message: initialError } : null);
+
+  const {
+    activities,
+    filter: activityFilter,
+    setFilter: setActivityFilter,
+    handleAddNote,
+    handleEditNote,
+    handleDeleteNote,
+  } = useLeadActivities(selectedLead?.id);
 
   const sources = useMemo(() => Array.from(new Set(leads.map((lead) => lead.source).filter(Boolean))).sort(), [leads]);
   const filteredLeads = useMemo(() => {
@@ -113,7 +123,20 @@ export function LeadsWorkspace({ initialLeads, initialError }: { initialLeads: L
       </section>
 
       <LeadForm open={formOpen} lead={editingLead} saving={saving} onClose={() => { if (!saving) { setFormOpen(false); setEditingLead(null); } }} onSubmit={saveLead} />
-      <LeadDetailPanel lead={selectedLead} saving={saving} onClose={() => setSelectedLead(null)} onEdit={() => { if (selectedLead) { setEditingLead(selectedLead); setSelectedLead(null); setFormOpen(true); } }} onStatusChange={setLeadStatus} onDelete={removeLead} />
+      <LeadDetailPanel 
+        lead={selectedLead} 
+        saving={saving} 
+        onClose={() => setSelectedLead(null)} 
+        onEdit={() => { if (selectedLead) { setEditingLead(selectedLead); setSelectedLead(null); setFormOpen(true); } }} 
+        onStatusChange={setLeadStatus} 
+        onDelete={removeLead}
+        activities={activities}
+        activityFilter={activityFilter}
+        onActivityFilterChange={setActivityFilter}
+        onAddNote={handleAddNote}
+        onEditNote={handleEditNote}
+        onDeleteNote={handleDeleteNote}
+      />
     </div>
   );
 }
