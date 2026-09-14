@@ -151,6 +151,7 @@ export async function createLead(formData: FormData): Promise<LeadActionResult<L
     await requireAuthenticatedUser();
     const lead = await db.lead.create({ data: leadData(formData) });
     revalidatePath("/leads");
+    revalidatePath("/pipeline");
     return { success: true, data: serializeLead(lead) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -162,6 +163,7 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
     await requireAuthenticatedUser();
     const lead = await db.lead.update({ where: { id: readLeadId(id) }, data: leadData(formData) });
     revalidatePath("/leads");
+    revalidatePath("/pipeline");
     return { success: true, data: serializeLead(lead) };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return { success: false, error: "Lead not found." };
@@ -176,6 +178,7 @@ export async function changeLeadStatus(id: string, status: LeadStatus): Promise<
     if (!databaseStatus) return { success: false, error: "Select a valid lead status." };
     const lead = await db.lead.update({ where: { id: readLeadId(id) }, data: { status: databaseStatus } });
     revalidatePath("/leads");
+    revalidatePath("/pipeline");
     return { success: true, data: serializeLead(lead) };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return { success: false, error: "Lead not found." };
@@ -188,6 +191,7 @@ export async function deleteLead(id: string): Promise<LeadActionResult<{ id: str
     await requireAuthenticatedUser();
     const deleted = await db.lead.delete({ where: { id: readLeadId(id) }, select: { id: true } });
     revalidatePath("/leads");
+    revalidatePath("/pipeline");
     return { success: true, data: deleted };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return { success: false, error: "Lead not found." };
