@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { changeLeadStatus, createLead, deleteLead, getLead, updateLead } from "@/app/actions/leads";
+import { createFollowUp } from "@/app/actions/follow-ups";
 import { LeadDetailPanel } from "@/features/leads/lead-detail-panel";
 import { LeadForm } from "@/features/leads/lead-form";
 import type { Lead, LeadStatus } from "@/features/leads/types";
@@ -11,6 +12,8 @@ import { PipelineSummary } from "./pipeline-summary";
 import { PipelineColumnHeader, PipelineEmptyState } from "./pipeline-column";
 import { PipelineMobileView } from "./pipeline-mobile-view";
 import { useLeadActivities } from "@/features/activity/use-activities";
+import { FollowUpForm } from "@/features/followups/follow-up-form";
+import type { NewFollowUpInput } from "@/features/followups/types";
 
 const COLUMNS: LeadStatus[] = [
   "New",
@@ -27,6 +30,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -36,6 +40,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     handleAddNote,
     handleEditNote,
     handleDeleteNote,
+    refresh: refreshActivities,
   } = useLeadActivities(selectedLead?.id);
 
   const grouped = useMemo(() => {
@@ -147,6 +152,27 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     setEditingLead(null);
   };
 
+  const handleAddFollowUp = async (data: NewFollowUpInput) => {
+    setSaving(true);
+    setError(null);
+    const formData = new FormData();
+    formData.append("leadId", data.leadId);
+    formData.append("scheduledAt", data.scheduledAt);
+    formData.append("type", data.type);
+    formData.append("note", data.note);
+    const result = await createFollowUp(formData);
+    setSaving(false);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    const nextDate = new Date(result.data.scheduledAt).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+    setLeads((current) => current.map((lead) => lead.id === data.leadId && (!lead.nextFollowUpDate || nextDate < lead.nextFollowUpDate) ? { ...lead, nextFollowUpDate: nextDate } : lead));
+    setSelectedLead((current) => current?.id === data.leadId && (!current.nextFollowUpDate || nextDate < current.nextFollowUpDate) ? { ...current, nextFollowUpDate: nextDate } : current);
+    if (selectedLead?.id === data.leadId) await refreshActivities();
+    setFollowUpLead(null);
+  };
+
   return (
     <div className="flex h-full flex-col overflow-hidden pb-4">
       {error && (
@@ -235,9 +261,12 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         activityFilter={activityFilter}
         onActivityFilterChange={setActivityFilter}
         onAddNote={handleAddNote}
+        onAddFollowUp={selectedLead ? () => setFollowUpLead(selectedLead) : undefined}
         onEditNote={handleEditNote}
         onDeleteNote={handleDeleteNote}
       />
+
+      <FollowUpForm isOpen={Boolean(followUpLead)} defaultLeadId={followUpLead?.id} leads={followUpLead ? [{ id: followUpLead.id, name: followUpLead.name }] : []} saving={saving} onClose={() => { if (!saving) setFollowUpLead(null); }} onSubmit={handleAddFollowUp} />
       
       <LeadForm 
         open={formOpen} 

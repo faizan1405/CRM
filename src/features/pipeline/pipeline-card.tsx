@@ -23,11 +23,6 @@ export function PipelineCard({
         <h4 className="font-semibold text-slate-900 text-sm break-words line-clamp-2">
           {lead.name}
         </h4>
-        {lead.source && (
-          <span className="shrink-0 text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-sm">
-            {lead.source}
-          </span>
-        )}
       </div>
 
       {(lead.business || lead.phone) && (

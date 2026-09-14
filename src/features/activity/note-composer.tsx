@@ -5,9 +5,11 @@ import { useEffect, useRef, useState } from "react";
 type NoteComposerProps = {
   onAddNote: (text: string) => Promise<{ success: boolean; error?: string }>;
   disabled?: boolean;
+  autoFocus?: boolean;
+  id?: string;
 };
 
-export function NoteComposer({ onAddNote, disabled = false }: NoteComposerProps) {
+export function NoteComposer({ onAddNote, disabled = false, autoFocus = false, id = "note-composer" }: NoteComposerProps) {
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -15,10 +17,10 @@ export function NoteComposer({ onAddNote, disabled = false }: NoteComposerProps)
   const MAX_CHARS = 500;
 
   useEffect(() => {
-    if (!disabled && textareaRef.current) {
+    if (autoFocus && !disabled && textareaRef.current) {
       textareaRef.current.focus();
     }
-  }, [disabled]);
+  }, [autoFocus, disabled]);
 
   const handleSubmit = async () => {
     const trimmed = text.trim();
@@ -46,12 +48,12 @@ export function NoteComposer({ onAddNote, disabled = false }: NoteComposerProps)
 
   return (
     <div>
-      <label htmlFor="note-composer" className="mb-1.5 block text-sm font-semibold text-slate-700">
+      <label htmlFor={id} className="mb-1.5 block text-sm font-semibold text-slate-700">
         Add a note
       </label>
       <textarea
         ref={textareaRef}
-        id="note-composer"
+        id={id}
         value={text}
         onChange={(e) => {
           if (e.target.value.length <= MAX_CHARS) {

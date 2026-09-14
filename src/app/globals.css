@@ -40,3 +40,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+@keyframes lead-panel-in {
+  from { transform: translateX(1.25rem); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}

@@ -13,7 +13,6 @@ type LeadFormProps = {
 };
 
 const inputClass = "mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:text-sm";
-const sources = ["Website", "Referral", "Organic", "Social", "Other"];
 
 export function LeadForm({ open, lead, saving, onClose, onSubmit }: LeadFormProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -45,13 +44,13 @@ export function LeadForm({ open, lead, saving, onClose, onSubmit }: LeadFormProp
         </header>
 
         <form key={formKey} action={onSubmit} className="overflow-y-auto">
+          <input type="hidden" name="source" value={lead?.source ?? ""} />
           <div className="grid gap-5 px-5 py-5 sm:grid-cols-2 sm:px-6">
             <label className="text-sm font-medium text-slate-700">Name <span className="text-rose-600">*</span><input className={inputClass} name="name" required maxLength={120} autoComplete="name" placeholder="Lead name" defaultValue={lead?.name ?? ""} /></label>
             <label className="text-sm font-medium text-slate-700">Phone <span className="text-rose-600">*</span><input className={inputClass} name="phone" type="tel" required maxLength={40} autoComplete="tel" placeholder="Phone number" defaultValue={lead?.phone ?? ""} /></label>
             <label className="text-sm font-medium text-slate-700">Email<input className={inputClass} name="email" type="email" maxLength={254} autoComplete="email" placeholder="Email address" defaultValue={lead?.email ?? ""} /></label>
             <label className="text-sm font-medium text-slate-700">Business / Company<input className={inputClass} name="business" maxLength={160} autoComplete="organization" placeholder="Business name" defaultValue={lead?.business ?? ""} /></label>
             <label className="text-sm font-medium text-slate-700">Industry<input className={inputClass} name="industry" maxLength={100} placeholder="Industry" defaultValue={lead?.industry ?? ""} /></label>
-            <label className="text-sm font-medium text-slate-700">Lead source<select className={inputClass} name="source" defaultValue={lead?.source || "Website"}>{sources.map((source) => <option key={source} value={source}>{source}</option>)}</select></label>
             <label className="text-sm font-medium text-slate-700">Budget<input className={inputClass} name="budget" type="number" min="0" max="9999999999.99" step="0.01" inputMode="decimal" placeholder="Estimated budget" defaultValue={lead?.budget ?? ""} /></label>
             <label className="text-sm font-medium text-slate-700">Status<select className={inputClass} name="status" defaultValue={lead?.status ?? "New"}>{leadStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></label>
             <label className="text-sm font-medium text-slate-700">Quoted amount<input className={inputClass} name="quotedAmount" type="number" min="0" max="9999999999.99" step="0.01" inputMode="decimal" placeholder="Quoted amount" defaultValue={lead?.quotedAmount ?? ""} /></label>

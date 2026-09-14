@@ -68,11 +68,13 @@ export default async function DashboardPage() {
         <div className="space-y-6">
           <section>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold tracking-tight text-slate-900">Revenue Snapshot</h2>
+              <h2 className="text-lg font-bold tracking-tight text-slate-900">Recent Activity</h2>
             </div>
-            <RevenueSnapshot data={data.revenue} />
+            <div className="overflow-hidden rounded-2xl border bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+              <RecentActivity data={data.recentActivity} />
+            </div>
           </section>
-          
+
           <section>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold tracking-tight text-slate-900">Today&apos;s Follow-ups</h2>
@@ -115,11 +117,9 @@ export default async function DashboardPage() {
 
           <section>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold tracking-tight text-slate-900">Recent Activity</h2>
+              <h2 className="text-lg font-bold tracking-tight text-slate-900">Revenue Snapshot</h2>
             </div>
-            <div className="rounded-2xl border bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] overflow-hidden">
-              <RecentActivity data={data.recentActivity} />
-            </div>
+            <RevenueSnapshot data={data.revenue} />
           </section>
         </div>
       </div>
