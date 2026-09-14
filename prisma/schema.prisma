@@ -22,32 +22,34 @@ enum LeadStatus {
 }
 
 model User {
-  id           String   @id @default(uuid())
+  id           String         @id @default(uuid())
   name         String
-  email        String   @unique
+  email        String         @unique
   passwordHash String
-  role         Role     @default(ADMIN)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  role         Role           @default(ADMIN)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  activities   LeadActivity[]
 }
 
 model Lead {
-  id               String     @id @default(uuid())
+  id               String         @id @default(uuid())
   name             String
   phone            String
   email            String?
   business         String?
   industry         String?
   leadSource       String?
-  budget           Decimal?   @db.Decimal(12, 2)
-  status           LeadStatus @default(NEW)
-  quotedAmount     Decimal?   @db.Decimal(12, 2)
-  lastContactDate  DateTime?  @db.Date
-  nextFollowUpDate DateTime?  @db.Date
-  notes            String?    @db.Text
+  budget           Decimal?       @db.Decimal(12, 2)
+  status           LeadStatus     @default(NEW)
+  quotedAmount     Decimal?       @db.Decimal(12, 2)
+  lastContactDate  DateTime?      @db.Date
+  nextFollowUpDate DateTime?      @db.Date
+  notes            String?        @db.Text
   followUps        FollowUp[]
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  activities       LeadActivity[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   @@index([status])
   @@index([leadSource])
@@ -82,4 +84,30 @@ model FollowUp {
   @@index([leadId])
   @@index([scheduledAt])
   @@index([status])
+}
+
+enum ActivityType {
+  LEAD_CREATED
+  LEAD_UPDATED
+  STATUS_CHANGED
+  NOTE_ADDED
+  FOLLOWUP_CREATED
+  FOLLOWUP_RESCHEDULED
+  FOLLOWUP_COMPLETED
+  FOLLOWUP_CANCELLED
+}
+
+model LeadActivity {
+  id              String       @id @default(uuid())
+  leadId          String
+  lead            Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type            ActivityType
+  message         String       @db.Text
+  metadata        Json?
+  createdByUserId String?
+  createdByUser   User?        @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime     @default(now())
+
+  @@index([leadId])
+  @@index([createdAt])
 }

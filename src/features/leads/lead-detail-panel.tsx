@@ -5,6 +5,9 @@ import { useEffect, useRef } from "react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
 import { leadStatuses, type Lead, type LeadStatus } from "@/features/leads/types";
+import { LeadActivityTimeline } from "@/features/activity/lead-activity-timeline";
+import type { Activity, ActivityFilter } from "@/features/activity/types";
+import { NoteComposer } from "@/features/activity/note-composer";
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-1.5 break-words text-sm font-medium text-slate-800">{value || "Not added"}</dd></div>;
@@ -19,9 +22,29 @@ type LeadDetailPanelProps = {
   onEdit: () => void;
   onStatusChange: (status: LeadStatus) => Promise<void>;
   onDelete: () => Promise<void>;
+  /** Phase 5: Activity timeline integration */
+  activities?: Activity[];
+  activityFilter?: ActivityFilter;
+  onActivityFilterChange?: (filter: ActivityFilter) => void;
+  onAddNote?: (text: string) => Promise<{ success: boolean; error?: string }>;
+  onEditNote?: (data: { id: string; noteId: string; noteText: string }) => void;
+  onDeleteNote?: (data: { id: string; noteId: string }) => void;
 };
 
-export function LeadDetailPanel({ lead, saving, onClose, onEdit, onStatusChange, onDelete }: LeadDetailPanelProps) {
+export function LeadDetailPanel({
+  lead,
+  saving,
+  onClose,
+  onEdit,
+  onStatusChange,
+  onDelete,
+  activities = [],
+  activityFilter = "all",
+  onActivityFilterChange,
+  onAddNote,
+  onEditNote,
+  onDeleteNote,
+}: LeadDetailPanelProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -36,6 +59,8 @@ export function LeadDetailPanel({ lead, saving, onClose, onEdit, onStatusChange,
 
   if (!lead) return null;
 
+  const hasActivity = activities.length > 0;
+
   return (
     <div className="fixed inset-0 z-50">
       <button type="button" aria-label="Close lead details" onClick={onClose} disabled={saving} className="absolute inset-0 bg-slate-950/45" />
@@ -45,11 +70,61 @@ export function LeadDetailPanel({ lead, saving, onClose, onEdit, onStatusChange,
           <button ref={closeButtonRef} type="button" onClick={onClose} disabled={saving} aria-label="Close lead details" className="grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"><X aria-hidden="true" size={20} /></button>
         </header>
 
-        <div role="region" tabIndex={0} aria-label="Lead information" className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
-          <section className="rounded-xl border border-[var(--border)] bg-white p-5"><h3 className="font-semibold text-slate-950">Contact</h3><dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2"><DetailItem label="Name" value={lead.name} /><DetailItem label="Phone" value={lead.phone} /><DetailItem label="Email" value={lead.email} /><DetailItem label="Business" value={lead.business} /></dl></section>
-          <section className="rounded-xl border border-[var(--border)] bg-white p-5"><h3 className="font-semibold text-slate-950">Sales</h3><dl className="mt-4 grid grid-cols-2 gap-5"><DetailItem label="Status" value={lead.status} /><DetailItem label="Lead source" value={lead.source} /><DetailItem label="Budget" value={formatCurrency(lead.budget)} /><DetailItem label="Quoted amount" value={formatCurrency(lead.quotedAmount)} /><DetailItem label="Industry" value={lead.industry} /></dl></section>
-          <section className="rounded-xl border border-[var(--border)] bg-white p-5"><h3 className="font-semibold text-slate-950">Follow-up</h3><dl className="mt-4 grid grid-cols-2 gap-5"><DetailItem label="Last contact" value={formatDate(lead.lastContactDate)} /><DetailItem label="Next follow-up" value={formatDate(lead.nextFollowUpDate)} /></dl></section>
-          <section className="rounded-xl border border-[var(--border)] bg-white p-5"><h3 className="font-semibold text-slate-950">Notes</h3><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">{lead.notes || "No notes added."}</p><p className="mt-4 text-xs text-slate-500">Created {formatDate(lead.createdAt)}</p></section>
+        <div role="region" tabIndex={0} aria-label="Lead information" className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+          <section className="rounded-xl border border-[var(--border)] bg-white p-5">
+            <h3 className="font-semibold text-slate-950">Contact</h3>
+            <dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <DetailItem label="Name" value={lead.name} />
+              <DetailItem label="Phone" value={lead.phone} />
+              <DetailItem label="Email" value={lead.email} />
+              <DetailItem label="Business" value={lead.business} />
+            </dl>
+          </section>
+
+          <section className="rounded-xl border border-[var(--border)] bg-white p-5">
+            <h3 className="font-semibold text-slate-950">Sales</h3>
+            <dl className="mt-4 grid grid-cols-2 gap-5">
+              <DetailItem label="Status" value={lead.status} />
+              <DetailItem label="Lead source" value={lead.source} />
+              <DetailItem label="Budget" value={formatCurrency(lead.budget)} />
+              <DetailItem label="Quoted amount" value={formatCurrency(lead.quotedAmount)} />
+              <DetailItem label="Industry" value={lead.industry} />
+            </dl>
+          </section>
+
+          <section className="rounded-xl border border-[var(--border)] bg-white p-5">
+            <h3 className="font-semibold text-slate-950">Follow-up</h3>
+            <dl className="mt-4 grid grid-cols-2 gap-5">
+              <DetailItem label="Last contact" value={formatDate(lead.lastContactDate)} />
+              <DetailItem label="Next follow-up" value={formatDate(lead.nextFollowUpDate)} />
+            </dl>
+          </section>
+
+          <section className="rounded-xl border border-[var(--border)] bg-white overflow-hidden">
+            <div className="border-b border-slate-100 px-5 py-3">
+              <h3 className="font-semibold text-slate-950">Notes & Activity</h3>
+              <p className="mt-0.5 text-xs text-[var(--muted)]">
+                {hasActivity
+                  ? `${activities.length} event${activities.length !== 1 ? "s" : ""}`
+                  : "No activity yet."}
+              </p>
+            </div>
+
+            <div className="flex" style={{ minHeight: 240, maxHeight: 420 }}>
+              <LeadActivityTimeline
+                activities={activities}
+                filter={activityFilter}
+                onFilterChange={onActivityFilterChange ?? (() => {})}
+                onEditNote={onEditNote}
+                onDeleteNote={onDeleteNote}
+                noteComposer={
+                  onAddNote ? (
+                    <NoteComposer onAddNote={onAddNote} disabled={saving} />
+                  ) : undefined
+                }
+              />
+            </div>
+          </section>
         </div>
 
         <footer className="border-t border-slate-200 bg-white p-4 sm:px-6">

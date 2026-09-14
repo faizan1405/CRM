@@ -1,6 +1,6 @@
 "use server";
 
-import { LeadStatus as PrismaLeadStatus, Prisma } from "@prisma/client";
+import { LeadStatus as PrismaLeadStatus, Prisma, ActivityType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -148,8 +148,20 @@ export async function getLead(id: string): Promise<LeadActionResult<Lead>> {
 
 export async function createLead(formData: FormData): Promise<LeadActionResult<Lead>> {
   try {
-    await requireAuthenticatedUser();
-    const lead = await db.lead.create({ data: leadData(formData) });
+    const session = await requireAuthenticatedUser();
+    const data = leadData(formData);
+    const lead = await db.$transaction(async (tx) => {
+      const newLead = await tx.lead.create({ data });
+      await tx.leadActivity.create({
+        data: {
+          leadId: newLead.id,
+          type: ActivityType.LEAD_CREATED,
+          message: "Lead was created",
+          createdByUserId: session.id as string,
+        },
+      });
+      return newLead;
+    });
     revalidatePath("/leads");
     revalidatePath("/pipeline");
     return { success: true, data: serializeLead(lead) };
@@ -160,8 +172,39 @@ export async function createLead(formData: FormData): Promise<LeadActionResult<L
 
 export async function updateLead(id: string, formData: FormData): Promise<LeadActionResult<Lead>> {
   try {
-    await requireAuthenticatedUser();
-    const lead = await db.lead.update({ where: { id: readLeadId(id) }, data: leadData(formData) });
+    const session = await requireAuthenticatedUser();
+    const leadId = readLeadId(id);
+    const data = leadData(formData);
+    
+    const lead = await db.$transaction(async (tx) => {
+      const oldLead = await tx.lead.findUnique({ where: { id: leadId } });
+      if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
+      
+      const updatedLead = await tx.lead.update({ where: { id: leadId }, data });
+      
+      // Determine if meaningful fields changed
+      const changed: string[] = [];
+      if (oldLead.name !== updatedLead.name) changed.push("name");
+      if (oldLead.email !== updatedLead.email) changed.push("email");
+      if (oldLead.phone !== updatedLead.phone) changed.push("phone");
+      if (oldLead.budget?.toString() !== updatedLead.budget?.toString()) changed.push("budget");
+      if (oldLead.quotedAmount?.toString() !== updatedLead.quotedAmount?.toString()) changed.push("quoted amount");
+      if (oldLead.business !== updatedLead.business) changed.push("business");
+      if (oldLead.status !== updatedLead.status) changed.push("status");
+      
+      if (changed.length > 0) {
+        await tx.leadActivity.create({
+          data: {
+            leadId,
+            type: ActivityType.LEAD_UPDATED,
+            message: `Lead was updated: changed ${changed.join(", ")}`,
+            createdByUserId: session.id as string,
+          },
+        });
+      }
+      return updatedLead;
+    });
+
     revalidatePath("/leads");
     revalidatePath("/pipeline");
     return { success: true, data: serializeLead(lead) };
@@ -173,10 +216,31 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
 
 export async function changeLeadStatus(id: string, status: LeadStatus): Promise<LeadActionResult<Lead>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
     const databaseStatus = statusToDatabase[status];
     if (!databaseStatus) return { success: false, error: "Select a valid lead status." };
-    const lead = await db.lead.update({ where: { id: readLeadId(id) }, data: { status: databaseStatus } });
+    const leadId = readLeadId(id);
+
+    const lead = await db.$transaction(async (tx) => {
+      const oldLead = await tx.lead.findUnique({ where: { id: leadId } });
+      if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
+
+      const updatedLead = await tx.lead.update({ where: { id: leadId }, data: { status: databaseStatus } });
+      
+      if (oldLead.status !== databaseStatus) {
+        await tx.leadActivity.create({
+          data: {
+            leadId,
+            type: ActivityType.STATUS_CHANGED,
+            message: `Status changed from ${statusFromDatabase[oldLead.status as DatabaseLeadStatus]} to ${status}`,
+            metadata: { oldStatus: oldLead.status, newStatus: databaseStatus },
+            createdByUserId: session.id as string,
+          },
+        });
+      }
+      return updatedLead;
+    });
+
     revalidatePath("/leads");
     revalidatePath("/pipeline");
     return { success: true, data: serializeLead(lead) };

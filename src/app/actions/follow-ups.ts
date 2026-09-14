@@ -10,6 +10,7 @@ import {
   statusFromDatabase,
   typeFromDatabase,
 } from "@/features/followups/types";
+import { ActivityType } from "@prisma/client";
 
 class UserFacingError extends Error {}
 
@@ -65,7 +66,7 @@ async function syncNextFollowUpDate(leadId: string) {
 
 export async function createFollowUp(formData: FormData): Promise<FollowUpActionResult<FollowUp>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
     const leadId = String(formData.get("leadId") ?? "").trim();
     if (!leadId) throw new UserFacingError("Lead ID is required.");
 
@@ -84,15 +85,29 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
     const lead = await db.lead.findUnique({ where: { id: leadId } });
     if (!lead) throw new UserFacingError("Lead not found.");
 
-    const followUp = await db.followUp.create({
-      data: {
-        leadId,
-        scheduledAt,
-        type,
-        note: note || null,
-        status: "PENDING",
-      },
-      include: { lead: true },
+    const followUp = await db.$transaction(async (tx) => {
+      const newFollowUp = await tx.followUp.create({
+        data: {
+          leadId,
+          scheduledAt,
+          type,
+          note: note || null,
+          status: "PENDING",
+        },
+        include: { lead: true },
+      });
+
+      await tx.leadActivity.create({
+        data: {
+          leadId: newFollowUp.leadId,
+          type: ActivityType.FOLLOWUP_CREATED,
+          message: `Scheduled a ${newFollowUp.type} follow-up for ${newFollowUp.scheduledAt.toLocaleDateString()}`,
+          metadata: { type: newFollowUp.type, scheduledAt: newFollowUp.scheduledAt },
+          createdByUserId: session.id as string,
+        },
+      });
+
+      return newFollowUp;
     });
 
     await syncNextFollowUpDate(leadId);
@@ -170,7 +185,7 @@ export async function getFollowUpsForLead(leadId: string): Promise<FollowUpActio
 
 export async function updateFollowUp(id: string, formData: FormData): Promise<FollowUpActionResult<FollowUp>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
     
     const existing = await db.followUp.findUnique({ where: { id } });
     if (!existing) throw new UserFacingError("Follow-up not found.");
@@ -187,14 +202,34 @@ export async function updateFollowUp(id: string, formData: FormData): Promise<Fo
     const note = String(formData.get("note") ?? "").trim();
     if (note.length > 5000) throw new UserFacingError("Note must be 5000 characters or fewer.");
 
-    const followUp = await db.followUp.update({
-      where: { id },
-      data: {
-        scheduledAt,
-        type,
-        note: note || null,
-      },
-      include: { lead: true },
+    const followUp = await db.$transaction(async (tx) => {
+      const updatedFollowUp = await tx.followUp.update({
+        where: { id },
+        data: {
+          scheduledAt,
+          type,
+          note: note || null,
+        },
+        include: { lead: true },
+      });
+
+      if (existing.scheduledAt.getTime() !== updatedFollowUp.scheduledAt.getTime()) {
+        await tx.leadActivity.create({
+          data: {
+            leadId: updatedFollowUp.leadId,
+            type: ActivityType.FOLLOWUP_RESCHEDULED,
+            message: `Follow-up rescheduled from ${existing.scheduledAt.toLocaleDateString()} to ${updatedFollowUp.scheduledAt.toLocaleDateString()}`,
+            metadata: { 
+              scheduledAtBefore: existing.scheduledAt, 
+              scheduledAtAfter: updatedFollowUp.scheduledAt,
+              type: updatedFollowUp.type 
+            },
+            createdByUserId: session.id as string,
+          },
+        });
+      }
+
+      return updatedFollowUp;
     });
 
     await syncNextFollowUpDate(followUp.leadId);
@@ -210,17 +245,33 @@ export async function updateFollowUp(id: string, formData: FormData): Promise<Fo
 
 export async function markFollowUpComplete(id: string): Promise<FollowUpActionResult<FollowUp>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
     const existing = await db.followUp.findUnique({ where: { id } });
     if (!existing) throw new UserFacingError("Follow-up not found.");
 
-    const followUp = await db.followUp.update({
-      where: { id },
-      data: {
-        status: "COMPLETED",
-        completedAt: new Date(),
-      },
-      include: { lead: true },
+    const followUp = await db.$transaction(async (tx) => {
+      const updatedFollowUp = await tx.followUp.update({
+        where: { id },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+        },
+        include: { lead: true },
+      });
+
+      if (existing.status !== "COMPLETED") {
+        await tx.leadActivity.create({
+          data: {
+            leadId: updatedFollowUp.leadId,
+            type: ActivityType.FOLLOWUP_COMPLETED,
+            message: `Completed ${updatedFollowUp.type} follow-up`,
+            metadata: { type: updatedFollowUp.type },
+            createdByUserId: session.id as string,
+          },
+        });
+      }
+
+      return updatedFollowUp;
     });
 
     await syncNextFollowUpDate(followUp.leadId);
@@ -236,17 +287,33 @@ export async function markFollowUpComplete(id: string): Promise<FollowUpActionRe
 
 export async function cancelFollowUp(id: string): Promise<FollowUpActionResult<FollowUp>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
     const existing = await db.followUp.findUnique({ where: { id } });
     if (!existing) throw new UserFacingError("Follow-up not found.");
 
-    const followUp = await db.followUp.update({
-      where: { id },
-      data: {
-        status: "CANCELLED",
-        completedAt: null,
-      },
-      include: { lead: true },
+    const followUp = await db.$transaction(async (tx) => {
+      const updatedFollowUp = await tx.followUp.update({
+        where: { id },
+        data: {
+          status: "CANCELLED",
+          completedAt: null,
+        },
+        include: { lead: true },
+      });
+
+      if (existing.status !== "CANCELLED") {
+        await tx.leadActivity.create({
+          data: {
+            leadId: updatedFollowUp.leadId,
+            type: ActivityType.FOLLOWUP_CANCELLED,
+            message: `Cancelled ${updatedFollowUp.type} follow-up`,
+            metadata: { type: updatedFollowUp.type },
+            createdByUserId: session.id as string,
+          },
+        });
+      }
+
+      return updatedFollowUp;
     });
 
     await syncNextFollowUpDate(followUp.leadId);
