@@ -41,6 +41,7 @@ export async function proxy(request: NextRequest) {
         name: 'session',
         value: updatedSession,
         httpOnly: true,
+        path: '/',
         expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
       });
     }
