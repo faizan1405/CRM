@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import type { LeadLossReason as PrismaLeadLossReason } from "@prisma/client";
 
 export const LOST_REASONS = [
@@ -58,6 +59,117 @@ export interface LeadLossRecord {
   createdAt: string;
 }
 
+export interface LostReasonMeta {
+  reason: PrismaLeadLossReason;
+  label: string;
+  shortCode: string;
+  description: string;
+  iconName:
+    | "DollarSign"
+    | "PhoneOff"
+    | "Clock"
+    | "Users"
+    | "ShieldAlert"
+    | "UserX"
+    | "RefreshCw"
+    | "Hourglass"
+    | "HelpCircle";
+}
+
+export const LOST_REASON_DETAILS: Record<PrismaLeadLossReason, LostReasonMeta> = {
+  PRICE: {
+    reason: "PRICE",
+    label: "Price",
+    shortCode: "PRC",
+    description: "Quotation above budget, discount declined, or pricing mismatch",
+    iconName: "DollarSign",
+  },
+  NO_RESPONSE: {
+    reason: "NO_RESPONSE",
+    label: "No Response",
+    shortCode: "NRP",
+    description: "Ghosted after outreach, calls unanswered, or uncontactable",
+    iconName: "PhoneOff",
+  },
+  TIMING: {
+    reason: "TIMING",
+    label: "Timing",
+    shortCode: "TMG",
+    description: "Not ready to purchase right now; postponed to future timeline",
+    iconName: "Clock",
+  },
+  COMPETITOR: {
+    reason: "COMPETITOR",
+    label: "Competitor",
+    shortCode: "CMP",
+    description: "Selected competitor or alternate market solution",
+    iconName: "Users",
+  },
+  TRUST: {
+    reason: "TRUST",
+    label: "Trust",
+    shortCode: "TRS",
+    description: "Confidence issues regarding delivery, brand proof, or reliability",
+    iconName: "ShieldAlert",
+  },
+  NOT_QUALIFIED: {
+    reason: "NOT_QUALIFIED",
+    label: "Not Qualified",
+    shortCode: "NQL",
+    description: "Does not match ICP, lack of requisite infrastructure or budget",
+    iconName: "UserX",
+  },
+  REQUIREMENT_CHANGED: {
+    reason: "REQUIREMENT_CHANGED",
+    label: "Requirement Changed",
+    shortCode: "RQC",
+    description: "Project scope shifted, tech stack altered, or internal revamp",
+    iconName: "RefreshCw",
+  },
+  NO_URGENCY: {
+    reason: "NO_URGENCY",
+    label: "No Urgency",
+    shortCode: "NUR",
+    description: "No pressing problem or immediate priority for leadership",
+    iconName: "Hourglass",
+  },
+  OTHER: {
+    reason: "OTHER",
+    label: "Other",
+    shortCode: "OTH",
+    description: "Custom circumstances requiring explicit explanatory note",
+    iconName: "HelpCircle",
+  },
+};
+
+export interface LostReasonSubmission {
+  reason: PrismaLeadLossReason;
+  notes?: string;
+  leadId?: string;
+  leadName?: string;
+  confirmedAt: string;
+}
+
+export interface LostReasonDialogProps {
+  isOpen: boolean;
+  leadName?: string;
+  leadId?: string;
+  initialReason?: PrismaLeadLossReason | null;
+  initialNotes?: string;
+  onConfirm: (data: LostReasonSubmission) => void | Promise<void>;
+  onCancel: () => void;
+  isSubmitting?: boolean;
+}
+
+export interface LostLeadDetailProps {
+  reason: PrismaLeadLossReason | string;
+  lostAt?: string | Date;
+  notes?: string | null;
+  leadName?: string;
+  className?: string;
+  compact?: boolean;
+}
+
 export interface LostReasonStat {
   reason: PrismaLeadLossReason;
   label: string;
@@ -70,10 +182,18 @@ export interface LostReasonsAnalyticsData {
   period: "7d" | "30d" | "90d" | "all";
   breakdown: LostReasonStat[];
   topReason: LostReasonStat | null;
+  aiInsight?: string | null;
 }
 
 export interface LostReasonActionResult<T> {
   success: boolean;
   data?: T;
   error?: string;
+}
+
+export interface LostReasonsAnalyticsProps {
+  data?: LostReasonsAnalyticsData;
+  period?: string;
+  onPeriodChange?: (period: string) => void;
+  className?: string;
 }
