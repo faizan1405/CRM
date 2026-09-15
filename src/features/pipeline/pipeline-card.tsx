@@ -1,6 +1,7 @@
 import { Building2, Phone } from "lucide-react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import type { Lead } from "@/features/leads/types";
+import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
 
 export function PipelineCard({
   lead,
@@ -9,6 +10,8 @@ export function PipelineCard({
   lead: Lead;
   onClick: () => void;
 }) {
+  const ai = lead.aiAttention || deriveAIAttention(lead);
+
   return (
     <div
       onClick={onClick}
@@ -17,13 +20,15 @@ export function PipelineCard({
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") onClick();
       }}
-      className="group flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:border-blue-300 hover:shadow-md transition-shadow text-left focus:outline-none focus:ring-2 focus:ring-blue-500"
+      className="group flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:border-blue-300 hover:shadow-md transition-shadow text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
     >
       <div className="flex justify-between items-start gap-2">
         <h4 className="font-semibold text-slate-900 text-sm break-words line-clamp-2">
           {lead.name}
         </h4>
+        <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
       </div>
+
 
       {(lead.business || lead.phone) && (
         <div className="flex flex-col gap-1 text-xs text-slate-600 mt-0.5">

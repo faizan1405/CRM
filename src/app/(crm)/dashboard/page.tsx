@@ -6,11 +6,12 @@ import { TodaysPriorities } from "@/features/dashboard/components/todays-priorit
 import { PipelineSnapshot } from "@/features/dashboard/components/pipeline-snapshot";
 import { RevenueSnapshot } from "@/features/dashboard/components/revenue-snapshot";
 import { RecentActivity } from "@/features/dashboard/components/recent-activity";
+import { AIAttentionDashboardSection } from "@/features/ai-attention";
 
 import { getDashboardData } from "@/app/actions/dashboard";
 import Link from "next/link";
 import { getTypeIcon, typeStyles } from "@/features/followups/follow-up-types";
-import { CalendarClock, ArrowRight, AlertTriangle } from "lucide-react";
+import { CalendarClock, ArrowRight, AlertTriangle, Sparkles } from "lucide-react";
 import { FollowUpType } from "@prisma/client";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -39,6 +40,17 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Left Column: Priorities & Attention */}
         <div className="xl:col-span-2 space-y-6">
+          <section>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-blue-600" aria-hidden="true" />
+                <h2 className="text-lg font-bold tracking-tight text-slate-900">AI Attention Leads</h2>
+              </div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Immediate Action</span>
+            </div>
+            <AIAttentionDashboardSection items={data.attentionLeads} priorities={data.priorities} />
+          </section>
+
           <section>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold tracking-tight text-slate-900">Needs Attention</h2>

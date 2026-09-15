@@ -4,6 +4,7 @@ import { ActivityType } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { ActivityActionResult, LeadActivity } from "@/features/activities/types";
+import { markLeadAIInsightNeedsRefresh } from "@/features/ai-attention/services/attention-engine";
 
 class UserFacingError extends Error {}
 
@@ -64,6 +65,8 @@ export async function addLeadNote(leadId: string, message: string): Promise<Acti
       },
     });
 
+    await markLeadAIInsightNeedsRefresh(leadId);
+
     return { success: true, data: serializeActivity(activity) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -87,6 +90,8 @@ export async function updateLeadNote(activityId: string, message: string): Promi
       data: { message: text },
     });
 
+    await markLeadAIInsightNeedsRefresh(activity.leadId);
+
     return { success: true, data: serializeActivity(updated) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -102,8 +107,10 @@ export async function deleteLeadNote(activityId: string): Promise<ActivityAction
     if (activity.createdByUserId !== session.id) throw new UserFacingError("You can only delete your own notes.");
 
     await db.leadActivity.delete({ where: { id: activityId } });
+    await markLeadAIInsightNeedsRefresh(activity.leadId);
     return { success: true, data: { id: activityId } };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
 }
+

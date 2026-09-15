@@ -11,6 +11,7 @@ import {
   typeFromDatabase,
 } from "@/features/followups/types";
 import { ActivityType } from "@prisma/client";
+import { markLeadAIInsightNeedsRefresh } from "@/features/ai-attention/services/attention-engine";
 
 class UserFacingError extends Error {}
 
@@ -106,6 +107,8 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
           createdByUserId: session.id as string,
         },
       });
+
+      await markLeadAIInsightNeedsRefresh(leadId, tx);
 
       return newFollowUp;
     });
@@ -229,6 +232,8 @@ export async function updateFollowUp(id: string, formData: FormData): Promise<Fo
         });
       }
 
+      await markLeadAIInsightNeedsRefresh(updatedFollowUp.leadId, tx);
+
       return updatedFollowUp;
     });
 
@@ -271,6 +276,8 @@ export async function markFollowUpComplete(id: string): Promise<FollowUpActionRe
         });
       }
 
+      await markLeadAIInsightNeedsRefresh(updatedFollowUp.leadId, tx);
+
       return updatedFollowUp;
     });
 
@@ -312,6 +319,8 @@ export async function cancelFollowUp(id: string): Promise<FollowUpActionResult<F
           },
         });
       }
+
+      await markLeadAIInsightNeedsRefresh(updatedFollowUp.leadId, tx);
 
       return updatedFollowUp;
     });
