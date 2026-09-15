@@ -1,4 +1,4 @@
-export type InterestLevel = "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
+export type InterestLevel = "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN" | string;
 
 export type QuickTag =
   | "Interested"
@@ -11,15 +11,35 @@ export type QuickTag =
 export interface StructuredCallNotesData {
   requirement: string | null;
   budget: string | null;
-  interestLevel: InterestLevel;
+  interestLevel: InterestLevel | null;
   decisionFactor: string | null;
   objections: string | null;
   importantDetails: string | null;
   nextAction: string | null;
-  suggestedFollowUpDate: string | null; // e.g. "YYYY-MM-DD" or descriptive
-  suggestedFollowUpTime: string | null; // e.g. "16:00" or "4:00 PM"
+  suggestedFollowUpDate: string | null; // e.g. YYYY-MM-DD or descriptive date
+  suggestedFollowUpTime: string | null; // e.g. HH:mm or 4:00 PM
   tags: string[];
+  rawNote?: string;
+}
+
+export type StructuredFieldKey = keyof Omit<StructuredCallNotesData, "tags" | "rawNote">;
+
+export interface CallNotesWorkflowResult {
+  appliedType: "structured" | "original";
+  formattedOutput: string;
+  structuredData: StructuredCallNotesData | null;
   rawNote: string;
+  appliedAt: string;
+}
+
+export interface AIConversationNotesProps {
+  initialRawNote?: string;
+  availableTags?: string[];
+  onStructureNotes?: (rawNote: string) => Promise<StructuredCallNotesData>;
+  onApplyStructured?: (result: CallNotesWorkflowResult) => void;
+  onKeepOriginal?: (result: CallNotesWorkflowResult) => void;
+  className?: string;
+  disabled?: boolean;
 }
 
 export interface CallNotesActionResult<T> {
