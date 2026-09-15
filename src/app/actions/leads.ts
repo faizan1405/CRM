@@ -376,3 +376,62 @@ export async function deleteLead(id: string): Promise<LeadActionResult<{ id: str
     return { success: false, error: cleanError(error) };
   }
 }
+
+export async function deleteAllLeadsAction(): Promise<{
+  success: boolean;
+  leadCount?: number;
+  followUpCount?: number;
+  activityCount?: number;
+  insightCount?: number;
+  notificationCount?: number;
+  lossEventCount?: number;
+  error?: string;
+}> {
+  try {
+    await requireAuthenticatedUser();
+
+    const counts = await db.$transaction(async (tx) => {
+      const notificationCount = await tx.salesNotification.count({
+        where: { leadId: { not: null } },
+      });
+      const lossEventCount = await tx.leadLossEvent.count();
+      const followUpCount = await tx.followUp.count();
+      const activityCount = await tx.leadActivity.count();
+      const insightCount = await tx.leadAIInsight.count();
+
+      await tx.salesNotification.deleteMany({ where: { leadId: { not: null } } });
+      await tx.leadLossEvent.deleteMany({});
+      await tx.followUp.deleteMany({});
+      await tx.leadActivity.deleteMany({});
+      await tx.leadAIInsight.deleteMany({});
+
+      const leadCount = await tx.lead.deleteMany({});
+
+      return {
+        leadCount: leadCount.count,
+        followUpCount,
+        activityCount,
+        insightCount,
+        notificationCount,
+        lossEventCount,
+      };
+    });
+
+    try {
+      revalidatePath("/leads");
+      revalidatePath("/pipeline");
+      revalidatePath("/dashboard");
+      revalidatePath("/analytics");
+      revalidatePath("/daily-briefing");
+    } catch {
+      // safe in test execution
+    }
+
+    return { success: true, ...counts };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to purge all leads.",
+    };
+  }
+}
