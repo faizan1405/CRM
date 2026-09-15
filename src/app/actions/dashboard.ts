@@ -78,18 +78,17 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
 
     const now = new Date();
     
-    // Calculate IST boundaries
-    const parts = new Intl.DateTimeFormat("en-US", {
+    const todayIST = new Intl.DateTimeFormat("en-US", {
       timeZone: "Asia/Kolkata",
       year: "numeric", month: "numeric", day: "numeric"
-    }).formatToParts(now);
+    }).format(now);
     
-    const y = parseInt(parts.find(p => p.type === 'year')!.value);
-    const m = parseInt(parts.find(p => p.type === 'month')!.value) - 1;
-    const d = parseInt(parts.find(p => p.type === 'day')!.value);
+    // Parse the MM/DD/YYYY from Intl.DateTimeFormat
+    const [m, d, y] = todayIST.split('/').map(Number);
 
-    const startOfTodayIST = new Date(Date.UTC(y, m, d, -5, -30, 0, 0));
-    const endOfTodayIST = new Date(Date.UTC(y, m, d, 18, 29, 59, 999));
+    // Convert IST midnight to UTC (subtract 5 hours 30 mins)
+    const startOfTodayIST = new Date(Date.UTC(y, m - 1, d, -5, -30, 0, 0));
+    const endOfTodayIST = new Date(Date.UTC(y, m - 1, d, 18, 29, 59, 999));
 
     // Parallel aggregate queries
     const [

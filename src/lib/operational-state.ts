@@ -6,31 +6,33 @@ export function deriveOperationalState(
   if (lead.status === "LOST") return "LOST";
   if (lead.isWaste) return "WASTE";
 
-  const todayIST = new Date();
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric", month: "numeric", day: "numeric"
-  }).formatToParts(todayIST);
-  const y = parseInt(parts.find(p => p.type === 'year')!.value);
-  const m = parseInt(parts.find(p => p.type === 'month')!.value) - 1;
-  const d = parseInt(parts.find(p => p.type === 'day')!.value);
-  const startOfToday = new Date(Date.UTC(y, m, d, -5, -30, 0, 0));
-  const endOfToday = new Date(Date.UTC(y, m, d, 18, 29, 59, 999));
+  const getKolkataDateString = (date: Date) => {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric", month: "2-digit", day: "2-digit"
+    }).formatToParts(date);
+    const y = parts.find(p => p.type === 'year')!.value;
+    const m = parts.find(p => p.type === 'month')!.value;
+    const d = parts.find(p => p.type === 'day')!.value;
+    return `${y}-${m}-${d}`;
+  };
+
+  const todayStr = getKolkataDateString(new Date());
 
   const pendingFollowUps = (lead.followUps ?? []).filter(
     f => f.status === "PENDING"
   );
 
   const hasOverdueOrToday = pendingFollowUps.some(f => {
-    const scheduled = new Date(f.scheduledAt);
-    return scheduled >= startOfToday && scheduled <= endOfToday || scheduled < startOfToday;
+    const scheduledStr = getKolkataDateString(new Date(f.scheduledAt));
+    return scheduledStr <= todayStr;
   });
 
   if (hasOverdueOrToday) return "FOLLOW_UP_NOW";
 
   const hasFutureFollowUp = pendingFollowUps.some(f => {
-    const scheduled = new Date(f.scheduledAt);
-    return scheduled > endOfToday;
+    const scheduledStr = getKolkataDateString(new Date(f.scheduledAt));
+    return scheduledStr > todayStr;
   });
 
   if (hasFutureFollowUp) return "FUTURE_FOLLOW_UP";
