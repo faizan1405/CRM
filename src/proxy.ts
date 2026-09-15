@@ -2,7 +2,17 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { updateSession, decrypt } from './lib/auth';
 
-const protectedRoutes = ['/dashboard', '/leads', '/follow-ups', '/pipeline', '/settings', '/analytics'];
+const protectedRoutes = [
+  '/dashboard',
+  '/leads',
+  '/follow-ups',
+  '/pipeline',
+  '/settings',
+  '/analytics',
+  '/notifications',
+  '/daily-briefing',
+  '/whatsapp-templates',
+];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
