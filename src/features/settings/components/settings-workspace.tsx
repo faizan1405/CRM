@@ -140,13 +140,13 @@ export function SettingsWorkspace({
               <div className="p-4 rounded-xl border border-slate-100 bg-slate-50 space-y-2">
                 <div className="flex items-center gap-2 text-slate-800 font-semibold text-sm">
                   <Sparkles className="h-4 w-4 text-purple-600" />
-                  Groq Llama 3 Inference
+                  Groq AI Inference
                 </div>
                 <p className="text-xs text-slate-500">
                   Ultra-low latency LLM inference powering AI Lead Scoring, Daily Briefings, and Note transformations.
                 </p>
                 <div className="text-[11px] font-mono text-purple-700 bg-purple-50 px-2 py-1 rounded inline-block">
-                  Model: llama-3.3-70b-versatile
+                  Model: openai/gpt-oss-120b
                 </div>
               </div>
 
