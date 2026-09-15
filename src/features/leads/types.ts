@@ -25,6 +25,7 @@ export type Lead = {
   notes: string;
   createdAt: string;
   updatedAt: string;
+  aiAttention?: import("@/features/ai-attention/types").AIAttentionLeadData;
 };
 
 export type NewLeadInput = Pick<

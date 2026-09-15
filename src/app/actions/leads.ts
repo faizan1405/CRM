@@ -12,6 +12,11 @@ import {
   type LeadActionResult,
   type LeadStatus,
 } from "@/features/leads/types";
+import { deriveAIAttention } from "@/features/ai-attention/helpers";
+import {
+  markLeadAIInsightNeedsRefresh,
+  analyzeLead,
+} from "@/features/ai-attention/services/attention-engine";
 
 const MAX_MONEY = 9_999_999_999.99;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -100,8 +105,9 @@ function serializeLead(lead: {
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
+  aiInsight?: import("@prisma/client").LeadAIInsight | null;
 }): Lead {
-  return {
+  const baseLead = {
     id: lead.id,
     name: lead.name,
     phone: lead.phone,
@@ -118,6 +124,14 @@ function serializeLead(lead: {
     createdAt: lead.createdAt.toISOString().slice(0, 10),
     updatedAt: lead.updatedAt.toISOString(),
   };
+
+  return {
+    ...baseLead,
+    aiAttention: deriveAIAttention({
+      ...baseLead,
+      aiInsight: lead.aiInsight,
+    }),
+  };
 }
 
 function cleanError(error: unknown) {
@@ -128,7 +142,10 @@ function cleanError(error: unknown) {
 export async function getLeads(): Promise<LeadActionResult<Lead[]>> {
   try {
     await requireAuthenticatedUser();
-    const leads = await db.lead.findMany({ orderBy: { createdAt: "desc" } });
+    const leads = await db.lead.findMany({
+      include: { aiInsight: true },
+      orderBy: { createdAt: "desc" },
+    });
     return { success: true, data: leads.map(serializeLead) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -138,13 +155,17 @@ export async function getLeads(): Promise<LeadActionResult<Lead[]>> {
 export async function getLead(id: string): Promise<LeadActionResult<Lead>> {
   try {
     await requireAuthenticatedUser();
-    const lead = await db.lead.findUnique({ where: { id: readLeadId(id) } });
+    const lead = await db.lead.findUnique({
+      where: { id: readLeadId(id) },
+      include: { aiInsight: true },
+    });
     if (!lead) return { success: false, error: "Lead not found." };
     return { success: true, data: serializeLead(lead) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
 }
+
 
 export async function createLead(formData: FormData): Promise<LeadActionResult<Lead>> {
   try {
@@ -188,6 +209,8 @@ export async function createLead(formData: FormData): Promise<LeadActionResult<L
           },
         });
       }
+
+      await markLeadAIInsightNeedsRefresh(newLead.id, tx);
 
       return newLead;
     });
@@ -237,6 +260,7 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
             createdByUserId: session.id as string,
           },
         });
+        await markLeadAIInsightNeedsRefresh(leadId, tx);
       }
       return updatedLead;
     });
@@ -273,6 +297,7 @@ export async function changeLeadStatus(id: string, status: LeadStatus): Promise<
             createdByUserId: session.id as string,
           },
         });
+        await markLeadAIInsightNeedsRefresh(leadId, tx);
       }
       return updatedLead;
     });
@@ -285,6 +310,23 @@ export async function changeLeadStatus(id: string, status: LeadStatus): Promise<
     return { success: false, error: cleanError(error) };
   }
 }
+
+export async function refreshLeadAI(id: string): Promise<LeadActionResult<Lead>> {
+  try {
+    await requireAuthenticatedUser();
+    const leadId = readLeadId(id);
+    await analyzeLead(leadId, { force: true });
+    const lead = await db.lead.findUnique({
+      where: { id: leadId },
+      include: { aiInsight: true },
+    });
+    if (!lead) return { success: false, error: "Lead not found." };
+    return { success: true, data: serializeLead(lead) };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
 
 export async function deleteLead(id: string): Promise<LeadActionResult<{ id: string }>> {
   try {

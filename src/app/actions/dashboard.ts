@@ -3,6 +3,9 @@
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { LeadStatus, FollowUpStatus } from "@prisma/client";
+import type { AIAttentionSummaryItem } from "@/features/ai-attention/types";
+import { deriveAIAttention } from "@/features/ai-attention/helpers";
+import { statusFromDatabase } from "@/features/leads/types";
 
 class UserFacingError extends Error {}
 
@@ -34,6 +37,7 @@ export type DashboardData = {
     leadsNotContacted: number;
   };
   priorities: PriorityItem[];
+  attentionLeads: AIAttentionSummaryItem[];
   pipeline: {
     new: number;
     contacted: number;
@@ -63,6 +67,7 @@ export type DashboardData = {
     type: string;
   }>;
 };
+
 
 export async function getDashboardData(): Promise<{ success: boolean; data?: DashboardData; error?: string }> {
   try {
@@ -98,7 +103,8 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
       overdueFollowUpsList,
       proposalsPendingList,
       newLeadsList,
-      recentActivities
+      recentActivities,
+      activeLeadsWithAI
     ] = await Promise.all([
       db.lead.count(),
       db.lead.groupBy({ by: ["status"], _count: true }),
@@ -133,6 +139,17 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
         take: 10,
         orderBy: { createdAt: "desc" },
         include: { lead: { select: { id: true, name: true } } }
+      }),
+      db.lead.findMany({
+        where: {
+          status: { in: [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED, LeadStatus.PROPOSAL_SENT] },
+        },
+        include: {
+          aiInsight: true,
+          activities: { orderBy: { createdAt: "desc" }, take: 2 },
+          followUps: { where: { status: FollowUpStatus.PENDING }, orderBy: { scheduledAt: "asc" }, take: 2 },
+        },
+        take: 25,
       })
     ]);
 
@@ -220,6 +237,61 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
       type: "NEW"
     }));
 
+    // Format AI Attention Leads from stored snapshots
+    const attentionLeads: AIAttentionSummaryItem[] = activeLeadsWithAI.map((l) => {
+      const serialized = {
+        id: l.id,
+        name: l.name,
+        phone: l.phone,
+        email: l.email ?? "",
+        business: l.business ?? "",
+        industry: l.industry ?? "",
+        source: l.leadSource ?? "",
+        budget: l.budget === null ? null : Number(l.budget),
+        status: statusFromDatabase[l.status as keyof typeof statusFromDatabase] || l.status,
+        quotedAmount: l.quotedAmount === null ? null : Number(l.quotedAmount),
+        lastContactDate: l.lastContactDate?.toISOString().slice(0, 10) ?? null,
+        nextFollowUpDate: l.nextFollowUpDate?.toISOString().slice(0, 10) ?? null,
+        notes: l.notes ?? "",
+        createdAt: l.createdAt.toISOString().slice(0, 10),
+        updatedAt: l.updatedAt.toISOString(),
+        aiInsight: l.aiInsight,
+      };
+
+      const ai = deriveAIAttention(serialized);
+      let attentionReason = ai.scoreReason;
+      if (l.nextFollowUpDate && new Date(l.nextFollowUpDate).getTime() < now.getTime()) {
+        attentionReason = "Overdue follow-up";
+      } else if (ai.staleStatus.isStale) {
+        attentionReason = ai.staleStatus.staleFor;
+      } else if (ai.scoreCategory === "hot") {
+        attentionReason = "High-value active opportunity";
+      }
+
+      return {
+        id: l.id,
+        leadId: l.id,
+        leadName: l.name,
+        business: l.business || undefined,
+        phone: l.phone,
+        score: ai.score,
+        scoreCategory: ai.scoreCategory,
+        priority: ai.priority,
+        attentionReason,
+        recommendedAction: ai.recommendedAction,
+        stage: serialized.status,
+        staleFor: ai.staleStatus.staleFor,
+        stageAge: ai.stageAging.timeInStage,
+      };
+    });
+
+    const priorityWeight = { critical: 3, important: 2, normal: 1 };
+    attentionLeads.sort((a, b) => {
+      const pDiff = priorityWeight[b.priority] - priorityWeight[a.priority];
+      if (pDiff !== 0) return pDiff;
+      return b.score - a.score;
+    });
+
     // Format Recent Activity Time
     const formatTimeAgo = (date: Date) => {
       const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
@@ -250,6 +322,7 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
           leadsNotContacted: getCount(LeadStatus.NEW),
         },
         priorities,
+        attentionLeads: attentionLeads.slice(0, 8),
         pipeline: {
           new: getCount(LeadStatus.NEW),
           contacted: getCount(LeadStatus.CONTACTED),
@@ -280,6 +353,7 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
         }))
       }
     };
+
   } catch (error) {
     if (error instanceof UserFacingError) {
       return { success: false, error: error.message };

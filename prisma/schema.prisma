@@ -48,6 +48,7 @@ model Lead {
   notes            String?        @db.Text
   followUps        FollowUp[]
   activities       LeadActivity[]
+  aiInsight        LeadAIInsight?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
@@ -111,3 +112,41 @@ model LeadActivity {
   @@index([leadId])
   @@index([createdAt])
 }
+
+enum AIPriority {
+  CRITICAL
+  IMPORTANT
+  NORMAL
+}
+
+enum AIActionType {
+  CALL
+  FOLLOWUP
+  WHATSAPP
+  EMAIL
+  REVIEW
+  WARNING
+  OTHER
+}
+
+model LeadAIInsight {
+  id                    String        @id @default(uuid())
+  leadId                String        @unique
+  lead                  Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  score                 Int
+  priority              AIPriority
+  scoreReason           String        @db.Text
+  recommendedAction     String        @db.Text
+  recommendedActionType AIActionType?
+  factorBreakdown       Json?
+  lastAnalyzedAt        DateTime      @default(now())
+  needsRefresh          Boolean       @default(false)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([priority])
+  @@index([score])
+  @@index([needsRefresh])
+  @@index([lastAnalyzedAt])
+}
+
