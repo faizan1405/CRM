@@ -55,7 +55,6 @@ model Lead {
   aiInsight        LeadAIInsight?
   lossEvents       LeadLossEvent[]
   notifications    SalesNotification[]
-  metaReceipts     MetaLeadReceipt[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
@@ -287,35 +286,3 @@ model PersonalNote {
   @@index([isPinned])
   @@index([createdAt])
 }
-
-enum MetaReceiptStatus {
-  RECEIVED
-  PROCESSED
-  DUPLICATE_UPDATED
-  FAILED
-  SKIPPED
-}
-
-model MetaLeadReceipt {
-  id           String            @id @default(uuid())
-  metaLeadId   String            @unique
-  leadId       String?
-  lead         Lead?             @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  formId       String?
-  pageId       String?
-  adId         String?
-  adsetId      String?
-  campaignId   String?
-  status       MetaReceiptStatus @default(RECEIVED)
-  rawPayload   Json?
-  errorMessage String?           @db.Text
-  receivedAt   DateTime          @default(now())
-  processedAt  DateTime?
-  retryCount   Int               @default(0)
-  lastRetryAt  DateTime?
-
-  @@index([status])
-  @@index([receivedAt])
-  @@index([leadId])
-}
-

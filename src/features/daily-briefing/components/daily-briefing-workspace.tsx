@@ -56,7 +56,7 @@ export function DailyBriefingWorkspace({
   const [isAiRefreshing, setIsAiRefreshing] = useState(false);
   const [selectedCard, setSelectedCard] = useState<BriefingCardId | null>(null);
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("ALL");
-  const [forceEmptyState, setForceEmptyState] = useState(false);
+
 
   // Modal State
 
@@ -126,7 +126,7 @@ export function DailyBriefingWorkspace({
   // Reset checklist
   const handleResetActions = () => {
     setActions(initialActions);
-    setForceEmptyState(false);
+
   };
 
   // Stats calculation
@@ -139,7 +139,7 @@ export function DailyBriefingWorkspace({
 
   // Filter actions
   const filteredActions = actions.filter((action) => {
-    if (forceEmptyState) return false;
+
 
     // Card-based filter if a summary card is clicked
     if (selectedCard === "overdue_followups") {
@@ -162,7 +162,6 @@ export function DailyBriefingWorkspace({
   });
 
   const isAllUrgentDone =
-    forceEmptyState ||
     (pendingActions.length === 0 && totalActions > 0) ||
     filteredActions.length === 0;
 
@@ -190,24 +189,12 @@ export function DailyBriefingWorkspace({
             Daily Sales Briefing
           </h1>
           <p className="mt-0.5 text-xs text-slate-600 sm:text-sm">
-            What matters today: 3 high-impact leads, 8 follow-ups, and ₹4.85L in active pipeline.
+            What matters today: {stats.hotLeadsCount} hot leads, {stats.followUpsTodayCount} follow-ups, and {stats.activeOpportunityValueFormatted} in active pipeline.
           </p>
         </div>
 
         {/* Header Controls */}
         <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0">
-          <button
-            type="button"
-            onClick={() => setForceEmptyState((prev) => !prev)}
-            aria-pressed={forceEmptyState}
-            className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
-              forceEmptyState
-                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
-          >
-            <span>{forceEmptyState ? "Exit Empty State" : "Preview Empty State"}</span>
-          </button>
 
           <button
             type="button"

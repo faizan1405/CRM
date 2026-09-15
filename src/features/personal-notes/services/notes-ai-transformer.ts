@@ -12,91 +12,68 @@ export async function cleanPersonalNote(content: string): Promise<string> {
   const trimmed = content.trim();
   if (!trimmed) return "";
 
-  try {
-    const systemPrompt = `${SYSTEM_PROMPT_BASE}
+  const systemPrompt = `${SYSTEM_PROMPT_BASE}
 Task: Clean up spelling, grammar, punctuation, and typographical mistakes. Keep the sentence structure and tone close to original.`;
 
-    const userPrompt = `Note to clean:\n\n${trimmed}`;
-    const result = await requestGroqText({
-      systemPrompt,
-      userPrompt,
-      temperature: 0.1,
-    });
+  const userPrompt = `Note to clean:\n\n${trimmed}`;
+  const result = await requestGroqText({
+    systemPrompt,
+    userPrompt,
+    temperature: 0.1,
+  });
 
-    return result.text;
-  } catch {
-    // Graceful deterministic fallback: clean whitespace and format points
-    return trimmed
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((l) => (l.startsWith("•") || l.startsWith("-") ? l : `• ${l.charAt(0).toUpperCase() + l.slice(1)}`))
-      .join("\n");
-  }
+  return result.text;
 }
 
 export async function organizePersonalNote(content: string): Promise<string> {
   const trimmed = content.trim();
   if (!trimmed) return "";
 
-  try {
-    const systemPrompt = `${SYSTEM_PROMPT_BASE}
+  const systemPrompt = `${SYSTEM_PROMPT_BASE}
 Task: Organize unstructured notes into a structured format with appropriate sections, bullet points, key takeaways, and action items if present.`;
 
-    const userPrompt = `Note to organize:\n\n${trimmed}`;
-    const result = await requestGroqText({
-      systemPrompt,
-      userPrompt,
-      temperature: 0.2,
-    });
+  const userPrompt = `Note to organize:\n\n${trimmed}`;
+  const result = await requestGroqText({
+    systemPrompt,
+    userPrompt,
+    temperature: 0.2,
+  });
 
-    return result.text;
-  } catch {
-    return `📌 Notes & Action Items:\n• ${trimmed.replace(/\n+/g, "\n• ")}`;
-  }
+  return result.text;
 }
 
 export async function rewritePersonalNoteClearly(content: string): Promise<string> {
   const trimmed = content.trim();
   if (!trimmed) return "";
 
-  try {
-    const systemPrompt = `${SYSTEM_PROMPT_BASE}
+  const systemPrompt = `${SYSTEM_PROMPT_BASE}
 Task: Rewrite the note with professional clarity, high readability, and concise phrasing while preserving every piece of factual content.`;
 
-    const userPrompt = `Note to rewrite:\n\n${trimmed}`;
-    const result = await requestGroqText({
-      systemPrompt,
-      userPrompt,
-      temperature: 0.2,
-    });
+  const userPrompt = `Note to rewrite:\n\n${trimmed}`;
+  const result = await requestGroqText({
+    systemPrompt,
+    userPrompt,
+    temperature: 0.2,
+  });
 
-    return result.text;
-  } catch {
-    return trimmed;
-  }
+  return result.text;
 }
 
 export async function summarizePersonalNote(content: string): Promise<string> {
   const trimmed = content.trim();
   if (!trimmed) return "";
 
-  try {
-    const systemPrompt = `${SYSTEM_PROMPT_BASE}
+  const systemPrompt = `${SYSTEM_PROMPT_BASE}
 Task: Provide a concise executive summary and key bullet takeaways of the note without omitting vital numbers, deadlines, or decisions.`;
 
-    const userPrompt = `Note to summarize:\n\n${trimmed}`;
-    const result = await requestGroqText({
-      systemPrompt,
-      userPrompt,
-      temperature: 0.2,
-    });
+  const userPrompt = `Note to summarize:\n\n${trimmed}`;
+  const result = await requestGroqText({
+    systemPrompt,
+    userPrompt,
+    temperature: 0.2,
+  });
 
-    return result.text;
-  } catch {
-    const firstLine = trimmed.split("\n")[0];
-    return `Key Summary: ${firstLine}`;
-  }
+  return result.text;
 }
 
 export async function transformPersonalNote(
@@ -104,15 +81,15 @@ export async function transformPersonalNote(
   action: AITransformAction
 ): Promise<string> {
   switch (action) {
-    case "cleanup":
-      return await cleanPersonalNote(content);
-    case "organize":
-      return await organizePersonalNote(content);
-    case "rewrite":
-      return await rewritePersonalNoteClearly(content);
-    case "summarize":
-      return await summarizePersonalNote(content);
-    default:
-      return content;
+  case "cleanup":
+    return await cleanPersonalNote(content);
+  case "organize":
+    return await organizePersonalNote(content);
+  case "rewrite":
+    return await rewritePersonalNoteClearly(content);
+  case "summarize":
+    return await summarizePersonalNote(content);
+  default:
+    return content;
   }
 }

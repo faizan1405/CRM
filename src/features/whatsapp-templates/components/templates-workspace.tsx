@@ -7,7 +7,6 @@ import {
   Search,
   X,
   Eye,
-  Send,
 } from "lucide-react";
 import type {
   WhatsAppTemplate,
@@ -19,7 +18,7 @@ import { TemplateCard } from "./template-card";
 import { TemplateEditor } from "./template-editor";
 import { TemplatePreviewCard } from "./template-preview-card";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
-import { WhatsAppLeadComposer } from "./whatsapp-lead-composer";
+
 
 const CATEGORY_TABS: Array<{ value: "all" | WhatsAppTemplateCategoryKey; label: string }> = [
   { value: "all", label: "All Templates" },
@@ -50,8 +49,6 @@ export function WhatsAppTemplatesWorkspace({
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Test composer modal trigger
-  const [testComposerOpen, setTestComposerOpen] = useState(false);
 
   // Filter templates by search and category
   const filteredTemplates = useMemo(() => {
@@ -189,15 +186,6 @@ export function WhatsAppTemplatesWorkspace({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Test Lead Composer Demo Button */}
-          <button
-            type="button"
-            onClick={() => setTestComposerOpen(true)}
-            className="inline-flex min-h-11 flex-1 sm:flex-initial items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-xs sm:text-sm font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors"
-          >
-            <Send size={15} className="text-emerald-600" aria-hidden="true" />
-            <span>Test Lead Composer</span>
-          </button>
 
           <button
             type="button"
@@ -374,24 +362,7 @@ export function WhatsAppTemplatesWorkspace({
         isDeleting={isDeleting}
       />
 
-      {/* Test Lead Message Composer Dialog */}
-      <WhatsAppLeadComposer
-        isOpen={testComposerOpen}
-        lead={{
-          id: "demo-lead-1",
-          name: "Rahul Sharma",
-          phone: "+91 98765 43210",
-          business: "Apex Logistics",
-          requirement: "Enterprise CRM & Automation",
-          budget: "₹45,000",
-          followUpDate: "Tomorrow",
-          followUpTime: "11:30 AM",
-          status: "Proposal Sent",
-        }}
-        templates={templates}
-        initialTemplateId={selectedTemplate?.id}
-        onClose={() => setTestComposerOpen(false)}
-      />
+
     </div>
   );
 }

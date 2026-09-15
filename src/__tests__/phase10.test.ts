@@ -267,13 +267,18 @@ describe("Phase 10: Personal Notes & Demo System Hardening", () => {
       expect(res.data).toContain("Follow-up call with Rakesh");
     });
 
-    it("handles AI service failures gracefully with fallback", async () => {
+    it("reports AI service failures without changing the original persisted note", async () => {
+      const note = await db.personalNote.create({
+        data: { userId: user1.id, title: "AI failure preservation", content: sampleRaw },
+      });
+      createdNoteIds.push(note.id);
       vi.spyOn(groqModule, "requestGroqText").mockRejectedValue(new Error("Groq API rate limit or outage"));
 
       const res = await cleanPersonalNote(sampleRaw);
-      expect(res.success).toBe(true);
-      expect(res.data).toBeDefined();
-      expect(res.data?.length).toBeGreaterThan(0);
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("Groq API rate limit or outage");
+      expect(res.data).toBeUndefined();
+      expect((await db.personalNote.findUnique({ where: { id: note.id } }))?.content).toBe(sampleRaw);
     });
   });
 
@@ -281,6 +286,18 @@ describe("Phase 10: Personal Notes & Demo System Hardening", () => {
   // 3. Demo Data Management & Isolation
   // ==========================================
   describe("3. Demo Data Management & Isolation", () => {
+    it("preserves non-demo leads with colliding phones or demo-like email addresses", async () => {
+      for (const data of [
+        { name: "Non-demo collision fixture", phone: "+91 98111 22334", email: "collision@example.com" },
+        { name: "Non-demo email fixture", phone: "9999911222", email: "real.demo@example.com" },
+      ]) {
+        const lead = await db.lead.create({ data });
+        createdLeadIds.push(lead.id);
+      }
+      expect((await populateDemoDataAction()).success).toBe(true);
+      expect((await clearDemoDataAction()).success).toBe(true);
+      expect(await db.lead.count({ where: { id: { in: createdLeadIds } } })).toBe(2);
+    });
     it("seeds realistic demo leads with insights, followups, and loss events", async () => {
       const res = await populateDemoDataAction();
       expect(res.success).toBe(true);

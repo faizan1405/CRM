@@ -34,6 +34,7 @@ export function NoteEditor({
   const [pinned, setPinned] = useState(note?.pinned || false);
   const [isTransforming, setIsTransforming] = useState(false);
   const [aiPreview, setAiPreview] = useState<AIPreviewState | null>(null);
+  const [aiError, setAIError] = useState<string | null>(null);
 
   const handleSave = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -55,6 +56,8 @@ export function NoteEditor({
     if (!rawText) return;
 
     setIsTransforming(true);
+    setAIError(null);
+    setAiPreview(null);
 
     try {
       let transformed = "";
@@ -62,20 +65,9 @@ export function NoteEditor({
       if (onAITransform) {
         transformed = await onAITransform(rawText, action);
       } else {
-        // UI Demonstration preview generator (Instant client-side fallback)
-        if (action === "cleanup") {
-          const lines = rawText.split(/,|\n/).map((l) => l.trim()).filter(Boolean);
-          transformed = lines
-            .map((line) => `• ${line.charAt(0).toUpperCase() + line.slice(1)}`)
-            .join("\n");
-        } else if (action === "organize") {
-          transformed = `📌 Action Items:\n• Follow up on discussion points\n• Verify numbers and pricing\n\n📝 Details:\n${rawText}\n\n🎯 Next Steps:\n• Schedule direct call with client`;
-        } else if (action === "rewrite") {
-          transformed = `Call Rakesh tomorrow to discuss proposal. If there is a budget constraint, propose the ₹18,000 package as an alternative. Review current campaign ad performance beforehand.`;
-        } else if (action === "summarize") {
-          transformed = `Key Takeaway: Planned client call with flexible pricing strategy (₹18k) contingent on ad result review.`;
-        }
+        throw new Error("AI transformation is unavailable.");
       }
+      if (!transformed.trim()) throw new Error("AI returned an empty preview. Your note is unchanged.");
 
       // Display in preview mode - NEVER silently overwrite
       setAiPreview({
@@ -86,6 +78,7 @@ export function NoteEditor({
       });
     } catch (err) {
       console.error("AI Transform failed", err);
+      setAIError(err instanceof Error ? err.message : "AI transformation failed. Your note is unchanged.");
     } finally {
       setIsTransforming(false);
     }
@@ -156,6 +149,7 @@ export function NoteEditor({
           />
         </div>
 
+        {aiError && <p role="alert" className="text-sm text-red-600">{aiError}</p>}
         {/* AI Preview Banner & Diff Container */}
         {aiPreview && (
           <div

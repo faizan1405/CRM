@@ -49,7 +49,7 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
       industry: "Retail",
       budget: new Prisma.Decimal("50000.00"),
       status: LeadStatus.NEW,
-      notes: "Submitted Meta Ad Form for retail POS CRM integration.",
+      notes: "Submitted inquiry for retail POS CRM integration.",
       insight: {
         score: 65,
         priority: AIPriority.NORMAL,
@@ -255,16 +255,6 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
   await clearDemoLeads();
 
   for (const item of demoData) {
-    // Delete any existing lead with same phone or email to avoid collisions
-    await db.lead.deleteMany({
-      where: {
-        OR: [
-          { phone: item.phone },
-          { email: item.email },
-        ],
-      },
-    });
-
     const lead = await db.lead.create({
       data: {
         name: item.name,
@@ -333,11 +323,8 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
 export async function clearDemoLeads(): Promise<{ deletedCount: number }> {
   const demoLeads = await db.lead.findMany({
     where: {
-      OR: [
-        { name: { startsWith: DEMO_TAG } },
-        { email: { endsWith: ".demo@example.com" } },
-        { email: { contains: ".demo@" } },
-      ],
+      name: { startsWith: DEMO_TAG },
+      email: { endsWith: ".demo@example.com" },
     },
     select: { id: true },
   });
@@ -353,11 +340,7 @@ export async function clearDemoLeads(): Promise<{ deletedCount: number }> {
 
   const deleteResult = await db.lead.deleteMany({
     where: {
-      OR: [
-        { name: { startsWith: DEMO_TAG } },
-        { email: { endsWith: ".demo@example.com" } },
-        { email: { contains: ".demo@" } },
-      ],
+      id: { in: ids },
     },
   });
 

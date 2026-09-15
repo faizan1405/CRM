@@ -13,6 +13,7 @@ import { getDashboardData } from "@/app/actions/dashboard";
 import { getDailyBriefing, refreshDailyBriefingAi } from "@/app/actions/daily-briefing";
 import Link from "next/link";
 import { getTypeIcon, typeStyles } from "@/features/followups/follow-up-types";
+import { typeFromDatabase } from "@/features/followups/types";
 import { CalendarClock, ArrowRight, AlertTriangle, Sparkles } from "lucide-react";
 import { FollowUpType } from "@prisma/client";
 
@@ -121,14 +122,15 @@ export default async function DashboardPage() {
               ) : (
                 <div className="flex flex-col gap-3">
                   {data.todayFollowUps.map(f => {
-                    const typeInfo = typeStyles[f.type as keyof typeof typeStyles] ?? typeStyles.OTHER;
+                    const followUpType = typeFromDatabase[f.type as FollowUpType] ?? "Other";
+                    const typeInfo = typeStyles[followUpType];
                     return (
                       <div key={f.id} className="group flex items-center justify-between gap-3 rounded-xl border p-3 hover:bg-slate-50 transition-colors">
                         <div className="flex flex-col gap-1 overflow-hidden">
                           <h3 className="truncate text-sm font-semibold text-slate-900">{f.leadName || "Unknown"}</h3>
                           <div className="flex items-center gap-2">
                              <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${typeInfo.bg} ${typeInfo.text}`}>
-                                {getTypeIcon(f.type as FollowUpType)} {f.type}
+                                {getTypeIcon(followUpType)} {followUpType}
                              </span>
                              <span className="text-xs text-slate-500">{f.time}</span>
                           </div>

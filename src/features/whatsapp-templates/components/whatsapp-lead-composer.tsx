@@ -13,6 +13,7 @@ import type { WhatsAppComposerLead, WhatsAppTemplate } from "../types";
 
 import { interpolatePlaceholders } from "../placeholders";
 import { PlaceholderChips } from "./placeholder-chips";
+import { personalizeWhatsAppMessage } from "@/app/actions/whatsapp-templates";
 
 interface WhatsAppLeadComposerProps {
   isOpen: boolean;
@@ -75,10 +76,9 @@ export function WhatsAppLeadComposer({
       if (onAIPersonalize) {
         personalized = await onAIPersonalize(lead, customMessage);
       } else {
-        // UI Demonstration preview (client-side fallback without external APIs)
-        personalized = `Hi ${lead.name}, I was reviewing your inquiry for ${lead.business || "your business"} regarding ${
-          lead.requirement || "your goals"
-        }. I've tailored a custom approach that matches your budget. When would be a good time for a 5-min chat today?`;
+        const result = await personalizeWhatsAppMessage({ leadId: lead.id, templateMessage: customMessage });
+        if (!result.success || !result.data) throw new Error(result.error || "AI personalization failed.");
+        personalized = result.data.personalizedMessage;
       }
 
       // Show preview first - NEVER silently overwrite

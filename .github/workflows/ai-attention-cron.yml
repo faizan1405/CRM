@@ -14,7 +14,7 @@ jobs:
       - name: Trigger AI Attention Analysis
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          APP_URL: ${{ secrets.PRODUCTION_APP_URL || 'https://crm-faizan1405.vercel.app' }}
+          APP_URL: ${{ secrets.PRODUCTION_APP_URL || 'https://crm-five-eta-59.vercel.app' }}
         run: |
           if [ -z "$CRON_SECRET" ]; then
             echo "::error::CRON_SECRET is not configured in repository secrets."
