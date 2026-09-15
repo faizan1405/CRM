@@ -9,6 +9,7 @@ import {
   ExternalLink,
   Sparkles,
 } from "lucide-react";
+import { ActionCard } from "@/components/action-card";
 import type { SmartNotification } from "../types";
 import { NotificationPriorityBadge } from "./notification-priority-badge";
 import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
@@ -60,8 +61,9 @@ export function NotificationCard({
   };
 
   return (
-    <article
-      onClick={handleCardClick}
+    <ActionCard
+      aria-label={notification.leadId ? `Open lead ${notification.leadName}` : "Read notification"}
+      onActivate={() => { handleCardClick(); if (notification.leadId) onOpenLead(notification.leadId); }}
       className={`group relative rounded-2xl border p-4 transition-all duration-150 ${
         isResolved
           ? "border-slate-200 bg-slate-50/70 opacity-75"
@@ -175,6 +177,7 @@ export function NotificationCard({
 
           <button
             type="button"
+            disabled={!notification.leadId}
             onClick={() => onAddFollowUp(notification)}
             className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
             title="Add Follow-up"
@@ -202,6 +205,7 @@ export function NotificationCard({
 
           <button
             type="button"
+            disabled={!notification.leadId}
             onClick={() => onOpenLead(notification.leadId)}
             className="inline-flex min-h-8 items-center gap-1 rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white shadow-2xs hover:bg-slate-800 transition-colors"
             aria-label={`Open lead record for ${notification.leadName}`}
@@ -211,6 +215,6 @@ export function NotificationCard({
           </button>
         </div>
       </div>
-    </article>
+    </ActionCard>
   );
 }

@@ -1,15 +1,19 @@
 "use client";
 
 import { Plus, SearchX, UsersRound } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { useLeadNavigation } from "./lead-navigation-provider";
+import { statusFromDatabase, type DatabaseLeadStatus } from "./types";
 import { useEffect, useMemo, useState } from "react";
 import { changeLeadStatus, createLead, deleteLead, getLead, updateLead } from "@/app/actions/leads";
 import { createFollowUp } from "@/app/actions/follow-ups";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { LeadCard } from "@/features/leads/lead-card";
-import { LeadDetailPanel } from "@/features/leads/lead-detail-panel";
+import dynamic from "next/dynamic";
+const LeadDetailPanel = dynamic(() => import("@/features/leads/lead-detail-panel").then(m => m.LeadDetailPanel));
 import { LeadFilters } from "@/features/leads/lead-filters";
-import { LeadForm } from "@/features/leads/lead-form";
+const LeadForm = dynamic(() => import("@/features/leads/lead-form").then(m => m.LeadForm));
 import { LeadTable } from "@/features/leads/lead-table";
 import type { Lead, LeadStatus } from "@/features/leads/types";
 import { LostReasonDialog } from "@/features/lost-reasons/lost-reason-dialog";
@@ -17,7 +21,8 @@ import type { LostReasonSubmission } from "@/features/lost-reasons/types";
 import { useLeadActivities } from "@/features/activity/use-activities";
 import { FollowUpForm } from "@/features/followups/follow-up-form";
 import type { NewFollowUpInput } from "@/features/followups/types";
-import type { DuplicateLeadCandidate, StructuredLeadDraft, StructureLeadCallback } from "@/features/leads/ai-entry-types";
+import type { DuplicateLeadCandidate, StructuredLeadDraft } from "@/features/leads/ai-entry-types";
+import type { BulkStructureLeadCallback } from "./bulk-review-types";
 import { structureLeadAction, updateExistingLeadWithDraftAction } from "@/app/actions/ai-lead-entry";
 
 type Feedback = { tone: "success" | "error"; message: string } | null;
@@ -25,10 +30,16 @@ type Feedback = { tone: "success" | "error"; message: string } | null;
 type LeadsWorkspaceProps = {
   initialLeads: Lead[];
   initialError: string | null;
-  onStructureLead?: StructureLeadCallback;
+  onStructureLead?: BulkStructureLeadCallback;
 };
 
 export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: LeadsWorkspaceProps) {
+  const searchParams = useSearchParams();
+  const navigation = useLeadNavigation();
+  const statusParam = searchParams.get("status");
+  const selectedParam = searchParams.get("selected");
+  const actionParam = searchParams.get("action");
+  const newParam = searchParams.get("new");
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<LeadStatus | "All">("All");
@@ -42,11 +53,20 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
   const [feedback, setFeedback] = useState<Feedback>(initialError ? { tone: "error", message: initialError } : null);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.location.search.includes("new=true")) {
+    if (newParam === "true") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormOpen(true);
     }
-  }, []);
+  }, [newParam]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStatus(statusFromDatabase[statusParam as DatabaseLeadStatus] || "All");
+  }, [statusParam]);
+
+  useEffect(() => {
+    if (selectedParam && navigation) navigation.openLead(selectedParam, actionParam === "activity" || actionParam === "followups" ? actionParam : null);
+  }, [selectedParam, actionParam, navigation]);
 
   const {
     activities,
@@ -91,7 +111,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     setDetailAction(action);
     setSelectedLead(lead);
     const result = await getLead(lead.id);
-    if (result.success) setSelectedLead(result.data);
+    if (result.success) setSelectedLead(current => current?.id === lead.id ? result.data : current);
     else setFeedback({ tone: "error", message: result.error });
   }
 
@@ -279,7 +299,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
         )}
       </section>
 
-      <LeadForm
+      {formOpen && <LeadForm
         open={formOpen}
         lead={editingLead}
         saving={saving}
@@ -291,10 +311,11 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
         }}
         onSubmit={saveLead}
         onStructureLead={onStructureLead || structureLeadAction}
+        onBulkSaved={saved => setLeads(current => [...saved, ...current.filter(lead => !saved.some(item => item.id === lead.id))])}
         onOpenDuplicate={openDuplicate}
         onUpdateDuplicate={updateDuplicate}
-      />
-      <LeadDetailPanel
+      />}
+      {selectedLead && <LeadDetailPanel key={selectedLead.id}
         lead={selectedLead}
         saving={saving}
         onClose={() => {
@@ -319,7 +340,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
         initialAction={detailAction}
         onEditNote={handleEditNote}
         onDeleteNote={handleDeleteNote}
-      />
+      />}
       <FollowUpForm
         isOpen={Boolean(followUpLead)}
         defaultLeadId={followUpLead?.id}

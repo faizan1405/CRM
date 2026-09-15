@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Banknote, CircleDollarSign, ClockAlert, Percent, ReceiptIndianRupee, UsersRound } from "lucide-react";
 import type { AnalyticsKpiData } from "../types";
 import { compactNumber, currency } from "./shared";
@@ -13,12 +14,12 @@ const cards = [
 
 export function AnalyticsKpis({ data }: { data: AnalyticsKpiData }) {
   return <section aria-label="Key performance indicators" className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">{cards.map(({ key, label, icon: Icon, tone, format, note }) => (
-    <article key={key} className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
+    <Link href={key === "totalLeads" ? "/leads" : key === "overdueFollowUps" ? "/follow-ups?filter=overdue" : key === "openPipelineValue" ? "/pipeline" : key === "winRate" ? "/analytics#win-loss" : "/leads?status=WON"} aria-label={`View ${label}`} key={key} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 hover:border-blue-300 min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
       <div className={`mb-4 grid size-9 place-items-center rounded-xl ${tone}`}><Icon aria-hidden="true" size={18} /></div>
       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>
       <p className="mt-1 truncate text-[clamp(1.2rem,1.5vw,1.5rem)] font-bold tracking-tight text-slate-950" title={format(data[key])}>{format(data[key])}</p>
       <p className="mt-1 text-xs text-slate-500">{data[key] === 0 ? "No data yet" : note}</p>
       {key === "openPipelineValue" && data[key] > 0 ? <p className="sr-only">Compact value: {compactNumber.format(data[key])}</p> : null}
-    </article>
+    </Link>
   ))}</section>;
 }

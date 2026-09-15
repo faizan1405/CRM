@@ -53,9 +53,9 @@ export function AnalyticsDashboard({
       <AnalyticsKpis data={data.kpis} />
       <div className="grid min-w-0 gap-5 xl:grid-cols-3">
         <SalesFunnel stages={data.funnel} />
-        <WinLossCard data={data.winLoss} />
+        <div id="win-loss" className="min-w-0"><WinLossCard data={data.winLoss} /></div>
       </div>
-      <LostReasonsAnalytics data={lostReasons} />
+      <div id="lost-reasons" className="scroll-mt-5"><LostReasonsAnalytics data={lostReasons} /></div>
       <div className="grid min-w-0 gap-5 xl:grid-cols-3">
         <RevenueTrend data={data.revenueTrend} />
         <LeadTrend data={data.leadTrend.points} />

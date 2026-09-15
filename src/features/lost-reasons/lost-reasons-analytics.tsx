@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import {
   TrendingDown,
   Sparkles,
@@ -106,7 +107,7 @@ export function LostReasonsAnalytics({
           {/* Key Metric Highlights */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {/* Total Lost Card */}
-            <div className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 transition-all hover:bg-slate-50">
+            <Link href="/leads?status=LOST" aria-label="View lost leads" className="block rounded-xl border border-slate-200/80 bg-slate-50/50 p-4 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                   Total Lost Leads
@@ -121,7 +122,7 @@ export function LostReasonsAnalytics({
                 </p>
                 <span className="text-xs font-medium text-slate-500">leads lost</span>
               </div>
-            </div>
+            </Link>
 
             {/* Top Lost Reason Card */}
             <div className="rounded-xl border border-rose-200/80 bg-gradient-to-br from-rose-50/40 to-white p-4 transition-all">

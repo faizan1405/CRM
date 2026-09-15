@@ -1,11 +1,16 @@
 "use client";
 
+import { GripVertical } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useRef } from "react";
+import { statusFromDatabase, type DatabaseLeadStatus } from "@/features/leads/types";
 import { useCallback, useMemo, useState } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { changeLeadStatus, createLead, deleteLead, getLead, updateLead } from "@/app/actions/leads";
 import { createFollowUp } from "@/app/actions/follow-ups";
-import { LeadDetailPanel } from "@/features/leads/lead-detail-panel";
-import { LeadForm } from "@/features/leads/lead-form";
+import dynamic from "next/dynamic";
+const LeadDetailPanel = dynamic(() => import("@/features/leads/lead-detail-panel").then(m => m.LeadDetailPanel));
+const LeadForm = dynamic(() => import("@/features/leads/lead-form").then(m => m.LeadForm));
 import type { Lead, LeadStatus } from "@/features/leads/types";
 import { PipelineCard } from "./pipeline-card";
 import { PipelineSummary } from "./pipeline-summary";
@@ -27,6 +32,12 @@ const COLUMNS: LeadStatus[] = [
 ];
 
 export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
+  const searchParams = useSearchParams();
+  const requestedStage = statusFromDatabase[searchParams.get("stage") as DatabaseLeadStatus];
+  const stageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (requestedStage) stageRef.current?.querySelector(`[data-stage="${requestedStage}"]`)?.scrollIntoView({ block: "nearest", inline: "start" });
+  }, [requestedStage]);
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -111,7 +122,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   const handleSelectLead = async (lead: Lead) => {
     setSelectedLead(lead);
     const result = await getLead(lead.id);
-    if (result.success) setSelectedLead(result.data);
+    if (result.success) setSelectedLead(current => current?.id === lead.id ? result.data : current);
     else setError(result.error);
   };
 
@@ -221,15 +232,15 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
 
       {/* Mobile View (Agent B UI) */}
       <div className="flex-1 min-h-0 lg:hidden">
-        <PipelineMobileView leads={leads} grouped={grouped} onSelectLead={handleSelectLead} />
+        <PipelineMobileView initialStage={requestedStage} leads={leads} grouped={grouped} onSelectLead={handleSelectLead} />
       </div>
 
       {/* Kanban Board (Agent A UI for Desktop) */}
-      <div className="hidden lg:flex flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar">
+      <div ref={stageRef} className="hidden lg:flex flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar">
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="flex h-full min-w-max gap-4 items-start pb-4">
             {COLUMNS.map((status) => (
-              <div key={status} className="flex h-full w-80 shrink-0 flex-col rounded-xl bg-slate-50 border border-slate-200 overflow-hidden">
+              <div key={status} data-stage={status} className="flex h-full w-80 shrink-0 flex-col rounded-xl bg-slate-50 border border-slate-200 overflow-hidden">
                 <PipelineColumnHeader status={status} count={grouped[status].length} />
 
                 <Droppable droppableId={status}>
@@ -248,12 +259,12 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
                               <div
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
-                                {...provided.dragHandleProps}
                                 style={provided.draggableProps.style}
                                 className={snapshot.isDragging ? "z-50" : ""}
                               >
                                 <PipelineCard
                                   lead={lead}
+                                  dragHandle={<button type="button" {...provided.dragHandleProps} aria-label={`Drag ${lead.name} to another stage`} className="grid size-8 place-items-center rounded-md text-slate-400 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-600"><GripVertical size={16} aria-hidden="true" /></button>}
                                   onClick={() => handleSelectLead(lead)}
                                 />
                               </div>
@@ -274,8 +285,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         </DragDropContext>
       </div>
 
-      <LeadDetailPanel
-        lead={selectedLead}
+      {selectedLead && <LeadDetailPanel key={selectedLead.id}         lead={selectedLead}
         saving={saving}
         onClose={() => setSelectedLead(null)}
         onEdit={() => {
@@ -295,11 +305,11 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         onAddFollowUp={selectedLead ? () => setFollowUpLead(selectedLead) : undefined}
         onEditNote={handleEditNote}
         onDeleteNote={handleDeleteNote}
-      />
+      />}
 
       <FollowUpForm isOpen={Boolean(followUpLead)} defaultLeadId={followUpLead?.id} leads={followUpLead ? [{ id: followUpLead.id, name: followUpLead.name }] : []} saving={saving} onClose={() => { if (!saving) setFollowUpLead(null); }} onSubmit={handleAddFollowUp} />
       
-      <LeadForm 
+      {formOpen && <LeadForm 
         open={formOpen} 
         lead={editingLead} 
         saving={saving} 
@@ -310,7 +320,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
           } 
         }} 
         onSubmit={handleSaveLead} 
-      />
+      />}
 
       <LostReasonDialog
         isOpen={Boolean(lostReasonLead)}

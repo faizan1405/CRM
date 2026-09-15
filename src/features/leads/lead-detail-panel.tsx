@@ -1,5 +1,8 @@
 "use client";
 
+import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
+
+import dynamic from "next/dynamic";
 import { Pencil, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
@@ -17,11 +20,11 @@ import {
 import { getLeadLossHistory } from "@/app/actions/lost-reasons";
 import { LostLeadDetail } from "@/features/lost-reasons/lost-lead-detail";
 import type { LeadLossRecord } from "@/features/lost-reasons/types";
-import { AIConversationNotes } from "@/features/ai-conversation-notes/ai-conversation-notes";
+const AIConversationNotes = dynamic(() => import("@/features/ai-conversation-notes/ai-conversation-notes").then(m => m.AIConversationNotes));
 import { structureCallNotes, applyCallNotes } from "@/app/actions/conversation-notes";
 import { createFollowUp } from "@/app/actions/follow-ups";
 import { getWhatsAppTemplates } from "@/app/actions/whatsapp-templates";
-import { WhatsAppLeadComposer } from "@/features/whatsapp-templates/components/whatsapp-lead-composer";
+const WhatsAppLeadComposer = dynamic(() => import("@/features/whatsapp-templates/components/whatsapp-lead-composer").then(m => m.WhatsAppLeadComposer));
 import type { WhatsAppTemplate } from "@/features/whatsapp-templates/types";
 import { FileText, Sparkles } from "lucide-react";
 
@@ -48,7 +51,7 @@ type LeadDetailPanelProps = {
   onAddNote?: (text: string) => Promise<{ success: boolean; error?: string }>;
   onRefreshActivities?: () => void;
   onAddFollowUp?: () => void;
-  initialAction?: "note" | "status" | null;
+  initialAction?: "note" | "status" | "activity" | "followups" | null;
   whatsAppMessage?: string;
   onEditNote?: (data: { id: string; noteId: string; noteText: string }) => void;
   onDeleteNote?: (data: { id: string; noteId: string }) => void;
@@ -104,27 +107,18 @@ export function LeadDetailPanel({
     }
   }, [composerOpen, templates.length]);
 
-  useEffect(() => {
-    if (!leadId) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    closeButtonRef.current?.focus();
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [leadId]);
+  useDialogAccessibility(Boolean(leadId), onClose, saving, closeButtonRef);
 
-  useEffect(() => {
-    if (!leadId) return;
-    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && !saving && onClose();
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [leadId, onClose, saving]);
+
 
   useEffect(() => {
     if (!leadId || !initialAction) return;
     const frame = window.requestAnimationFrame(() => {
       if (initialAction === "status") statusSelectRef.current?.focus();
+      if (initialAction === "activity" || initialAction === "followups") {
+        onActivityFilterChange?.(initialAction === "followups" ? "followups" : "all");
+        document.getElementById("lead-activity-section")?.scrollIntoView({ block: "start" });
+      }
       if (initialAction === "note") {
         const composer = document.getElementById(`lead-note-${leadId}`);
         composer?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -132,7 +126,7 @@ export function LeadDetailPanel({
       }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [initialAction, leadId]);
+  }, [initialAction, leadId, onActivityFilterChange]);
 
   if (!lead) return null;
 
@@ -153,9 +147,10 @@ export function LeadDetailPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div className="fixed inset-x-0 top-0 z-50 h-dvh">
       <button
         type="button"
+        tabIndex={-1}
         aria-label="Close lead details"
         onClick={onClose}
         disabled={saving}
@@ -165,9 +160,9 @@ export function LeadDetailPanel({
         role="dialog"
         aria-modal="true"
         aria-labelledby="lead-detail-title"
-        className="absolute inset-y-0 right-0 flex w-full max-w-xl flex-col bg-[var(--background)] shadow-2xl motion-safe:animate-[lead-panel-in_180ms_ease-out]"
+        className="absolute inset-y-0 right-0 flex h-full min-h-0 w-full max-w-xl flex-col bg-[var(--background)] shadow-2xl motion-safe:animate-[lead-panel-in_180ms_ease-out]"
       >
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-5 sm:px-6">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-5 sm:px-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2
@@ -196,7 +191,7 @@ export function LeadDetailPanel({
           role="region"
           tabIndex={0}
           aria-label="Lead information"
-          className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4"
         >
           {/* Phase 8: AI Insights Section */}
           <LeadDetailAIInsights data={aiData} onRecommendedAction={handleRecommendedAction} />
@@ -240,7 +235,7 @@ export function LeadDetailPanel({
 
           <section
             id="lead-activity-section"
-            className="overflow-hidden rounded-xl border border-[var(--border)] bg-white"
+            className="min-w-0 rounded-xl border border-[var(--border)] bg-white"
           >
             <div className="border-b border-slate-100 px-5 py-3">
               <h3 className="font-semibold text-slate-950">Notes & Activity</h3>
@@ -251,7 +246,7 @@ export function LeadDetailPanel({
               </p>
             </div>
 
-            <div className="flex" style={{ minHeight: 240, maxHeight: 420 }}>
+            <div className="min-w-0">
               <LeadActivityTimeline
                 activities={activities}
                 filter={activityFilter}
@@ -395,9 +390,12 @@ export function LeadDetailPanel({
             onAddNote={
               onAddNote
                 ? () => {
-                    const composer = document.getElementById(`lead-note-${lead.id}`);
-                    composer?.scrollIntoView({ behavior: "smooth", block: "center" });
-                    composer?.focus({ preventScroll: true });
+                    setNoteMode("standard");
+                    window.requestAnimationFrame(() => {
+                      const composer = document.getElementById(`lead-note-${lead.id}`);
+                      composer?.scrollIntoView({ block: "center" });
+                      composer?.focus({ preventScroll: true });
+                    });
                   }
                 : undefined
             }
@@ -410,7 +408,7 @@ export function LeadDetailPanel({
       </aside>
       
       {/* WhatsApp Composer */}
-      <WhatsAppLeadComposer
+      {composerOpen && <WhatsAppLeadComposer
         isOpen={composerOpen}
         onClose={() => setComposerOpen(false)}
         templates={templates}
@@ -425,7 +423,7 @@ export function LeadDetailPanel({
           followUpDate: lead.nextFollowUpDate ? formatDate(lead.nextFollowUpDate) : null,
           followUpTime: null,
         }}
-      />
+      />}
     </div>
   );
 }

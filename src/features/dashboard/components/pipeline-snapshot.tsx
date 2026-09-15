@@ -21,7 +21,7 @@ export function PipelineSnapshot({ data }: { data: { new: number; contacted: num
             <div
               key={stage.name}
               style={{ width }}
-              className={`h-full ${stage.color} transition-all duration-500`}
+              className={`h-full ${stage.color} transition-all duration-150`}
               title={`${stage.name}: ${stage.count}`}
             />
           );
@@ -33,8 +33,8 @@ export function PipelineSnapshot({ data }: { data: { new: number; contacted: num
         {pipelineStages.map((stage) => (
           <Link
             key={stage.name}
-            href="/pipeline"
-            className="group flex flex-col items-center justify-center rounded-xl border bg-white p-3 shadow-sm transition-all hover:border-slate-300 hover:shadow-md"
+            href={`/pipeline?stage=${stage.name === "Proposal" ? "PROPOSAL_SENT" : stage.name.toUpperCase()}`}
+            className="group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 flex flex-col items-center justify-center rounded-xl border bg-white p-3 shadow-sm transition-all hover:border-slate-300 hover:shadow-md"
           >
             <span className={`text-xl font-bold ${stage.text}`}>{stage.count}</span>
             <span className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">

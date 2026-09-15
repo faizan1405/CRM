@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { DuplicateLeadCandidate, StructuredLeadDraft, StructuredLeadResult, StructureLeadCallback } from "./ai-entry-types";
+import type { DuplicateLeadCandidate, StructuredLeadDraft, StructuredLeadResult } from "./ai-entry-types";
+import type { BulkStructureLeadCallback, ReviewLeadResult } from "./bulk-review-types";
+import { BulkLeadReview } from "./bulk-lead-review";
+import type { Lead } from "./types";
 import { StructuredLeadPreview } from "./structured-lead-preview";
 import { UnstructuredAIInput } from "./unstructured-ai-input";
 import { structureLeadAction } from "@/app/actions/ai-lead-entry";
@@ -9,7 +12,9 @@ import { structureLeadAction } from "@/app/actions/ai-lead-entry";
 type AILeadEntryProps = {
   saving: boolean;
   onSubmit: (formData: FormData) => Promise<void>;
-  onStructureLead?: StructureLeadCallback;
+  onStructureLead?: BulkStructureLeadCallback;
+  onBulkSaved?: (leads: Lead[]) => void;
+  onBusyChange?: (busy: boolean) => void;
   onOpenDuplicate?: (candidate: DuplicateLeadCandidate) => void;
   onUpdateDuplicate?: (candidate: DuplicateLeadCandidate, draft: StructuredLeadDraft) => void;
 };
@@ -20,7 +25,12 @@ export function AILeadEntry({
   onStructureLead,
   onOpenDuplicate,
   onUpdateDuplicate,
+  onBulkSaved,
+  onBusyChange,
 }: AILeadEntryProps) {
+  const [bulk, setBulk] = useState<ReviewLeadResult[] | null>(null);
+  const [reviewVersion, setReviewVersion] = useState(0);
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [rawInput, setRawInput] = useState("");
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +49,18 @@ export function AILeadEntry({
         setError(response.error);
         return;
       }
-      setResult(response.data);
+      const data = response.data;
+      const entries = Array.isArray(data) ? data : "drafts" in data ? data.drafts : "leads" in data ? data.leads : [data];
+      const parsed: ReviewLeadResult[] = entries.map(item => "draft" in item ? item : {
+        draft: item,
+        possibleDuplicate: item.possibleDuplicate,
+        itemStatus: item.itemStatus,
+        validationErrors: item.validationErrors,
+      });
+      if (!parsed.length) { setError("No leads detected. Check your input and retry."); return; }
+      setReviewVersion(current => current + 1);
+      setBulk(parsed.length > 1 ? parsed : null);
+      setResult(parsed.length === 1 ? parsed[0] : null);
     } catch {
       setError("AI couldn’t structure this lead. You can retry or use Manual Entry.");
     } finally {
@@ -54,17 +75,17 @@ export function AILeadEntry({
   return (
     <div
       className={`grid min-w-0 gap-4 p-4 sm:p-5 ${
-        result ? "lg:grid-cols-[minmax(18rem,0.8fr)_minmax(24rem,1.2fr)] lg:gap-5" : "mx-auto max-w-2xl"
+        bulk ? "mx-auto w-full max-w-5xl" : result ? "lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-5" : "mx-auto max-w-2xl"
       }`}
     >
       <UnstructuredAIInput
         value={rawInput}
-        onChange={setRawInput}
-        onStructure={structureLead}
-        processing={processing}
+        onChange={value => { if (!bulkSaving) setRawInput(value); }}
+        onStructure={() => { if (!bulkSaving && !saving) void structureLead(); }}
+        processing={processing || bulkSaving || saving}
         error={error}
       />
-      {result ? (
+      {bulk ? <BulkLeadReview key={reviewVersion} leads={bulk} saving={saving} onSaved={onBulkSaved} onBusyChange={value => { setBulkSaving(value); onBusyChange?.(value); }} /> : result ? (
         <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <StructuredLeadPreview
             draft={result.draft}

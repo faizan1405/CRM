@@ -1,9 +1,12 @@
 "use client";
 
+import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
+
 import { Keyboard, Sparkles, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { AILeadEntry } from "@/features/leads/ai-lead-entry";
-import type { DuplicateLeadCandidate, StructuredLeadDraft, StructureLeadCallback } from "@/features/leads/ai-entry-types";
+import type { DuplicateLeadCandidate, StructuredLeadDraft } from "@/features/leads/ai-entry-types";
+import type { BulkStructureLeadCallback } from "./bulk-review-types";
 import { leadStatuses, type Lead } from "@/features/leads/types";
 
 type LeadFormProps = {
@@ -12,7 +15,9 @@ type LeadFormProps = {
   saving: boolean;
   onClose: () => void;
   onSubmit: (formData: FormData) => Promise<void>;
-  onStructureLead?: StructureLeadCallback;
+  onStructureLead?: BulkStructureLeadCallback;
+  onBulkSaved?: (leads: Lead[]) => void;
+  onBusyChange?: (busy: boolean) => void;
   onOpenDuplicate?: (candidate: DuplicateLeadCandidate) => void;
   onUpdateDuplicate?: (candidate: DuplicateLeadCandidate, draft: StructuredLeadDraft) => void;
 };
@@ -27,7 +32,7 @@ function ManualLeadEntry({
   onSubmit,
 }: Pick<LeadFormProps, "lead" | "saving" | "onClose" | "onSubmit">) {
   return (
-    <form action={onSubmit} className="overflow-y-auto">
+    <form action={onSubmit} className="min-w-0">
       <div className="mx-auto max-w-2xl">
         <input type="hidden" name="source" value={lead?.source ?? ""} />
         <div className="grid gap-5 px-5 py-5 sm:grid-cols-2 sm:px-6">
@@ -185,6 +190,8 @@ function NewLeadEntry({
   onStructureLead,
   onOpenDuplicate,
   onUpdateDuplicate,
+  onBulkSaved,
+  onBusyChange,
 }: Omit<LeadFormProps, "open" | "lead">) {
   const [mode, setMode] = useState<"ai" | "manual">("ai");
   return (
@@ -227,6 +234,8 @@ function NewLeadEntry({
             onStructureLead={onStructureLead}
             onOpenDuplicate={onOpenDuplicate}
             onUpdateDuplicate={onUpdateDuplicate}
+            onBulkSaved={onBulkSaved}
+            onBusyChange={onBusyChange}
           />
         </div>
         <div hidden={mode !== "manual"}>
@@ -246,21 +255,14 @@ export function LeadForm({
   onStructureLead,
   onOpenDuplicate,
   onUpdateDuplicate,
+  onBulkSaved,
+  onBusyChange,
 }: LeadFormProps) {
+  const [entryBusy, setEntryBusy] = useState(false);
+  const modalSaving = saving || entryBusy;
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    if (lead) closeButtonRef.current?.focus();
-    const closeOnEscape = (event: KeyboardEvent) => event.key === "Escape" && !saving && onClose();
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [lead, onClose, open, saving]);
+  useDialogAccessibility(open, onClose, modalSaving, closeButtonRef);
 
   if (!open) return null;
 
@@ -268,9 +270,10 @@ export function LeadForm({
     <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-6">
       <button
         type="button"
+        tabIndex={-1}
         aria-label="Close lead form"
         onClick={onClose}
-        disabled={saving}
+        disabled={modalSaving}
         className="absolute inset-0 bg-slate-950/50"
       />
       <section
@@ -292,7 +295,7 @@ export function LeadForm({
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            disabled={saving}
+            disabled={modalSaving}
             aria-label="Close lead form"
             className="grid size-11 shrink-0 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
           >
@@ -301,16 +304,18 @@ export function LeadForm({
         </header>
         {lead ? (
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <ManualLeadEntry lead={lead} saving={saving} onClose={onClose} onSubmit={onSubmit} />
+            <ManualLeadEntry lead={lead} saving={modalSaving} onClose={onClose} onSubmit={onSubmit} />
           </div>
         ) : (
           <NewLeadEntry
-            saving={saving}
+            saving={modalSaving}
             onClose={onClose}
             onSubmit={onSubmit}
             onStructureLead={onStructureLead}
             onOpenDuplicate={onOpenDuplicate}
             onUpdateDuplicate={onUpdateDuplicate}
+            onBulkSaved={onBulkSaved}
+            onBusyChange={value => { setEntryBusy(value); onBusyChange?.(value); }}
           />
         )}
       </section>

@@ -7,6 +7,7 @@ import { DuplicateLeadWarning } from "./duplicate-lead-warning";
 import { FollowUpSuggestion } from "./follow-up-suggestion";
 
 type StructuredLeadPreviewProps = {
+  idSuffix?: string;
   draft: StructuredLeadDraft;
   duplicate?: DuplicateLeadCandidate | null;
   saving: boolean;
@@ -71,6 +72,7 @@ function FieldLabel({
 }
 
 export function StructuredLeadPreview({
+  idSuffix = "single",
   draft,
   duplicate,
   saving,
@@ -99,11 +101,11 @@ export function StructuredLeadPreview({
   ).length;
 
   return (
-    <form action={onSubmit} className="space-y-4" aria-labelledby="structured-preview-title">
+    <form action={onSubmit} className="space-y-4" aria-labelledby={`structured-preview-title-${idSuffix}`}>
       <input type="hidden" name="source" value="" />
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 id="structured-preview-title" className="flex items-center gap-2 text-base font-semibold text-slate-950">
+          <h2 id={`structured-preview-title-${idSuffix}`} className="flex items-center gap-2 text-base font-semibold text-slate-950">
             <BadgeCheck aria-hidden="true" className="text-blue-600" size={19} />
             Review structured lead
           </h2>

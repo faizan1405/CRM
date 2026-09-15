@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useLeadNavigation } from "@/features/leads/lead-navigation-provider";
 import { useRouter } from "next/navigation";
 import type {
   AiBriefingData,
@@ -48,6 +49,7 @@ export function DailyBriefingWorkspace({
   onRefreshAi,
 }: DailyBriefingWorkspaceProps) {
   const router = useRouter();
+  const navigation = useLeadNavigation();
 
   // State
   const [stats, setStats] = useState<BriefingSummaryStats>(initialStats);
@@ -79,7 +81,8 @@ export function DailyBriefingWorkspace({
   // Handle Open Lead
   const handleOpenLead = (item: BriefingActionItem) => {
     if (item.leadId) {
-      router.push(`/leads/${item.leadId}`);
+      if (navigation) navigation.openLead(item.leadId);
+      else router.push(`/leads?selected=${encodeURIComponent(item.leadId)}`);
     }
   };
 
@@ -99,9 +102,9 @@ export function DailyBriefingWorkspace({
 
   // Handle Add Follow-up modal trigger
   const handleOpenAddFollowUp = (item: BriefingActionItem) => {
-    if (item.leadId) {
-      router.push(`/leads/${item.leadId}`);
-    }
+    if (!item.leadId) return;
+    if (navigation) navigation.openFollowUp({ id: item.leadId, name: item.leadName || item.title });
+    else router.push(`/follow-ups?new=true&leadId=${encodeURIComponent(item.leadId)}`);
   };
 
   // Handle AI Refresh callback

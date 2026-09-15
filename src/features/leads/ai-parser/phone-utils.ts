@@ -95,7 +95,7 @@ export function extractPotentialPhone(text: string): string | null {
   const plainMatch = text.match(/\b[6-9]\d{4}[\s\-]?\d{5}\b/);
   if (plainMatch) return plainMatch[0];
 
-  const intlMatch = text.match(/\+\d{1,3}[\s\-]?\d{3,4}[\s\-]?\d{3,4}[\s\-]?\d{0,4}\b/);
+  const intlMatch = text.match(/\+\d{1,3}[\s\-]?\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{0,4}\b/);
   if (intlMatch) return intlMatch[0];
 
   return null;

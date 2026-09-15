@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { ActionCard } from "@/components/action-card";
 import { Building2, Phone } from "lucide-react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import type { Lead } from "@/features/leads/types";
@@ -6,29 +8,29 @@ import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
 export function PipelineCard({
   lead,
   onClick,
+  dragHandle,
 }: {
   lead: Lead;
   onClick: () => void;
+  dragHandle?: ReactNode;
 }) {
   const ai = lead.aiAttention || deriveAIAttention(lead);
 
   return (
-    <div
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onClick();
-      }}
+    <ActionCard
+      onActivate={onClick}
+      aria-label={`Open lead ${lead.name}`}
       className="group flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:border-blue-300 hover:shadow-md transition-shadow text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
     >
       <div className="flex justify-between items-start gap-2">
         <h4 className="font-semibold text-slate-900 text-sm break-words line-clamp-2">
           {lead.name}
         </h4>
-        <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
+        <div className="flex shrink-0 items-center gap-1">
+          <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
+          {dragHandle}
+        </div>
       </div>
-
 
       {(lead.business || lead.phone) && (
         <div className="flex flex-col gap-1 text-xs text-slate-600 mt-0.5">
@@ -75,6 +77,6 @@ export function PipelineCard({
           )}
         </div>
       )}
-    </div>
+    </ActionCard>
   );
 }

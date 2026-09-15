@@ -59,6 +59,8 @@ model Lead {
   updatedAt        DateTime            @updatedAt
 
   @@index([status])
+  @@index([phone])
+  @@index([email])
   @@index([leadSource])
   @@index([createdAt])
 }

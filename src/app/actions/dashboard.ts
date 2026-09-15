@@ -146,9 +146,8 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
         },
         include: {
           aiInsight: true,
-          activities: { orderBy: { createdAt: "desc" }, take: 2 },
-          followUps: { where: { status: FollowUpStatus.PENDING }, orderBy: { scheduledAt: "asc" }, take: 2 },
         },
+        orderBy: { updatedAt: "desc" },
         take: 25,
       })
     ]);

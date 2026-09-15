@@ -60,10 +60,10 @@ export function KPICards({ data }: { data: { totalLeads: number; newLeads: numbe
 
   const stats = [
     { label: "Total Leads", value: data.totalLeads, icon: UsersRound, colorScheme: "default" as const, href: "/leads" },
-    { label: "New Leads", value: data.newLeads, icon: UserPlus, colorScheme: "blue" as const, href: "/leads" },
-    { label: "Qualified", value: data.qualifiedLeads, icon: BadgeCheck, colorScheme: "purple" as const, href: "/pipeline" },
-    { label: "Won Clients", value: data.wonClients, icon: Handshake, colorScheme: "green" as const, href: "/pipeline" },
-    { label: "Follow-ups Today", value: data.followUpsToday, icon: CalendarClock, colorScheme: "orange" as const, href: "/follow-ups" },
+    { label: "New Leads", value: data.newLeads, icon: UserPlus, colorScheme: "blue" as const, href: "/leads?status=NEW" },
+    { label: "Qualified", value: data.qualifiedLeads, icon: BadgeCheck, colorScheme: "purple" as const, href: "/leads?status=QUALIFIED" },
+    { label: "Won Clients", value: data.wonClients, icon: Handshake, colorScheme: "green" as const, href: "/leads?status=WON" },
+    { label: "Follow-ups Today", value: data.followUpsToday, icon: CalendarClock, colorScheme: "orange" as const, href: "/follow-ups?filter=today" },
     { label: "Revenue", value: formattedRevenue, icon: CircleDollarSign, colorScheme: "emerald" as const, href: "/analytics" },
   ];
 

@@ -7,6 +7,15 @@ import type {
   StructuredLeadResult,
   StructureLeadResponse,
   StructureLeadCallback,
+  BulkLeadItemStatus,
+  BulkLeadDraftItem,
+  BulkLeadReviewDTO,
+  BulkStructureLeadResponse,
+  BulkCreateItemAction,
+  BulkCreateLeadItem,
+  BulkCreateItemOutcome,
+  BulkCreateItemResult,
+  BulkCreateResponse,
 } from "@/features/leads/ai-entry-types";
 
 export type {
@@ -17,12 +26,21 @@ export type {
   StructuredLeadResult,
   StructureLeadResponse,
   StructureLeadCallback,
+  BulkLeadItemStatus,
+  BulkLeadDraftItem,
+  BulkLeadReviewDTO,
+  BulkStructureLeadResponse,
+  BulkCreateItemAction,
+  BulkCreateLeadItem,
+  BulkCreateItemOutcome,
+  BulkCreateItemResult,
+  BulkCreateResponse,
 };
 
 export const LeadStatusesList = ["New", "Contacted", "Qualified", "Proposal Sent", "Won", "Lost"] as const;
 
 /**
- * Raw JSON schema returned by Groq LLM
+ * Raw JSON schema returned by Groq LLM for single lead extraction
  */
 export const GroqLeadExtractionSchema = z.object({
   name: z.string().nullable().optional(),
@@ -39,3 +57,12 @@ export const GroqLeadExtractionSchema = z.object({
 });
 
 export type GroqLeadExtraction = z.infer<typeof GroqLeadExtractionSchema>;
+
+/**
+ * Raw JSON schema returned by Groq LLM for bulk leads extraction
+ */
+export const GroqBulkLeadExtractionSchema = z.object({
+  leads: z.array(GroqLeadExtractionSchema),
+});
+
+export type GroqBulkLeadExtraction = z.infer<typeof GroqBulkLeadExtractionSchema>;

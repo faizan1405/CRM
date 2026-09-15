@@ -1,5 +1,7 @@
 "use client";
 
+import { ActionCard } from "@/components/action-card";
+
 import type { BriefingActionItem, BriefingPriority } from "../types";
 import {
   Phone,
@@ -59,13 +61,13 @@ export function PriorityActionItem({
   onToggleDone,
 }: PriorityActionItemProps) {
   const priority = PRIORITY_CONFIG[item.priority];
-  const telHref = item.phone ? getTelephoneHref(item.phone) : "#";
+  const telHref = item.phone ? getTelephoneHref(item.phone) : undefined;
   const waHref = item.phone
     ? getWhatsAppHref(item.phone, item.leadName || item.title)
-    : "#";
+    : undefined;
 
   return (
-    <article
+    <ActionCard onActivate={item.leadId ? () => onOpenLead(item) : undefined}
       aria-label={`${rankIndex}. ${item.title} - ${item.priority} priority`}
       className={`group relative rounded-xl border transition-all duration-150 ${
         item.isDone
@@ -160,6 +162,7 @@ export function PriorityActionItem({
             {/* Open Lead */}
             <button
               type="button"
+              disabled={!item.leadId}
               onClick={() => onOpenLead(item)}
               aria-label={`Open lead profile for ${item.leadName || item.title}`}
               className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
@@ -169,7 +172,7 @@ export function PriorityActionItem({
             </button>
 
             {/* Call */}
-            <a
+            {item.phone && <a
               href={telHref}
               onClick={(e) => {
                 if (!item.phone) {
@@ -182,10 +185,10 @@ export function PriorityActionItem({
             >
               <Phone size={13} className="text-blue-600" />
               <span>Call</span>
-            </a>
+            </a>}
 
             {/* WhatsApp */}
-            <a
+            {item.phone && <a
               href={waHref}
               target="_blank"
               rel="noopener noreferrer"
@@ -200,11 +203,12 @@ export function PriorityActionItem({
             >
               <MessageCircle size={13} className="text-emerald-600" />
               <span>WhatsApp</span>
-            </a>
+            </a>}
 
             {/* Add Follow-up */}
             <button
               type="button"
+              disabled={!item.leadId}
               onClick={() => onAddFollowUp(item)}
               aria-label={`Add follow-up for ${item.leadName || item.title}`}
               className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 text-xs font-medium text-amber-800 hover:bg-amber-100/80 active:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
@@ -245,6 +249,6 @@ export function PriorityActionItem({
           </div>
         </div>
       </div>
-    </article>
+    </ActionCard>
   );
 }

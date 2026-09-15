@@ -45,14 +45,14 @@ export function LeadActivityTimeline({
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-w-0 flex-col">
       {/* Filter tabs */}
       <div
-        className="shrink-0 border-b border-slate-200 bg-white"
+        className="sticky top-0 z-10 min-w-0 shrink-0 overflow-x-auto rounded-t-xl border-b border-slate-200 bg-white"
         role="tablist"
         aria-label="Activity filters"
       >
-        <div className="flex">
+        <div className="flex min-w-max">
           {FILTERS.map((f) => {
             const isActive = filter === f.key;
             const count = filterCounts[f.key];
@@ -86,7 +86,7 @@ export function LeadActivityTimeline({
       </div>
 
       {/* Activity list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-w-0">
         {filtered.length === 0 ? (
           <ActivityEmptyState filter={filter} hasNotes={activities.some((a) => a.type.startsWith("NOTE"))} />
         ) : (

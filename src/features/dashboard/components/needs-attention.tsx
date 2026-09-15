@@ -14,7 +14,7 @@ export function NeedsAttention({ data }: { data: { overdueFollowUps: number; pro
       bg: "bg-red-100",
       border: "border-red-200",
       actionText: "View Overdue",
-      href: "/follow-ups", // Wait, does /follow-ups exist? Yes, Phase 4 added it. Or we can just use /pipeline or whatever.
+      href: "/follow-ups?filter=overdue",
     });
   }
 
@@ -28,7 +28,7 @@ export function NeedsAttention({ data }: { data: { overdueFollowUps: number; pro
       bg: "bg-amber-100",
       border: "border-amber-200",
       actionText: "Review Pipeline",
-      href: "/pipeline",
+      href: "/pipeline?stage=PROPOSAL_SENT",
     });
   }
 
@@ -42,7 +42,7 @@ export function NeedsAttention({ data }: { data: { overdueFollowUps: number; pro
       bg: "bg-blue-100",
       border: "border-blue-200",
       actionText: "Contact Leads",
-      href: "/leads",
+      href: "/leads?status=NEW",
     });
   }
 
@@ -57,7 +57,7 @@ export function NeedsAttention({ data }: { data: { overdueFollowUps: number; pro
   return (
     <div className="flex flex-col gap-3">
       {alerts.map((alert) => (
-        <div key={alert.id} className={`flex items-start gap-4 rounded-xl border p-4 ${alert.bg} ${alert.border} transition-colors hover:bg-opacity-80`}>
+        <Link href={alert.href} aria-label={alert.actionText} key={alert.id} className={`flex flex-wrap items-start gap-4 rounded-xl border p-4 ${alert.bg} ${alert.border} transition-colors duration-150 hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600`}>
           <div className={`mt-0.5 rounded-full p-1 ${alert.color}`}>
             <alert.icon className="h-5 w-5" />
           </div>
@@ -65,13 +65,12 @@ export function NeedsAttention({ data }: { data: { overdueFollowUps: number; pro
             <h4 className={`text-sm font-semibold ${alert.color}`}>{alert.title}</h4>
             <p className="mt-1 text-xs text-slate-600">{alert.description}</p>
           </div>
-          <Link
-            href={alert.href}
+          <span
             className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 transition-colors border"
           >
             {alert.actionText}
-          </Link>
-        </div>
+          </span>
+        </Link>
       ))}
     </div>
   );

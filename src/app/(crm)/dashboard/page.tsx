@@ -7,10 +7,10 @@ import { PipelineSnapshot } from "@/features/dashboard/components/pipeline-snaps
 import { RevenueSnapshot } from "@/features/dashboard/components/revenue-snapshot";
 import { RecentActivity } from "@/features/dashboard/components/recent-activity";
 import { AIAttentionDashboardSection } from "@/features/ai-attention";
-import { DailyBriefingWorkspace } from "@/features/daily-briefing/components/daily-briefing-workspace";
+import { ActionCard } from "@/components/action-card";
+import { LeadRecordLink, ScheduleFollowUpButton } from "@/features/leads/lead-record-link";
 
 import { getDashboardData } from "@/app/actions/dashboard";
-import { getDailyBriefing, refreshDailyBriefingAi } from "@/app/actions/daily-briefing";
 import Link from "next/link";
 import { getTypeIcon, typeStyles } from "@/features/followups/follow-up-types";
 import { typeFromDatabase } from "@/features/followups/types";
@@ -20,10 +20,7 @@ import { FollowUpType } from "@prisma/client";
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  const [result, briefingResult] = await Promise.all([
-    getDashboardData(),
-    getDailyBriefing()
-  ]);
+  const result = await getDashboardData();
   
   if (!result.success || !result.data) {
     return (
@@ -39,36 +36,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      {briefingResult.success && briefingResult.data ? (
-        <DailyBriefingWorkspace 
-          initialStats={briefingResult.data.summaryStats}
-          initialActions={briefingResult.data.priorityActions}
-          initialAiBriefing={briefingResult.data.aiBriefing}
-          onRefreshAi={async () => {
-            "use server";
-            await refreshDailyBriefingAi();
-          }}
-        />
-      ) : (
-        <DashboardHeader />
-      )}
-      
+      <DashboardHeader />
+      <section aria-labelledby="recent-activity-heading">
+        <h2 id="recent-activity-heading" className="mb-3 text-lg font-bold tracking-tight text-slate-900">Recent Activity</h2>
+        <div className="rounded-2xl border bg-white p-3 sm:p-4"><RecentActivity data={data.recentActivity.slice(0, 6)} /></div>
+      </section>
+
       <KPICards data={data.kpis} />
       
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Left Column: Priorities & Attention */}
         <div className="xl:col-span-2 space-y-6">
-          <section>
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-blue-600" aria-hidden="true" />
-                <h2 className="text-lg font-bold tracking-tight text-slate-900">AI Attention Leads</h2>
-              </div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Immediate Action</span>
-            </div>
-            <AIAttentionDashboardSection items={data.attentionLeads} priorities={data.priorities} />
-          </section>
-
           <section>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold tracking-tight text-slate-900">Needs Attention</h2>
@@ -84,6 +62,17 @@ export default async function DashboardPage() {
           </section>
           
           <section>
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-blue-600" aria-hidden="true" />
+                <h2 className="text-lg font-bold tracking-tight text-slate-900">AI Attention Leads</h2>
+              </div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Immediate Action</span>
+            </div>
+            <AIAttentionDashboardSection items={data.attentionLeads} priorities={data.priorities} />
+          </section>
+
+          <section>
              <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold tracking-tight text-slate-900">Pipeline Snapshot</h2>
               <Link href="/pipeline" className="text-sm font-medium text-blue-600 hover:text-blue-700">View Pipeline &rarr;</Link>
@@ -98,17 +87,8 @@ export default async function DashboardPage() {
         <div className="space-y-6">
           <section>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-bold tracking-tight text-slate-900">Recent Activity</h2>
-            </div>
-            <div className="overflow-hidden rounded-2xl border bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
-              <RecentActivity data={data.recentActivity} />
-            </div>
-          </section>
-
-          <section>
-            <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-bold tracking-tight text-slate-900">Today&apos;s Follow-ups</h2>
-              <Link href="/follow-ups" className="text-sm font-medium text-blue-600 hover:text-blue-700">View all &rarr;</Link>
+              <Link href="/follow-ups?filter=today" className="text-sm font-medium text-blue-600 hover:text-blue-700">View all &rarr;</Link>
             </div>
             <div className="rounded-2xl border bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
               {data.todayFollowUps.length === 0 ? (
@@ -125,7 +105,7 @@ export default async function DashboardPage() {
                     const followUpType = typeFromDatabase[f.type as FollowUpType] ?? "Other";
                     const typeInfo = typeStyles[followUpType];
                     return (
-                      <div key={f.id} className="group flex items-center justify-between gap-3 rounded-xl border p-3 hover:bg-slate-50 transition-colors">
+                      <ActionCard key={f.id} href={`/leads?selected=${encodeURIComponent(f.leadId)}&action=followups`} aria-label={`Open follow-up for ${f.leadName}`} className="group flex items-center justify-between gap-3 rounded-xl border p-3 hover:bg-slate-50 transition-colors">
                         <div className="flex flex-col gap-1 overflow-hidden">
                           <h3 className="truncate text-sm font-semibold text-slate-900">{f.leadName || "Unknown"}</h3>
                           <div className="flex items-center gap-2">
@@ -135,10 +115,11 @@ export default async function DashboardPage() {
                              <span className="text-xs text-slate-500">{f.time}</span>
                           </div>
                         </div>
-                        <Link href={`/leads/${f.leadId}`} className="flex h-8 w-8 items-center justify-center rounded-lg bg-white border text-slate-400 shadow-sm hover:text-slate-900 hover:bg-slate-50 transition-colors shrink-0">
+                        <LeadRecordLink leadId={f.leadId} action="followups" label={`Open ${f.leadName || "lead"}`} className="flex h-8 w-8 items-center justify-center rounded-lg bg-white border text-slate-400 shadow-sm hover:text-slate-900 hover:bg-slate-50 transition-colors shrink-0">
                           <ArrowRight className="h-4 w-4" />
-                        </Link>
-                      </div>
+                        </LeadRecordLink>
+                        <ScheduleFollowUpButton leadId={f.leadId} leadName={f.leadName || "Lead"} />
+                      </ActionCard>
                     );
                   })}
                 </div>

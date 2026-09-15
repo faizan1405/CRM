@@ -41,13 +41,13 @@ export function TemplateCard({
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
+        if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
           e.preventDefault();
           onSelect(template);
         }
       }}
       aria-label={`WhatsApp template: ${template.title}`}
-      className={`group relative flex flex-col justify-between rounded-2xl border p-4 text-left transition-all duration-150 cursor-pointer ${
+      className={`group relative flex flex-col justify-between rounded-2xl border p-4 text-left transition-colors duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 ${
         isSelected
           ? "border-emerald-600 bg-emerald-50/40 shadow-sm ring-2 ring-emerald-500/20"
           : !template.active

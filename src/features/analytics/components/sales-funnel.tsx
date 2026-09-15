@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ArrowDown, TriangleAlert } from "lucide-react";
 import type { FunnelStage } from "../types";
 import { AnalyticsCard, stageColors } from "./shared";
@@ -17,10 +18,10 @@ export function SalesFunnel({ stages }: { stages: FunnelStage[] }) {
                 <ArrowDown aria-hidden="true" size={14} />
                 {stage.conversionFromPrev === null ? <span>Conversion unavailable</span> : <span className={bottleneck ? "font-semibold text-red-700" : ""}>{(stage.conversionFromPrev * 100).toFixed(1)}% converted · {(drop! * 100).toFixed(1)}% drop-off {bottleneck ? "— bottleneck" : ""}</span>}
               </div> : null}
-              <div className="mx-auto flex min-h-14 items-center justify-between gap-3 rounded-xl px-4 text-white shadow-sm transition-[width]" style={{ width: `${width}%`, backgroundColor: stageColors[stage.status] ?? "#475569" }}>
+              <Link href={`/leads?status=${encodeURIComponent(stage.status)}`} aria-label={`View ${stage.label} leads`} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 mx-auto flex min-h-14 items-center justify-between gap-3 rounded-xl px-4 text-white shadow-sm transition-[width]" style={{ width: `${width}%`, backgroundColor: stageColors[stage.status] ?? "#475569" }}>
                 <span className="flex min-w-0 items-center gap-2 text-sm font-semibold"><span className="truncate">{stage.label}</span>{bottleneck ? <TriangleAlert aria-label="Bottleneck" className="shrink-0" size={15} /> : null}</span>
                 <span className="shrink-0 text-lg font-bold">{stage.reached.toLocaleString("en-IN")}</span>
-              </div>
+              </Link>
             </li>;
           })}
         </ol>

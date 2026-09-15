@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { TrendingUp, CircleDollarSign, BarChart3 } from "lucide-react";
 
 export function RevenueSnapshot({ data }: { data: { won: number; openPipeline: number; avgWonDeal: number } }) {
@@ -37,7 +38,7 @@ export function RevenueSnapshot({ data }: { data: { won: number; openPipeline: n
   return (
     <div className="flex flex-col gap-3">
       {displayData.map((item, i) => (
-        <div key={i} className="flex items-center justify-between rounded-xl border bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+        <Link href={i === 1 ? "/pipeline" : "/analytics"} aria-label={`View ${item.label}`} key={i} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 flex flex-wrap gap-3 items-center justify-between rounded-xl border bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
           <div className="flex items-center gap-4">
             <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${item.bg}`}>
               <item.icon className={`h-5 w-5 ${item.color}`} />
@@ -50,7 +51,7 @@ export function RevenueSnapshot({ data }: { data: { won: number; openPipeline: n
           <div className="text-right">
             <span className="text-lg font-bold text-slate-900">{item.value}</span>
           </div>
-        </div>
+        </Link>
       ))}
     </div>
   );

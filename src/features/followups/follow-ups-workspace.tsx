@@ -1,5 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { useLeadNavigation } from "@/features/leads/lead-navigation-provider";
+import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FollowUpCard } from "./follow-up-card";
 import { FollowUpForm } from "./follow-up-form";
@@ -33,6 +36,11 @@ export function FollowUpsWorkspace({
   initialFollowUps,
   leads = [],
 }: FollowUpsWorkspaceProps) {
+  const searchParams = useSearchParams();
+  const navigation = useLeadNavigation();
+  const filterParam = searchParams.get("filter");
+  const newParam = searchParams.get("new");
+  const leadParam = searchParams.get("leadId");
   const [followUps, setFollowUps] = useState<FollowUp[]>(initialFollowUps);
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
     const hasOverdue = initialFollowUps.some((f) => isFollowUpOverdue(f));
@@ -54,11 +62,18 @@ export function FollowUpsWorkspace({
   }, [initialFollowUps]);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && window.location.search.includes("new=true")) {
+    if (newParam === "true") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormOpen(true);
     }
-  }, []);
+  }, [newParam]);
+
+  useEffect(() => {
+    if (TABS.some(tab => tab.key === filterParam)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveTab(filterParam as TabKey);
+    }
+  }, [filterParam]);
 
   const stats = useMemo(() => {
     const pending = followUps.filter((f) => f.status === "Pending");
@@ -112,12 +127,13 @@ export function FollowUpsWorkspace({
       if (!result.success) {
         alert(result.error || "Failed to save follow-up.");
       } else {
-        // We rely on revalidatePath in the action to refresh data via initialFollowUps
+        setFormOpen(false);
+        setEditingFollowUp(null);
       }
+    } catch {
+      alert("Failed to save follow-up. Please retry.");
     } finally {
       setSaving(false);
-      setFormOpen(false);
-      setEditingFollowUp(null);
     }
   };
 
@@ -140,7 +156,7 @@ export function FollowUpsWorkspace({
   };
 
   const handleReschedule = async (id: string, date: string, time: string) => {
-    const scheduledAt = new Date(`${date}T${time}:00`).toISOString();
+    const scheduledAt = new Date(`${date}T${time}:00+05:30`).toISOString();
     localUpdateFollowUp(id, { scheduledAt });
     setRescheduling(true);
     
@@ -200,11 +216,11 @@ export function FollowUpsWorkspace({
 
       {/* Tab navigation */}
       <div
-        className="shrink-0 border-b border-slate-200 bg-white"
+        className="shrink-0 overflow-x-auto border-b border-slate-200 bg-white"
         role="tablist"
         aria-label="Follow-up status tabs"
       >
-        <div className="flex">
+        <div className="flex min-w-max">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.key;
             const count =
@@ -251,7 +267,7 @@ export function FollowUpsWorkspace({
       </div>
 
       {/* Follow-ups list */}
-      <div className="flex-1 overflow-y-auto py-4">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto py-4">
         {filteredFollowUps.length === 0 ? (
           <FollowUpEmptyState title={emptyConfig.title} description={emptyConfig.description} />
         ) : (
@@ -263,12 +279,12 @@ export function FollowUpsWorkspace({
                   key={followUp.id}
                   followUp={followUp}
                   statusInfo={statusInfo}
-                  onCall={() => {}}
-                  onWhatsApp={() => {}}
+                  onCall={() => { if (followUp.lead?.phone) window.location.href = getTelephoneHref(followUp.lead.phone); }}
+                  onWhatsApp={() => { if (followUp.lead?.phone) window.open(getWhatsAppHref(followUp.lead.phone, followUp.lead.name), "_blank", "noopener,noreferrer"); }}
                   onComplete={() => handleComplete(followUp)}
                   onReschedule={() => setRescheduleTarget(followUp)}
                   onCancel={() => handleCancel(followUp)}
-                  onOpenLead={() => {}}
+                  onOpenLead={() => navigation?.openLead(followUp.leadId, "followups")}
                 />
               );
             })}
@@ -280,6 +296,7 @@ export function FollowUpsWorkspace({
       <FollowUpForm
         isOpen={formOpen}
         followUp={editingFollowUp}
+        defaultLeadId={leadParam || undefined}
         leads={leads}
         saving={saving}
         onClose={() => { if (!saving) { setFormOpen(false); setEditingFollowUp(null); } }}

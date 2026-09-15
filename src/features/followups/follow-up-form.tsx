@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
+
+import { useEffect, useId, useRef, useState } from "react";
 import type { FollowUp, FollowUpType, NewFollowUpInput } from "./types";
 import { followUpTypes } from "./types";
 
@@ -14,7 +16,7 @@ type FollowUpFormProps = {
   saving?: boolean;
 };
 
-const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+const todayStr = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 
 export function FollowUpForm({
   isOpen,
@@ -30,22 +32,11 @@ export function FollowUpForm({
   const [scheduledTime, setScheduledTime] = useState("09:00");
   const [note, setNote] = useState("");
   const [leadId, setLeadId] = useState("");
+  const firstLeadId = leads[0]?.id || "";
+  const formId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    closeButtonRef.current?.focus();
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !saving) onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen, onClose, saving]);
+  useDialogAccessibility(isOpen, onClose, saving, closeButtonRef);
 
   useEffect(() => {
     if (isOpen && followUp) {
@@ -60,18 +51,18 @@ export function FollowUpForm({
       }
     } else if (isOpen && !followUp) {
       setType("Call");
-      setScheduledDate(todayStr);
+      setScheduledDate(todayStr());
       setScheduledTime("09:00");
       setNote("");
-      setLeadId(defaultLeadId ?? (leads.length > 0 ? leads[0].id : ""));
+      setLeadId(defaultLeadId ?? firstLeadId);
     }
-  }, [isOpen, followUp, defaultLeadId, leads]);
+  }, [isOpen, followUp, defaultLeadId, firstLeadId]);
 
   if (!isOpen) return null;
 
   const handleSubmit = () => {
     if (!leadId) return;
-    const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}:00`).toISOString();
+    const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}:00+05:30`).toISOString();
     onSubmit({
       leadId,
       type,
@@ -81,19 +72,20 @@ export function FollowUpForm({
   };
 
   const inputClass =
-    "mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm";
+    "mt-1.5 h-11 min-w-0 w-full rounded-lg border border-slate-200 bg-white px-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm";
 
   return (
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-labelledby="followup-form-title">
+    <div className="fixed inset-x-0 top-0 z-[60] h-dvh" role="dialog" aria-modal="true" aria-labelledby="followup-form-title">
       <button
         type="button"
+        tabIndex={-1}
         aria-label="Close dialog"
         onClick={onClose}
         disabled={saving}
         className="absolute inset-0 bg-slate-950/45"
       />
-      <aside className="absolute inset-y-0 right-0 flex w-full max-w-lg flex-col bg-[var(--background)] shadow-2xl sm:max-w-md">
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-5 sm:px-6">
+      <aside className="absolute inset-y-0 right-0 flex h-full min-h-0 w-full max-w-lg flex-col bg-[var(--background)] shadow-2xl sm:max-w-md">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-5 sm:px-6">
           <h2 id="followup-form-title" className="text-lg font-semibold tracking-tight text-slate-950">
             {followUp ? "Edit Follow-up" : "New Follow-up"}
           </h2>
@@ -112,13 +104,14 @@ export function FollowUpForm({
           </button>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <form id={formId} onSubmit={event => { event.preventDefault(); handleSubmit(); }} className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="space-y-5">
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">
+              <label htmlFor={`${formId}-lead`} className="mb-1 block text-sm font-semibold text-slate-700">
                 Lead <span className="text-red-500">*</span>
               </label>
               <select
+                id={`${formId}-lead`}
                 value={leadId}
                 onChange={(e) => setLeadId(e.target.value)}
                 className={inputClass}
@@ -132,12 +125,13 @@ export function FollowUpForm({
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2">
               <div>
-                <label className="mb-1 block text-sm font-semibold text-slate-700">
+                <label htmlFor={`${formId}-date`} className="mb-1 block text-sm font-semibold text-slate-700">
                   Date <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id={`${formId}-date`}
                   type="date"
                   value={scheduledDate}
                   onChange={(e) => setScheduledDate(e.target.value)}
@@ -147,10 +141,11 @@ export function FollowUpForm({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-semibold text-slate-700">
+                <label htmlFor={`${formId}-time`} className="mb-1 block text-sm font-semibold text-slate-700">
                   Time <span className="text-red-500">*</span>
                 </label>
                 <input
+                  id={`${formId}-time`}
                   type="time"
                   value={scheduledTime}
                   onChange={(e) => setScheduledTime(e.target.value)}
@@ -169,6 +164,7 @@ export function FollowUpForm({
                 {followUpTypes.map((t) => (
                   <button
                     key={t}
+                    aria-pressed={type === t}
                     type="button"
                     onClick={() => setType(t)}
                     disabled={saving}
@@ -185,22 +181,23 @@ export function FollowUpForm({
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">
+              <label htmlFor={`${formId}-note`} className="mb-1 block text-sm font-semibold text-slate-700">
                 Note
               </label>
               <textarea
+                id={`${formId}-note`}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 rows={3}
-                className={`${inputClass} resize-none`}
+                className={`${inputClass} h-auto resize-none py-3`}
                 placeholder="Add a note about this follow-up..."
                 disabled={saving}
               />
             </div>
           </div>
-        </div>
+        </form>
 
-        <footer className="shrink-0 border-t border-slate-200 bg-white p-4 sm:px-6">
+        <footer className="shrink-0 border-t border-slate-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
           <div className="flex gap-3">
             <button
               type="button"
@@ -211,9 +208,9 @@ export function FollowUpForm({
               Cancel
             </button>
             <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={saving || !leadId}
+              type="submit"
+              form={formId}
+              disabled={saving || !leadId || !scheduledDate || !scheduledTime}
               className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "Saving..." : followUp ? "Update" : "Create"}

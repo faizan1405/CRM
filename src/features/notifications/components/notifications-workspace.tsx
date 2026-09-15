@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useLeadNavigation } from "@/features/leads/lead-navigation-provider";
 import {
   Bell,
   CheckCheck,
@@ -185,12 +186,14 @@ export function NotificationsWorkspace({
   };
 
   const router = useRouter();
+  const navigation = useLeadNavigation();
 
   const handleOpenLead = (leadId: string) => {
     if (onOpenLead) {
       onOpenLead(leadId);
     } else {
-      router.push(`/leads?selected=${leadId}`);
+      if (navigation) navigation.openLead(leadId);
+      else router.push(`/leads?selected=${encodeURIComponent(leadId)}`);
     }
   };
 
@@ -198,7 +201,9 @@ export function NotificationsWorkspace({
     if (onAddFollowUp) {
       onAddFollowUp(notification);
     } else {
-      router.push(`/follow-ups?new=true&leadId=${notification.leadId}`);
+      if (!notification.leadId) return;
+      if (navigation) navigation.openFollowUp({ id: notification.leadId, name: notification.leadName });
+      else router.push(`/follow-ups?new=true&leadId=${encodeURIComponent(notification.leadId)}`);
     }
   };
 

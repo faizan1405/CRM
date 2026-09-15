@@ -292,7 +292,10 @@ export function WhatsAppTemplatesWorkspace({
                   key={tpl.id}
                   template={tpl}
                   isSelected={selectedTemplate?.id === tpl.id}
-                  onSelect={(t) => setSelectedTemplate(t)}
+                  onSelect={(t) => {
+                    setSelectedTemplate(t);
+                    if (!window.matchMedia("(min-width: 1024px)").matches) handleOpenEditor(t);
+                  }}
                   onEdit={(t) => handleOpenEditor(t)}
                   onDuplicate={handleDuplicateTemplate}
                   onToggleActive={handleToggleActive}

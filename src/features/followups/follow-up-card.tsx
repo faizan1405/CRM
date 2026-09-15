@@ -1,5 +1,7 @@
 "use client";
 
+import { ActionCard } from "@/components/action-card";
+
 import { Phone } from "lucide-react";
 import type { FollowUp } from "./types";
 import { formatFollowUpDate, formatTime } from "./formatters";
@@ -39,7 +41,7 @@ export function FollowUpCard({
   const isPast = statusInfo === "Overdue" || statusInfo === "Completed" || statusInfo === "Cancelled";
 
   return (
-    <article
+    <ActionCard onActivate={onOpenLead} aria-label={`Open follow-up context for ${followUp.lead?.name || "lead"}`}
       className={`rounded-xl border bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all ${
         statusInfo === "Overdue"
           ? "border-amber-200 ring-1 ring-amber-100"
@@ -176,6 +178,6 @@ export function FollowUpCard({
           </button>
         </div>
       )}
-    </article>
+    </ActionCard>
   );
 }

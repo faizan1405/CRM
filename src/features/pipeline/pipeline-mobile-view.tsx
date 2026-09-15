@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Lead, LeadStatus } from "@/features/leads/types";
 import { PipelineCard } from "./pipeline-card";
 import { PipelineEmptyState } from "./pipeline-column";
@@ -25,14 +25,20 @@ const statusAccent: Record<LeadStatus, { dot: string; activeBg: string; activeTe
 
 export function PipelineMobileView({
   leads,
+  initialStage,
   grouped,
   onSelectLead,
 }: {
   leads: Lead[];
+  initialStage?: LeadStatus;
   grouped: Record<LeadStatus, Lead[]>;
   onSelectLead: (lead: Lead) => void;
 }) {
-  const [activeStage, setActiveStage] = useState<LeadStatus>(leads.length > 0 ? leads[0]?.status ?? "New" : "New");
+  const [activeStage, setActiveStage] = useState<LeadStatus>(initialStage || (leads.length > 0 ? leads[0]?.status ?? "New" : "New"));
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (initialStage) setActiveStage(initialStage);
+  }, [initialStage]);
   const visibleLeads = grouped[activeStage] ?? [];
 
   // Compute counts for tab badges

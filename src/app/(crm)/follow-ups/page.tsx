@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { getFollowUps } from "@/app/actions/follow-ups";
 import { getLeads } from "@/app/actions/leads";
 import { FollowUpsWorkspace } from "@/features/followups/follow-ups-workspace";
@@ -22,7 +23,9 @@ export default async function FollowUpsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <FollowUpsWorkspace initialFollowUps={followUps} leads={leads} />
+      <Suspense fallback={<div className="p-6 text-slate-500">Loading follow-ups...</div>}>
+        <FollowUpsWorkspace initialFollowUps={followUps} leads={leads} />
+      </Suspense>
     </div>
   );
 }

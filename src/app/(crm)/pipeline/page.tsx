@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getLeads } from "@/app/actions/leads";
 import { PipelineBoard } from "@/features/pipeline/pipeline-board";
@@ -24,7 +25,9 @@ export default async function PipelinePage() {
         />
       </div>
       <div className="flex-1 min-h-0">
-        <PipelineBoard initialLeads={initialLeads} />
+        <Suspense fallback={<div className="p-6 text-slate-500">Loading pipeline...</div>}>
+          <PipelineBoard initialLeads={initialLeads} />
+        </Suspense>
       </div>
     </div>
   );

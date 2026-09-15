@@ -1,3 +1,4 @@
+import { ActionCard } from "@/components/action-card";
 import Link from "next/link";
 import { Flame, PhoneCall, MessageCircle, ArrowRight, CheckCircle2 } from "lucide-react";
 import { type AIAttentionSummaryItem, type AttentionPriority } from "../types";
@@ -84,7 +85,7 @@ export function AIAttentionDashboardSection({
       {displayItems.map((item) => {
         const isHot = item.score >= 80;
         return (
-          <article
+          <ActionCard onActivate={onSelectLead ? () => onSelectLead(item.leadId) : undefined} href={onSelectLead ? undefined : `/leads?selected=${encodeURIComponent(item.leadId)}`} aria-label={`Open lead ${item.leadName}`}
             key={item.id}
             className="group flex flex-col gap-3 rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-xs transition-all hover:border-blue-300 hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
           >
@@ -183,7 +184,7 @@ export function AIAttentionDashboardSection({
                 </button>
               ) : (
                 <Link
-                  href={`/leads`}
+                  href={`/leads?selected=${encodeURIComponent(item.leadId)}`}
                   className="inline-flex h-8 items-center gap-1 rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white shadow-xs hover:bg-slate-800 transition-colors"
                   aria-label={`Review ${item.leadName}`}
                 >
@@ -192,7 +193,7 @@ export function AIAttentionDashboardSection({
                 </Link>
               )}
             </div>
-          </article>
+          </ActionCard>
         );
       })}
     </div>
