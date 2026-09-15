@@ -27,15 +27,15 @@ export function RecentActivity({ data }: { data: DashboardData['recentActivity']
           data.map((activity) => {
             const iconInfo = getIconInfo(activity.type);
             return (
-              <ActionCard key={activity.id} href={`/leads?selected=${encodeURIComponent(activity.leadId)}&action=activity`} aria-label={`Open activity for ${activity.leadName}`} className="group relative flex items-start gap-3 rounded-lg p-2 transition-colors duration-150 hover:bg-slate-50">
+              <ActionCard key={activity.activityId} href={`/leads?selected=${encodeURIComponent(activity.leadId)}&action=activity`} aria-label={`Open activity for ${activity.leadName}`} className="group relative flex items-start gap-3 rounded-lg p-2 transition-colors duration-150 hover:bg-slate-50">
                 <div className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white ${iconInfo.bg} shadow-sm ring-4 ring-white`}>
                   <iconInfo.icon className={`h-4 w-4 ${iconInfo.color}`} />
                 </div>
                 <div className="min-w-0 flex flex-col pt-1 break-words">
                   <p className="text-sm font-medium text-slate-900">
-                    {activity.event} <span className="text-slate-500 font-normal">for</span> {activity.leadName}
+                    {activity.message} <span className="text-slate-500 font-normal">for</span> {activity.leadName}
                   </p>
-                  <p className="text-xs text-slate-400 mt-0.5">{activity.time}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{activity.createdAt}</p>
                 </div>
               </ActionCard>
             );

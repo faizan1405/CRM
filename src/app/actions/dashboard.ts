@@ -59,11 +59,11 @@ export type DashboardData = {
     time: string;
   }>;
   recentActivity: Array<{
-    id: string;
-    event: string;
+    activityId: string;
+    message: string;
     leadName: string;
     leadId: string;
-    time: string;
+    createdAt: string;
     type: string;
   }>;
 };
@@ -136,7 +136,7 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
         take: 5
       }),
       db.leadActivity.findMany({
-        take: 10,
+        take: 8,
         orderBy: { createdAt: "desc" },
         include: { lead: { select: { id: true, name: true } } }
       }),
@@ -343,11 +343,11 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
           time: formatTimeIST(f.scheduledAt),
         })),
         recentActivity: recentActivities.map(a => ({
-          id: a.id,
-          event: a.message,
+          activityId: a.id,
+          message: a.message,
           leadName: a.lead.name,
           leadId: a.leadId,
-          time: formatTimeAgo(a.createdAt),
+          createdAt: formatTimeAgo(a.createdAt),
           type: a.type
         }))
       }
