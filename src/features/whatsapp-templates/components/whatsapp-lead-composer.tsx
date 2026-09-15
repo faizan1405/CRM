@@ -10,7 +10,7 @@ import {
   Send,
 } from "lucide-react";
 import type { WhatsAppComposerLead, WhatsAppTemplate } from "../types";
-import { initialMockWhatsAppTemplates } from "../mock-data";
+
 import { interpolatePlaceholders } from "../placeholders";
 import { PlaceholderChips } from "./placeholder-chips";
 
@@ -27,7 +27,7 @@ interface WhatsAppLeadComposerProps {
 export function WhatsAppLeadComposer({
   isOpen,
   lead,
-  templates = initialMockWhatsAppTemplates,
+  templates = [],
   initialTemplateId,
   onClose,
   onAIPersonalize,

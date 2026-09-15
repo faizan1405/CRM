@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getAnalyticsData } from "@/app/actions/analytics";
+import { getLostReasonsAnalytics } from "@/app/actions/lost-reasons";
 import { AnalyticsDashboard } from "@/features/analytics/components/analytics-dashboard";
 import type { AnalyticsDateRange } from "@/features/analytics/types";
 import { AlertTriangle } from "lucide-react";
@@ -29,17 +30,20 @@ export default async function AnalyticsPage({
       ? (requestedRange as AnalyticsDateRange)
       : "30d";
 
-  const result = await getAnalyticsData(selectedRange);
+  const [result, lostReasonsResult] = await Promise.all([
+    getAnalyticsData(selectedRange),
+    getLostReasonsAnalytics(selectedRange)
+  ]);
 
-  if (!result.success) {
+  if (!result.success || !lostReasonsResult.success) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center text-center">
         <AlertTriangle className="mb-4 h-10 w-10 text-red-500" />
         <h2 className="text-xl font-bold text-slate-900">Failed to load analytics</h2>
-        <p className="mt-2 text-slate-500">{result.error ?? "An unknown error occurred"}</p>
+        <p className="mt-2 text-slate-500">{!result.success ? result.error : !lostReasonsResult.success ? lostReasonsResult.error : "An unknown error occurred"}</p>
       </div>
     );
   }
 
-  return <AnalyticsDashboard data={result.data} selectedRange={selectedRange} />;
+  return <AnalyticsDashboard data={result.data} lostReasons={lostReasonsResult.data!} selectedRange={selectedRange} />;
 }

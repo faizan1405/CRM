@@ -11,17 +11,17 @@ import {
 } from "lucide-react";
 import type {
   WhatsAppTemplate,
-  WhatsAppTemplateCategory,
+  WhatsAppTemplateCategoryKey,
   WhatsAppTemplatesProps,
 } from "../types";
-import { initialMockWhatsAppTemplates } from "../mock-data";
+
 import { TemplateCard } from "./template-card";
 import { TemplateEditor } from "./template-editor";
 import { TemplatePreviewCard } from "./template-preview-card";
 import { DeleteConfirmDialog } from "./delete-confirm-dialog";
 import { WhatsAppLeadComposer } from "./whatsapp-lead-composer";
 
-const CATEGORY_TABS: Array<{ value: "all" | WhatsAppTemplateCategory; label: string }> = [
+const CATEGORY_TABS: Array<{ value: "all" | WhatsAppTemplateCategoryKey; label: string }> = [
   { value: "all", label: "All Templates" },
   { value: "first_contact", label: "First Contact" },
   { value: "after_call", label: "After Call" },
@@ -34,7 +34,7 @@ const CATEGORY_TABS: Array<{ value: "all" | WhatsAppTemplateCategory; label: str
 ];
 
 export function WhatsAppTemplatesWorkspace({
-  initialTemplates = initialMockWhatsAppTemplates,
+  initialTemplates = [],
   onCreateTemplate,
   onUpdateTemplate,
   onDeleteTemplate,
@@ -42,7 +42,7 @@ export function WhatsAppTemplatesWorkspace({
 }: WhatsAppTemplatesProps) {
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>(initialTemplates);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<"all" | WhatsAppTemplateCategory>("all");
+  const [selectedCategory, setSelectedCategory] = useState<"all" | WhatsAppTemplateCategoryKey>("all");
   const [selectedTemplate, setSelectedTemplate] = useState<WhatsAppTemplate | null>(templates[0] || null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<WhatsAppTemplate | null>(null);
@@ -67,7 +67,7 @@ export function WhatsAppTemplatesWorkspace({
   const handleSaveTemplate = async (data: {
     id?: string;
     title: string;
-    category: WhatsAppTemplateCategory;
+    category: WhatsAppTemplateCategoryKey;
     categoryLabel: string;
     body: string;
     active: boolean;

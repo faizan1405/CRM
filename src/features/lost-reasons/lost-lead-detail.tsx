@@ -15,11 +15,11 @@ import {
   Calendar,
   FileText,
 } from "lucide-react";
-import type { LostLeadDetailProps, LostReason } from "./types";
+import type { LostLeadDetailProps, PrismaLeadLossReason } from "./types";
 import { LOST_REASON_DETAILS } from "./types";
 
-function getReasonIcon(reason: LostReason | string) {
-  const meta = LOST_REASON_DETAILS[reason as LostReason];
+function getReasonIcon(reason: PrismaLeadLossReason | string) {
+  const meta = LOST_REASON_DETAILS[reason as PrismaLeadLossReason];
   if (!meta) return <XCircle className="size-4 shrink-0 text-rose-600" aria-hidden="true" />;
 
   switch (meta.iconName) {
@@ -67,7 +67,7 @@ export function LostLeadDetail({
     }
   }, [lostAt]);
 
-  const meta = LOST_REASON_DETAILS[reason as LostReason];
+  const meta = LOST_REASON_DETAILS[reason as PrismaLeadLossReason];
   const shortCode = meta?.shortCode ?? "LOST";
 
   if (compact) {

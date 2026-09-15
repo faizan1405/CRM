@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Save, X, MessageSquare, Power } from "lucide-react";
-import type { WhatsAppTemplate, WhatsAppTemplateCategory } from "../types";
+import type { WhatsAppTemplate, WhatsAppTemplateCategoryKey } from "../types";
 import { PlaceholderChips } from "./placeholder-chips";
 import { TemplatePreviewCard } from "./template-preview-card";
 
@@ -11,7 +11,7 @@ interface TemplateEditorProps {
   onSave: (data: {
     id?: string;
     title: string;
-    category: WhatsAppTemplateCategory;
+    category: WhatsAppTemplateCategoryKey;
     categoryLabel: string;
     body: string;
     active: boolean;
@@ -20,7 +20,7 @@ interface TemplateEditorProps {
   isSaving?: boolean;
 }
 
-const CATEGORY_OPTIONS: Array<{ value: WhatsAppTemplateCategory; label: string }> = [
+const CATEGORY_OPTIONS: Array<{ value: WhatsAppTemplateCategoryKey; label: string }> = [
   { value: "first_contact", label: "First Contact" },
   { value: "after_call", label: "After Call" },
   { value: "follow_up", label: "Follow-up" },
@@ -38,7 +38,7 @@ export function TemplateEditor({
   isSaving = false,
 }: TemplateEditorProps) {
   const [title, setTitle] = useState(template?.title || "");
-  const [category, setCategory] = useState<WhatsAppTemplateCategory>(
+  const [category, setCategory] = useState<WhatsAppTemplateCategoryKey>(
     template?.category || "first_contact"
   );
   const [body, setBody] = useState(template?.body || "");
@@ -145,7 +145,7 @@ export function TemplateEditor({
             <select
               id="template-category-select"
               value={category}
-              onChange={(e) => setCategory(e.target.value as WhatsAppTemplateCategory)}
+              onChange={(e) => setCategory(e.target.value as WhatsAppTemplateCategoryKey)}
               className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
             >
               {CATEGORY_OPTIONS.map((opt) => (

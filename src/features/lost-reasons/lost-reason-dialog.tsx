@@ -20,11 +20,11 @@ import {
 import {
   LOST_REASONS,
   LOST_REASON_DETAILS,
-  type LostReason,
+  type PrismaLeadLossReason,
   type LostReasonDialogProps,
 } from "./types";
 
-function renderReasonIcon(reason: LostReason, isSelected: boolean) {
+function renderReasonIcon(reason: PrismaLeadLossReason, isSelected: boolean) {
   const meta = LOST_REASON_DETAILS[reason];
   const className = `size-4 shrink-0 transition-colors ${
     isSelected ? "text-rose-600" : "text-slate-500"
@@ -62,7 +62,7 @@ function LostReasonDialogInner({
   onCancel,
   isSubmitting = false,
 }: Omit<LostReasonDialogProps, "isOpen">) {
-  const [selectedReason, setSelectedReason] = useState<LostReason | null>(
+  const [selectedReason, setSelectedReason] = useState<PrismaLeadLossReason | null>(
     initialReason || null
   );
   const [notes, setNotes] = useState(initialNotes || "");
@@ -136,13 +136,13 @@ function LostReasonDialogInner({
     };
   }, [step, isSubmitting, onCancel]);
 
-  const isOtherSelected = selectedReason === "Other";
+  const isOtherSelected = selectedReason === "OTHER";
   const isOtherInvalid = isOtherSelected && notes.trim().length === 0;
   const canProceedToConfirm = Boolean(selectedReason) && !isOtherInvalid;
 
-  const handleSelectReason = (reason: LostReason) => {
+  const handleSelectReason = (reason: PrismaLeadLossReason) => {
     setSelectedReason(reason);
-    if (reason === "Other") {
+    if (reason === "OTHER") {
       setTouchedOther(true);
     }
   };

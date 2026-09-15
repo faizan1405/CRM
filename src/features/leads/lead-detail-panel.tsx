@@ -1,7 +1,7 @@
 "use client";
 
 import { Pencil, Trash2, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
 import { leadStatuses, type Lead, type LeadStatus } from "@/features/leads/types";
@@ -14,6 +14,16 @@ import {
   deriveAIAttention,
   type AIAttentionLeadData,
 } from "@/features/ai-attention";
+import { getLeadLossHistory } from "@/app/actions/lost-reasons";
+import { LostLeadDetail } from "@/features/lost-reasons/lost-lead-detail";
+import type { LeadLossRecord } from "@/features/lost-reasons/types";
+import { AIConversationNotes } from "@/features/ai-conversation-notes/ai-conversation-notes";
+import { structureCallNotes, applyCallNotes } from "@/app/actions/conversation-notes";
+import { createFollowUp } from "@/app/actions/follow-ups";
+import { getWhatsAppTemplates } from "@/app/actions/whatsapp-templates";
+import { WhatsAppLeadComposer } from "@/features/whatsapp-templates/components/whatsapp-lead-composer";
+import type { WhatsAppTemplate } from "@/features/whatsapp-templates/types";
+import { FileText, Sparkles } from "lucide-react";
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
@@ -36,6 +46,7 @@ type LeadDetailPanelProps = {
   activityFilter?: ActivityFilter;
   onActivityFilterChange?: (filter: ActivityFilter) => void;
   onAddNote?: (text: string) => Promise<{ success: boolean; error?: string }>;
+  onRefreshActivities?: () => void;
   onAddFollowUp?: () => void;
   initialAction?: "note" | "status" | null;
   whatsAppMessage?: string;
@@ -55,6 +66,7 @@ export function LeadDetailPanel({
   activityFilter = "all",
   onActivityFilterChange,
   onAddNote,
+  onRefreshActivities,
   onAddFollowUp,
   initialAction = null,
   whatsAppMessage,
@@ -65,6 +77,32 @@ export function LeadDetailPanel({
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const statusSelectRef = useRef<HTMLSelectElement>(null);
   const leadId = lead?.id;
+  const [lossHistory, setLossHistory] = useState<LeadLossRecord[]>([]);
+  const [noteMode, setNoteMode] = useState<"standard" | "ai">("standard");
+  
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+
+  useEffect(() => {
+    if (leadId && lead?.status === "Lost") {
+      getLeadLossHistory(leadId).then((res) => {
+        if (res.success && res.data) {
+          setLossHistory(res.data);
+        }
+      });
+    } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setLossHistory([]);
+    }
+  }, [leadId, lead?.status]);
+
+  useEffect(() => {
+    if (composerOpen && templates.length === 0) {
+      getWhatsAppTemplates({ activeOnly: true }).then(res => {
+        if (res.success) setTemplates(res.data || []);
+      });
+    }
+  }, [composerOpen, templates.length]);
 
   useEffect(() => {
     if (!leadId) return;
@@ -163,6 +201,15 @@ export function LeadDetailPanel({
           {/* Phase 8: AI Insights Section */}
           <LeadDetailAIInsights data={aiData} onRecommendedAction={handleRecommendedAction} />
 
+          {lead.status === "Lost" && lossHistory.length > 0 && (
+            <LostLeadDetail
+              reason={lossHistory[0].reasonLabel || lossHistory[0].reason}
+              lostAt={lossHistory[0].lostAt}
+              notes={lossHistory[0].note}
+              leadName={lead.name}
+            />
+          )}
+
           <section className="rounded-xl border border-[var(--border)] bg-white p-5">
             <h3 className="font-semibold text-slate-950">Contact</h3>
             <dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -213,12 +260,87 @@ export function LeadDetailPanel({
                 onDeleteNote={onDeleteNote}
                 noteComposer={
                   onAddNote ? (
-                    <NoteComposer
-                      id={`lead-note-${lead.id}`}
-                      autoFocus={initialAction === "note"}
-                      onAddNote={onAddNote}
-                      disabled={saving}
-                    />
+                    <div className="flex flex-col gap-3">
+                      <div className="flex rounded-lg bg-slate-100 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setNoteMode("standard")}
+                          className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                            noteMode === "standard"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          <FileText className="size-3.5" /> Standard Note
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNoteMode("ai")}
+                          className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                            noteMode === "ai"
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          <Sparkles className="size-3.5 text-blue-600" /> AI Call Notes
+                        </button>
+                      </div>
+
+                      {noteMode === "standard" ? (
+                        <NoteComposer
+                          id={`lead-note-${lead.id}`}
+                          autoFocus={initialAction === "note"}
+                          onAddNote={onAddNote}
+                          disabled={saving}
+                        />
+                      ) : (
+                        <div className="pt-2">
+                          <AIConversationNotes
+                            disabled={saving}
+                            onStructureNotes={async (rawNote) => {
+                              const result = await structureCallNotes(rawNote, leadId);
+                              if (!result.success || !result.data) throw new Error(result.error || "Failed to structure notes");
+                              return result.data;
+                            }}
+                            onApplyStructured={async (result) => {
+                              if (!leadId) return;
+                              await applyCallNotes({
+                                leadId,
+                                rawNote: result.rawNote,
+                                structuredData: result.structuredData,
+                                formattedNote: result.formattedOutput,
+                                appliedType: "structured",
+                              });
+                              
+                              if (result.structuredData?.suggestedFollowUpDate) {
+                                const formData = new FormData();
+                                formData.append("leadId", leadId);
+                                formData.append(
+                                  "scheduledAt",
+                                  `${result.structuredData.suggestedFollowUpDate}T${result.structuredData.suggestedFollowUpTime || "10:00"}:00+05:30`
+                                );
+                                formData.append("type", "CALL");
+                                formData.append("note", "Follow-up suggested by AI Call Notes");
+                                await createFollowUp(formData);
+                              }
+                              
+                              onRefreshActivities?.();
+                            }}
+                            onKeepOriginal={async (result) => {
+                              if (!leadId) return;
+                              await applyCallNotes({
+                                leadId,
+                                rawNote: result.rawNote,
+                                structuredData: null,
+                                formattedNote: result.rawNote,
+                                appliedType: "original",
+                              });
+                              onRefreshActivities?.();
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   ) : undefined
                 }
               />
@@ -281,10 +403,29 @@ export function LeadDetailPanel({
             }
             onAddFollowUp={onAddFollowUp}
             onChangeStatus={() => statusSelectRef.current?.focus()}
+            onOpenWhatsAppComposer={() => setComposerOpen(true)}
             className="mt-2"
           />
         </footer>
       </aside>
+      
+      {/* WhatsApp Composer */}
+      <WhatsAppLeadComposer
+        isOpen={composerOpen}
+        onClose={() => setComposerOpen(false)}
+        templates={templates}
+        lead={{
+          id: lead.id,
+          name: lead.name,
+          phone: lead.phone,
+          business: lead.business,
+          requirement: lead.notes,
+          budget: lead.budget ? Number(lead.budget) : null,
+          status: lead.status,
+          followUpDate: lead.nextFollowUpDate ? formatDate(lead.nextFollowUpDate) : null,
+          followUpTime: null,
+        }}
+      />
     </div>
   );
 }

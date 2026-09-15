@@ -12,6 +12,8 @@ import { LeadFilters } from "@/features/leads/lead-filters";
 import { LeadForm } from "@/features/leads/lead-form";
 import { LeadTable } from "@/features/leads/lead-table";
 import type { Lead, LeadStatus } from "@/features/leads/types";
+import { LostReasonDialog } from "@/features/lost-reasons/lost-reason-dialog";
+import type { LostReasonSubmission } from "@/features/lost-reasons/types";
 import { useLeadActivities } from "@/features/activity/use-activities";
 import { FollowUpForm } from "@/features/followups/follow-up-form";
 import type { NewFollowUpInput } from "@/features/followups/types";
@@ -35,6 +37,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [detailAction, setDetailAction] = useState<"note" | "status" | null>(null);
   const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
+  const [lostReasonLead, setLostReasonLead] = useState<Lead | null>(null);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(initialError ? { tone: "error", message: initialError } : null);
 
@@ -158,12 +161,35 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
 
   async function setLeadStatus(nextStatus: LeadStatus) {
     if (!selectedLead || nextStatus === selectedLead.status) return;
+    if (nextStatus === "Lost") {
+      setLostReasonLead(selectedLead);
+      return;
+    }
     setSaving(true);
     const result = await changeLeadStatus(selectedLead.id, nextStatus);
     setSaving(false);
     if (!result.success) return setFeedback({ tone: "error", message: result.error });
     replaceLead(result.data);
     setFeedback({ tone: "success", message: "Lead status updated." });
+  }
+
+  async function handleLostConfirm(data: LostReasonSubmission) {
+    if (!lostReasonLead) return;
+    setSaving(true);
+    const result = await changeLeadStatus(
+      lostReasonLead.id,
+      "Lost",
+      data.reason,
+      data.notes
+    );
+    setSaving(false);
+    if (!result.success) {
+      setFeedback({ tone: "error", message: result.error || "Failed to mark as lost." });
+      return;
+    }
+    replaceLead(result.data);
+    setLostReasonLead(null);
+    setFeedback({ tone: "success", message: "Lead marked as lost." });
   }
 
   async function removeLead() {
@@ -288,6 +314,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
         activityFilter={activityFilter}
         onActivityFilterChange={setActivityFilter}
         onAddNote={handleAddNote}
+        onRefreshActivities={refreshActivities}
         onAddFollowUp={selectedLead ? () => setFollowUpLead(selectedLead) : undefined}
         initialAction={detailAction}
         onEditNote={handleEditNote}
@@ -302,6 +329,16 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
           if (!saving) setFollowUpLead(null);
         }}
         onSubmit={saveFollowUp}
+      />
+      <LostReasonDialog
+        isOpen={Boolean(lostReasonLead)}
+        leadId={lostReasonLead?.id}
+        leadName={lostReasonLead?.name}
+        isSubmitting={saving}
+        onConfirm={handleLostConfirm}
+        onCancel={() => {
+          if (!saving) setLostReasonLead(null);
+        }}
       />
     </div>
   );

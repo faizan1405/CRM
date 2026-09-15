@@ -177,6 +177,8 @@ export function renderWhatsAppMessage(
     .trim();
 
   return rendered;
+}
+
 /**
  * Sample preview map for visual demonstration in template manager
  */

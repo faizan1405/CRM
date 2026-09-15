@@ -8,12 +8,16 @@ import { PipelineHealth } from "./pipeline-health";
 import { RevenueTrend } from "./revenue-trend";
 import { SalesFunnel } from "./sales-funnel";
 import { WinLossCard } from "./win-loss-card";
+import { LostReasonsAnalytics } from "@/features/lost-reasons/lost-reasons-analytics";
+import type { LostReasonsAnalyticsData } from "@/features/lost-reasons/types";
 
 export function AnalyticsDashboard({
   data,
+  lostReasons,
   selectedRange,
 }: {
   data: AnalyticsData;
+  lostReasons: LostReasonsAnalyticsData;
   selectedRange: AnalyticsDateRange;
 }) {
   const showCoverageWarning = Boolean(data.dataCoverageWarning || data.dataCoverage?.funnelWarning);
@@ -51,6 +55,7 @@ export function AnalyticsDashboard({
         <SalesFunnel stages={data.funnel} />
         <WinLossCard data={data.winLoss} />
       </div>
+      <LostReasonsAnalytics data={lostReasons} />
       <div className="grid min-w-0 gap-5 xl:grid-cols-3">
         <RevenueTrend data={data.revenueTrend} />
         <LeadTrend data={data.leadTrend.points} />

@@ -28,7 +28,6 @@ export type NotificationFilter =
   | "ai_suggestions"
   | "resolved";
 
-<<<<<<< HEAD
 export const NOTIFICATION_TYPE_MAP: Record<NotificationTypeKey, PrismaNotificationType> = {
   overdue_followup: "OVERDUE_FOLLOWUP",
   followup_due_today: "FOLLOWUP_DUE_TODAY",

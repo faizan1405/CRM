@@ -16,7 +16,7 @@ import {
 import { useState } from "react";
 import { FollowUpCard } from "./follow-up-card";
 import { formatStructuredCallNote } from "./formatters";
-import { mockStructureNotesCallback } from "./mock-data";
+
 import { NoteOutputPreview } from "./note-output-preview";
 import { OriginalNotePreservation } from "./original-note-preservation";
 import { QuickTags } from "./quick-tags";
@@ -32,7 +32,7 @@ import type {
 export function AIConversationNotes({
   initialRawNote = "",
   availableTags,
-  onStructureNotes = mockStructureNotesCallback,
+  onStructureNotes = async () => ({} as StructuredCallNotesData),
   onApplyStructured,
   onKeepOriginal,
   className = "",

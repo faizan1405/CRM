@@ -250,7 +250,7 @@ export function formatStructuredNoteToReadableText(data: StructuredCallNotesData
   }
 
   if (parts.length === 0) {
-    return data.rawNote;
+    return data.rawNote || "";
   }
 
   return parts.join("\n• ");

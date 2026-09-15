@@ -1,5 +1,5 @@
-<<<<<<< HEAD
 import type { LeadLossReason as PrismaLeadLossReason } from "@prisma/client";
+export type { PrismaLeadLossReason };
 
 export const LOST_REASONS = [
   "PRICE",

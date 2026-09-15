@@ -11,6 +11,8 @@ import { PipelineCard } from "./pipeline-card";
 import { PipelineSummary } from "./pipeline-summary";
 import { PipelineColumnHeader, PipelineEmptyState } from "./pipeline-column";
 import { PipelineMobileView } from "./pipeline-mobile-view";
+import { LostReasonDialog } from "@/features/lost-reasons/lost-reason-dialog";
+import type { LostReasonSubmission } from "@/features/lost-reasons/types";
 import { useLeadActivities } from "@/features/activity/use-activities";
 import { FollowUpForm } from "@/features/followups/follow-up-form";
 import type { NewFollowUpInput } from "@/features/followups/types";
@@ -31,6 +33,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
+  const [lostReasonLead, setLostReasonLead] = useState<Lead | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -81,6 +84,11 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     if (!draggedLead) return;
     if (draggedLead.status === destStatus) return; 
 
+    if (destStatus === "Lost") {
+      setLostReasonLead(draggedLead);
+      return;
+    }
+
     // Optimistic UI update
     setLeads((prev) =>
       prev.map((l) => (l.id === draggedLeadId ? { ...l, status: destStatus } : l))
@@ -109,6 +117,10 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
 
   const handleStatusChange = async (nextStatus: LeadStatus) => {
     if (!selectedLead || nextStatus === selectedLead.status) return;
+    if (nextStatus === "Lost") {
+      setLostReasonLead(selectedLead);
+      return;
+    }
     setSaving(true);
     const result = await changeLeadStatus(selectedLead.id, nextStatus);
     setSaving(false);
@@ -118,6 +130,24 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     }
     replaceLead(result.data);
     setError(null);
+  };
+
+  const handleLostConfirm = async (data: LostReasonSubmission) => {
+    if (!lostReasonLead) return;
+    setSaving(true);
+    const result = await changeLeadStatus(
+      lostReasonLead.id,
+      "Lost",
+      data.reason,
+      data.notes
+    );
+    setSaving(false);
+    if (!result.success) {
+      setError(result.error);
+      return;
+    }
+    replaceLead(result.data);
+    setLostReasonLead(null);
   };
 
   const handleRemoveLead = async () => {
@@ -261,6 +291,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         activityFilter={activityFilter}
         onActivityFilterChange={setActivityFilter}
         onAddNote={handleAddNote}
+        onRefreshActivities={refreshActivities}
         onAddFollowUp={selectedLead ? () => setFollowUpLead(selectedLead) : undefined}
         onEditNote={handleEditNote}
         onDeleteNote={handleDeleteNote}
@@ -279,6 +310,17 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
           } 
         }} 
         onSubmit={handleSaveLead} 
+      />
+
+      <LostReasonDialog
+        isOpen={Boolean(lostReasonLead)}
+        leadId={lostReasonLead?.id}
+        leadName={lostReasonLead?.name}
+        isSubmitting={saving}
+        onConfirm={handleLostConfirm}
+        onCancel={() => {
+          if (!saving) setLostReasonLead(null);
+        }}
       />
     </div>
   );

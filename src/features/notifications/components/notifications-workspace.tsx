@@ -17,7 +17,7 @@ import type {
   NotificationFilter,
   NotificationsProps,
 } from "../types";
-import { initialMockNotifications } from "../mock-data";
+
 import { NotificationCard } from "./notification-card";
 
 const FILTER_TABS: Array<{ value: NotificationFilter; label: string }> = [
@@ -31,7 +31,7 @@ const FILTER_TABS: Array<{ value: NotificationFilter; label: string }> = [
 ];
 
 export function NotificationsWorkspace({
-  initialNotifications = initialMockNotifications,
+  initialNotifications = [],
   onMarkRead,
   onMarkDone,
   onDismiss,

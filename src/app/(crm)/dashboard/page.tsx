@@ -7,8 +7,10 @@ import { PipelineSnapshot } from "@/features/dashboard/components/pipeline-snaps
 import { RevenueSnapshot } from "@/features/dashboard/components/revenue-snapshot";
 import { RecentActivity } from "@/features/dashboard/components/recent-activity";
 import { AIAttentionDashboardSection } from "@/features/ai-attention";
+import { DailyBriefingWorkspace } from "@/features/daily-briefing/components/daily-briefing-workspace";
 
 import { getDashboardData } from "@/app/actions/dashboard";
+import { getDailyBriefing, refreshDailyBriefingAi } from "@/app/actions/daily-briefing";
 import Link from "next/link";
 import { getTypeIcon, typeStyles } from "@/features/followups/follow-up-types";
 import { CalendarClock, ArrowRight, AlertTriangle, Sparkles } from "lucide-react";
@@ -17,7 +19,10 @@ import { FollowUpType } from "@prisma/client";
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  const result = await getDashboardData();
+  const [result, briefingResult] = await Promise.all([
+    getDashboardData(),
+    getDailyBriefing()
+  ]);
   
   if (!result.success || !result.data) {
     return (
@@ -33,7 +38,19 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      <DashboardHeader />
+      {briefingResult.success && briefingResult.data ? (
+        <DailyBriefingWorkspace 
+          initialStats={briefingResult.data.summaryStats}
+          initialActions={briefingResult.data.priorityActions}
+          initialAiBriefing={briefingResult.data.aiBriefing}
+          onRefreshAi={async () => {
+            "use server";
+            await refreshDailyBriefingAi();
+          }}
+        />
+      ) : (
+        <DashboardHeader />
+      )}
       
       <KPICards data={data.kpis} />
       

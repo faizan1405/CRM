@@ -3,28 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type {
-  AddFollowUpData,
   AiBriefingData,
   BriefingActionItem,
   BriefingCardId,
   BriefingPriority,
   BriefingSummaryStats,
 } from "../types";
-import {
-  MOCK_AI_BRIEFING,
-  MOCK_BRIEFING_ACTIONS,
-  MOCK_BRIEFING_STATS,
-} from "../mock-data";
+import { refreshDailyBriefingAi } from "@/app/actions/daily-briefing";
 import { BriefingSummaryCards } from "./briefing-summary-cards";
 import { AiBriefingBanner } from "./ai-briefing-banner";
 import { PriorityActionItem } from "./priority-action-item";
-import { AddBriefingFollowUpModal } from "./add-briefing-followup-modal";
 import { BriefingEmptyState } from "./briefing-empty-state";
-import {
-  CheckCircle2,
-  Filter,
-  RotateCcw,
-} from "lucide-react";
+import { Filter, RotateCcw } from "lucide-react";
 
 type DailyBriefingWorkspaceProps = {
   initialStats?: BriefingSummaryStats;
@@ -33,12 +23,28 @@ type DailyBriefingWorkspaceProps = {
   onRefreshAi?: () => void;
 };
 
+const DEFAULT_STATS: BriefingSummaryStats = {
+  hotLeadsCount: 0,
+  followUpsTodayCount: 0,
+  overdueFollowUpsCount: 0,
+  newLeadsCount: 0,
+  staleLeadsCount: 0,
+  activeOpportunityValue: 0,
+  activeOpportunityValueFormatted: "₹0",
+};
+
+const DEFAULT_AI_BRIEFING: AiBriefingData = {
+  summary: "No AI briefing summary generated yet for today. Click Refresh to analyze your priority leads.",
+  keyPoints: [],
+  recommendation: "Focus on leads with scheduled follow-ups and active attention status.",
+};
+
 type PriorityFilter = "ALL" | BriefingPriority | "PENDING" | "COMPLETED";
 
 export function DailyBriefingWorkspace({
-  initialStats = MOCK_BRIEFING_STATS,
-  initialActions = MOCK_BRIEFING_ACTIONS,
-  initialAiBriefing = MOCK_AI_BRIEFING,
+  initialStats = DEFAULT_STATS,
+  initialActions = [],
+  initialAiBriefing = DEFAULT_AI_BRIEFING,
   onRefreshAi,
 }: DailyBriefingWorkspaceProps) {
   const router = useRouter();
@@ -53,17 +59,9 @@ export function DailyBriefingWorkspace({
   const [forceEmptyState, setForceEmptyState] = useState(false);
 
   // Modal State
-  const [activeFollowUpItem, setActiveFollowUpItem] = useState<BriefingActionItem | null>(null);
 
-  // Toast feedback
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((current) => (current === msg ? null : current));
-    }, 3200);
-  };
+
 
   // Toggle Action Done
   const handleToggleDone = (itemId: string) => {
@@ -71,11 +69,6 @@ export function DailyBriefingWorkspace({
       prev.map((item) => {
         if (item.id === itemId) {
           const newDone = !item.isDone;
-          showToast(
-            newDone
-              ? `Action "${item.title}" marked done.`
-              : `Action "${item.title}" reopened.`
-          );
           return { ...item, isDone: newDone };
         }
         return item;
@@ -85,66 +78,55 @@ export function DailyBriefingWorkspace({
 
   // Handle Open Lead
   const handleOpenLead = (item: BriefingActionItem) => {
-    showToast(`Opening lead ${item.leadName || item.title}...`);
     if (item.leadId) {
       router.push(`/leads/${item.leadId}`);
-    } else {
-      router.push("/leads");
     }
   };
 
   // Handle Call
   const handleCall = (item: BriefingActionItem) => {
-    showToast(`Calling ${item.leadName || item.title} (${item.phone || "No phone"})...`);
+    if (item.phone) {
+      window.location.href = `tel:${item.phone}`;
+    }
   };
 
   // Handle WhatsApp
   const handleWhatsApp = (item: BriefingActionItem) => {
-    showToast(`Opening WhatsApp for ${item.leadName || item.title}...`);
+    if (item.phone) {
+      window.open(`https://wa.me/${item.phone.replace(/[^0-9]/g, "")}`, "_blank");
+    }
   };
 
   // Handle Add Follow-up modal trigger
   const handleOpenAddFollowUp = (item: BriefingActionItem) => {
-    setActiveFollowUpItem(item);
-  };
-
-  // Handle Add Follow-up submission
-  const handleSaveFollowUp = (data: AddFollowUpData) => {
-    setActiveFollowUpItem(null);
-    showToast(
-      `Scheduled ${data.type} follow-up for ${data.leadName} on ${data.date} at ${data.time}.`
-    );
-    // Increment follow-ups today if today
-    setStats((prev: BriefingSummaryStats) => ({
-      ...prev,
-      followUpsTodayCount: prev.followUpsTodayCount + 1,
-    }));
+    if (item.leadId) {
+      router.push(`/leads/${item.leadId}`);
+    }
   };
 
   // Handle AI Refresh callback
-  const handleRefreshAi = () => {
+  const handleRefreshAi = async () => {
     if (onRefreshAi) {
       onRefreshAi();
       return;
     }
     setIsAiRefreshing(true);
-    setTimeout(() => {
+    try {
+      const res = await refreshDailyBriefingAi();
+      if (res.success && res.data) {
+        if (res.data.aiBriefing) setAiBriefing(res.data.aiBriefing);
+        if (res.data.summaryStats) setStats(res.data.summaryStats);
+        if (res.data.priorityActions) setActions(res.data.priorityActions);
+      }
+    } finally {
       setIsAiRefreshing(false);
-      setAiBriefing({
-        ...aiBriefing,
-        summary:
-          "AI Briefing updated. Rahul Sharma (₹30,000 overdue) remains your #1 target, followed by Sameer's pending proposal closing window.",
-        generatedAt: "Just now",
-      });
-      showToast("AI Briefing refreshed with latest signals.");
-    }, 600);
+    }
   };
 
   // Reset checklist
   const handleResetActions = () => {
     setActions(initialActions);
     setForceEmptyState(false);
-    showToast("Checklist reset to default state.");
   };
 
   // Stats calculation
@@ -186,17 +168,7 @@ export function DailyBriefingWorkspace({
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5 pb-16">
-      {/* Toast Notification Banner */}
-      {toastMessage && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-medium text-white shadow-xl sm:text-sm"
-        >
-          <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+
 
       {/* Briefing Header: Mobile-First, Scan in under 30 seconds */}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-4">
@@ -414,14 +386,7 @@ export function DailyBriefingWorkspace({
         )}
       </section>
 
-      {/* Add Follow-up Modal */}
-      <AddBriefingFollowUpModal
-        key={activeFollowUpItem?.id ?? "modal"}
-        isOpen={Boolean(activeFollowUpItem)}
-        item={activeFollowUpItem}
-        onClose={() => setActiveFollowUpItem(null)}
-        onSubmit={handleSaveFollowUp}
-      />
+
     </div>
   );
 }

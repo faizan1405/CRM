@@ -18,12 +18,12 @@ import {
   Bot,
 } from "lucide-react";
 import type {
-  LostReason,
+  PrismaLeadLossReason,
   LostReasonsAnalyticsProps,
 } from "./types";
 import { LOST_REASON_DETAILS } from "./types";
 
-function getReasonIcon(reason: LostReason) {
+function getReasonIcon(reason: PrismaLeadLossReason) {
   const meta = LOST_REASON_DETAILS[reason];
   if (!meta) return <HelpCircle className="size-4 shrink-0 text-slate-500" aria-hidden="true" />;
 

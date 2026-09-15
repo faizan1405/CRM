@@ -2,7 +2,13 @@
 
 import { Check, Tag } from "lucide-react";
 import type { QuickTag } from "./types";
-import { DEFAULT_QUICK_TAGS } from "./mock-data";
+const DEFAULT_QUICK_TAGS: QuickTag[] = [
+  "Interested",
+  "Price Concern",
+  "Follow-up Required",
+  "Decision Maker",
+  "No Response",
+];
 
 interface QuickTagsProps {
   selectedTags: QuickTag[];

@@ -1,8 +1,8 @@
 import { AlertOctagon, AlertTriangle, Info } from "lucide-react";
-import type { NotificationPriority } from "../types";
+import type { NotificationPriorityKey } from "../types";
 
 interface NotificationPriorityBadgeProps {
-  priority: NotificationPriority;
+  priority: NotificationPriorityKey;
   size?: "sm" | "md";
   className?: string;
 }
