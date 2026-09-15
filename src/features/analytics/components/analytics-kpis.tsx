@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Banknote, CircleDollarSign, ClockAlert, Percent, ReceiptIndianRupee, UsersRound } from "lucide-react";
 import type { AnalyticsKpiData } from "../types";
 import { compactNumber, currency } from "./shared";
+import { compactCurrency } from "@/features/dashboard/compact-currency";
 
 const cards = [
   { key: "totalLeads", label: "Total Leads", icon: UsersRound, tone: "bg-blue-50 text-blue-700", format: (v: number) => v.toLocaleString("en-IN"), note: "in selected period" },
@@ -17,7 +18,7 @@ export function AnalyticsKpis({ data }: { data: AnalyticsKpiData }) {
     <Link href={key === "totalLeads" ? "/leads" : key === "overdueFollowUps" ? "/follow-ups?filter=overdue" : key === "openPipelineValue" ? "/pipeline" : key === "winRate" ? "/analytics#win-loss" : "/leads?status=WON"} aria-label={`View ${label}`} key={key} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 hover:border-blue-300 min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
       <div className={`mb-4 grid size-9 place-items-center rounded-xl ${tone}`}><Icon aria-hidden="true" size={18} /></div>
       <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-[clamp(1.2rem,1.5vw,1.5rem)] font-bold tracking-tight text-slate-950" title={format(data[key])}>{format(data[key])}</p>
+      <p className="mt-1 break-all text-[clamp(1.1rem,1.5vw,1.5rem)] font-bold tracking-tight text-slate-950" title={format(data[key])} aria-label={format(data[key])}>{key === "wonRevenue" || key === "openPipelineValue" || key === "avgWonDeal" ? compactCurrency(data[key]) : format(data[key])}</p>
       <p className="mt-1 text-xs text-slate-500">{data[key] === 0 ? "No data yet" : note}</p>
       {key === "openPipelineValue" && data[key] > 0 ? <p className="sr-only">Compact value: {compactNumber.format(data[key])}</p> : null}
     </Link>

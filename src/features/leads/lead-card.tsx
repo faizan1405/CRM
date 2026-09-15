@@ -1,5 +1,5 @@
 import { ActionCard } from "@/components/action-card";
-import { ChevronRight, Phone } from "lucide-react";
+import { ChevronRight, Phone, Trash2 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import { getTelephoneHref } from "@/features/leads/contact-links";
 import { LeadQuickActions } from "@/features/leads/lead-quick-actions";
@@ -19,6 +19,7 @@ type LeadCardProps = {
   lead: Lead;
   onSelect: (lead: Lead, action?: "note" | "status") => void;
   onAddFollowUp: (lead: Lead) => void;
+  onDelete?: (lead: Lead) => void;
   whatsAppMessage?: string;
   aiAttention?: AIAttentionLeadData;
 };
@@ -27,6 +28,7 @@ export function LeadCard({
   lead,
   onSelect,
   onAddFollowUp,
+  onDelete,
   whatsAppMessage,
   aiAttention,
 }: LeadCardProps) {
@@ -44,6 +46,7 @@ export function LeadCard({
           </p>
         </div>
 
+        {onDelete && <button type="button" onClick={() => onDelete(lead)} aria-label={`Delete ${lead.name}`} className="grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700 focus-visible:ring-2 focus-visible:ring-rose-600"><Trash2 size={18} /></button>}
         {/* Status and Score */}
         <div className="flex shrink-0 flex-col items-end gap-1">
           <LeadStatusBadge status={lead.status} />
@@ -74,7 +77,7 @@ export function LeadCard({
       {/* Phone Link */}
       <a
         href={getTelephoneHref(lead.phone)}
-        className="mt-3 flex min-h-10 items-center gap-2 rounded-md text-sm text-slate-700 hover:text-blue-700 focus-visible:outline-offset-2"
+        className="mt-3 flex min-h-10 items-center gap-2 break-all rounded-md text-sm text-slate-700 hover:text-blue-700 focus-visible:outline-offset-2"
         aria-label={`Call ${lead.name} at ${lead.phone}`}
       >
         <Phone aria-hidden="true" size={16} className="text-slate-400" />
@@ -85,13 +88,13 @@ export function LeadCard({
       <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
         <div>
           <dt className="text-xs font-medium text-slate-500">Next follow-up</dt>
-          <dd className="mt-0.5 text-sm font-medium text-slate-800">
+          <dd className="mt-0.5 break-all text-sm font-medium text-slate-800">
             {formatDate(lead.nextFollowUpDate)}
           </dd>
         </div>
         <div>
           <dt className="text-xs font-medium text-slate-500">Quoted amount</dt>
-          <dd className="mt-0.5 text-sm font-medium text-slate-800">
+          <dd className="mt-0.5 break-all text-sm font-medium text-slate-800">
             {formatCurrency(lead.quotedAmount)}
           </dd>
         </div>

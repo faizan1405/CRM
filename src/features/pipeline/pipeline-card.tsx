@@ -43,22 +43,14 @@ export function PipelineCard({
           {lead.phone && (
             <div className="flex items-start gap-1.5">
               <Phone size={12} className="text-slate-400 shrink-0 mt-0.5" />
-              <span>{lead.phone}</span>
+              <span className="break-all">{lead.phone}</span>
             </div>
           )}
         </div>
       )}
 
-      {(lead.budget || lead.quotedAmount || lead.nextFollowUpDate) && (
+      {(lead.quotedAmount !== null || lead.nextFollowUpDate) && (
         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-slate-100 pt-2 text-[11px]">
-          {lead.budget !== null && (
-            <div className="flex flex-col">
-              <span className="text-slate-400 leading-tight">Budget</span>
-              <span className="font-medium text-slate-700 leading-tight">
-                {formatCurrency(lead.budget)}
-              </span>
-            </div>
-          )}
           {lead.quotedAmount !== null && (
             <div className="flex flex-col">
               <span className="text-slate-400 leading-tight">Quoted</span>

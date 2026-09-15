@@ -83,7 +83,7 @@ export function RawNotesInput({
 
       <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
         <p id="raw-notes-hint" className="text-xs text-slate-500">
-          Tip: Type rough notes like &ldquo;interested ecommerce 25k budget talk with partner friday 4pm&rdquo;
+          Tip: Type rough notes like &ldquo;interested ecommerce talk with partner friday 4pm&rdquo;
         </p>
 
         <button

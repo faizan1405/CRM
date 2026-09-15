@@ -19,7 +19,7 @@ export function PlaceholderChips({ onInsert, className = "" }: PlaceholderChipsP
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        {SUPPORTED_PLACEHOLDERS.map((item) => (
+        {SUPPORTED_PLACEHOLDERS.filter(item => item.key !== "{budget}").map((item) => (
           <button
             key={item.key}
             type="button"
