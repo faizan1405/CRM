@@ -248,8 +248,8 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`flex-1 overflow-y-auto p-3 custom-scrollbar transition-colors ${
-                        snapshot.isDraggingOver ? "bg-slate-100" : ""
+                      className={`flex-1 overflow-y-auto p-3 custom-scrollbar rounded-lg transition-colors duration-200 ${
+                        snapshot.isDraggingOver ? "bg-blue-50/80 ring-1 ring-blue-200/50" : ""
                       }`}
                     >
                       <div className="flex flex-col gap-3 min-h-[100px]">
@@ -260,7 +260,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 style={provided.draggableProps.style}
-                                className={snapshot.isDragging ? "z-50" : ""}
+                                className={snapshot.isDragging ? "z-50 scale-[1.02] rotate-1 shadow-lg" : ""}
                               >
                                 <PipelineCard
                                   lead={lead}

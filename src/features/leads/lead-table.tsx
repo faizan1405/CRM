@@ -2,6 +2,7 @@ import { ChevronRight, MessageCircle, Phone } from "lucide-react";
 import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
+import { OperationalStateBadge } from "@/features/leads/operational-state-badge";
 import type { Lead } from "@/features/leads/types";
 import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
 
@@ -16,6 +17,7 @@ export function LeadTable({ leads, onSelect }: { leads: Lead[]; onSelect: (lead:
             <th className="px-4 py-3.5">Phone</th>
             <th className="px-4 py-3.5">Budget</th>
             <th className="px-4 py-3.5">Status</th>
+            <th className="px-4 py-3.5">Operational</th>
             <th className="px-4 py-3.5">Next follow-up</th>
             <th className="px-4 py-3.5">Quoted amount</th>
             <th className="px-5 py-3.5 text-right">Actions</th>
@@ -26,7 +28,13 @@ export function LeadTable({ leads, onSelect }: { leads: Lead[]; onSelect: (lead:
             const ai = lead.aiAttention || deriveAIAttention(lead);
             const isTerminal = lead.status === "Won" || lead.status === "Lost";
             return (
-              <tr key={lead.id} className="bg-white transition-colors hover:bg-slate-50/70">
+              <tr key={lead.id} className={`bg-white transition-all duration-150 hover:bg-slate-50/70 active:bg-slate-100 cursor-pointer ${
+                lead.operationalState === "FOLLOW_UP_NOW" ? "border-l-4 border-l-emerald-400"
+                : lead.operationalState === "FUTURE_FOLLOW_UP" ? "border-l-4 border-l-amber-400"
+                : lead.operationalState === "LOST" ? "border-l-4 border-l-rose-300 bg-rose-50/20"
+                : lead.operationalState === "WASTE" ? "border-l-4 border-l-slate-300 bg-slate-50/50"
+                : ""
+              }`}>
                 <td className="px-5 py-4">
                   <p className="font-semibold text-slate-900">{lead.name}</p>
                   <p className="mt-0.5 text-sm text-[var(--muted)]">{lead.business || "No business added"}</p>
@@ -42,6 +50,7 @@ export function LeadTable({ leads, onSelect }: { leads: Lead[]; onSelect: (lead:
                 <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-700">{lead.phone}</td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-slate-700">{formatCurrency(lead.budget)}</td>
                 <td className="px-4 py-4"><LeadStatusBadge status={lead.status} /></td>
+                <td className="px-4 py-4"><OperationalStateBadge state={lead.operationalState || "ACTIVE_NEUTRAL"} /></td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-700">{formatDate(lead.nextFollowUpDate)}</td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-slate-700">{formatCurrency(lead.quotedAmount)}</td>
                 <td className="px-5 py-4 text-right">

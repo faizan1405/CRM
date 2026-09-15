@@ -46,6 +46,7 @@ model Lead {
   leadSource       String?
   budget           Decimal?            @db.Decimal(12, 2)
   status           LeadStatus          @default(NEW)
+  isWaste          Boolean             @default(false)
   quotedAmount     Decimal?            @db.Decimal(12, 2)
   lastContactDate  DateTime?           @db.Date
   nextFollowUpDate DateTime?           @db.Date

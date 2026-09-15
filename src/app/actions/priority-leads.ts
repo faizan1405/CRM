@@ -57,13 +57,13 @@ export async function getPriorityLeads(page: number = 1): Promise<{ success: boo
         take: fetchLimit
       }),
       db.lead.findMany({
-        where: { status: LeadStatus.PROPOSAL_SENT },
+        where: { isWaste: false,  status: LeadStatus.PROPOSAL_SENT },
         select: { id: true, name: true, phone: true, business: true, status: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
         take: fetchLimit
       }),
       db.lead.findMany({
-        where: { status: LeadStatus.NEW },
+        where: { isWaste: false,  status: LeadStatus.NEW },
         select: { id: true, name: true, phone: true, business: true, status: true, createdAt: true },
         orderBy: { createdAt: "desc" },
         take: fetchLimit

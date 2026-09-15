@@ -17,6 +17,7 @@ import {
   markLeadAIInsightNeedsRefresh,
   analyzeLead,
 } from "@/features/ai-attention/services/attention-engine";
+import { deriveOperationalState } from "@/lib/operational-state";
 
 const MAX_MONEY = 9_999_999_999.99;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -105,6 +106,8 @@ function serializeLead(lead: {
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
+  isWaste: boolean;
+  followUps?: { scheduledAt: Date; status: string }[];
   aiInsight?: import("@prisma/client").LeadAIInsight | null;
 }): Lead {
   const baseLead = {
@@ -125,8 +128,20 @@ function serializeLead(lead: {
     updatedAt: lead.updatedAt.toISOString(),
   };
 
+  const operationalState = deriveOperationalState({
+    status: baseLead.status,
+    isWaste: lead.isWaste,
+    nextFollowUpDate: lead.nextFollowUpDate?.toISOString().slice(0, 10) ?? null,
+    followUps: lead.followUps?.map(f => ({
+      scheduledAt: f.scheduledAt.toISOString(),
+      status: f.status,
+    })),
+  });
+
   return {
     ...baseLead,
+    isWaste: lead.isWaste,
+    operationalState,
     aiAttention: deriveAIAttention({
       ...baseLead,
       aiInsight: lead.aiInsight,
@@ -139,14 +154,29 @@ function cleanError(error: unknown) {
   return "We could not save that change. Please try again.";
 }
 
-export async function getLeads(): Promise<LeadActionResult<Lead[]>> {
+export async function getLeads(filter?: import('@/features/leads/types').LeadOperationalState): Promise<LeadActionResult<Lead[]>> {
   try {
     await requireAuthenticatedUser();
+    const where: Record<string, unknown> = {};
+    if (filter === "WASTE") {
+      where.isWaste = true;
+    } else if (filter && filter !== "ACTIVE_NEUTRAL") {
+      where.isWaste = false;
+    }
+    // For ACTIVE_NEUTRAL filter, show non-waste only (no status filter)
+    if (filter === "ACTIVE_NEUTRAL") {
+      where.isWaste = false;
+    }
     const leads = await db.lead.findMany({
-      include: { aiInsight: true },
+      where,
+      include: { aiInsight: true, followUps: { where: { status: "PENDING" } } },
       orderBy: { createdAt: "desc" },
     });
-    return { success: true, data: leads.map(serializeLead) };
+    let serialized = leads.map(serializeLead);
+    if (filter) {
+      serialized = serialized.filter(l => l.operationalState === filter);
+    }
+    return { success: true, data: serialized };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -433,5 +463,83 @@ export async function deleteAllLeadsAction(): Promise<{
       success: false,
       error: error instanceof Error ? error.message : "Failed to purge all leads.",
     };
+  }
+}
+
+export async function markLeadWaste(leadId: string): Promise<LeadActionResult<Lead>> {
+  try {
+    const session = await requireAuthenticatedUser();
+    const id = readLeadId(leadId);
+    
+    const lead = await db.$transaction(async (tx) => {
+      const oldLead = await tx.lead.findUnique({ where: { id } });
+      if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
+
+      const updatedLead = await tx.lead.update({
+        where: { id },
+        data: { isWaste: true },
+        include: { aiInsight: true },
+      });
+
+      await tx.leadActivity.create({
+        data: {
+          leadId: id,
+          type: ActivityType.LEAD_UPDATED,
+          message: "Lead was marked as Waste",
+          createdByUserId: session.id as string,
+        },
+      });
+
+      return updatedLead;
+    });
+
+    try {
+      revalidatePath("/leads");
+      revalidatePath("/pipeline");
+      revalidatePath("/dashboard");
+    } catch {}
+
+    return { success: true, data: serializeLead(lead) };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+export async function restoreWasteLead(leadId: string): Promise<LeadActionResult<Lead>> {
+  try {
+    const session = await requireAuthenticatedUser();
+    const id = readLeadId(leadId);
+
+    const lead = await db.$transaction(async (tx) => {
+      const oldLead = await tx.lead.findUnique({ where: { id } });
+      if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
+      
+      const updatedLead = await tx.lead.update({
+        where: { id },
+        data: { isWaste: false },
+        include: { aiInsight: true },
+      });
+      
+      await tx.leadActivity.create({
+        data: {
+          leadId: id,
+          type: ActivityType.LEAD_UPDATED,
+          message: "Lead was restored from Waste",
+          createdByUserId: session.id as string,
+        },
+      });
+      
+      return updatedLead;
+    });
+
+    try {
+      revalidatePath("/leads");
+      revalidatePath("/pipeline");
+      revalidatePath("/dashboard");
+    } catch {}
+
+    return { success: true, data: serializeLead(lead) };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
   }
 }

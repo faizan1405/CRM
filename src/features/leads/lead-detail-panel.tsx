@@ -7,6 +7,7 @@ import { Pencil, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
+import { OperationalStateBadge } from "@/features/leads/operational-state-badge";
 import { leadStatuses, type Lead, type LeadStatus } from "@/features/leads/types";
 import { LeadActivityTimeline } from "@/features/activity/lead-activity-timeline";
 import type { Activity, ActivityFilter } from "@/features/activity/types";
@@ -172,6 +173,7 @@ export function LeadDetailPanel({
                 {lead.name}
               </h2>
               <LeadStatusBadge status={lead.status} />
+              <OperationalStateBadge state={lead.operationalState || "ACTIVE_NEUTRAL"} />
             </div>
             <p className="mt-1 text-sm text-[var(--muted)]">{lead.business || "No business added"}</p>
           </div>

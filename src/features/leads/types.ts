@@ -25,6 +25,8 @@ export type Lead = {
   notes: string;
   createdAt: string;
   updatedAt: string;
+  isWaste?: boolean;
+  operationalState?: LeadOperationalState;
   aiAttention?: import("@/features/ai-attention/types").AIAttentionLeadData;
 };
 
@@ -56,3 +58,10 @@ export const statusFromDatabase: Record<DatabaseLeadStatus, LeadStatus> = {
   WON: "Won",
   LOST: "Lost",
 };
+
+export type LeadOperationalState =
+  | "LOST"
+  | "WASTE"
+  | "FOLLOW_UP_NOW"
+  | "FUTURE_FOLLOW_UP"
+  | "ACTIVE_NEUTRAL";
