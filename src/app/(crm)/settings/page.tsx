@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
-import { Settings } from "lucide-react";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { SettingsWorkspace } from "@/features/settings";
 
-export const metadata: Metadata = { title: "Settings" };
+export const metadata: Metadata = {
+  title: "Settings & Workspace | CRM",
+  description: "Manage CRM workspace settings, system services, and demo data controls.",
+};
+
+export const dynamic = "force-dynamic";
 
 export default function SettingsPage() {
-  return <PlaceholderPage title="Settings" description="Configure your Scale Flow CRM workspace." message="CRM settings will appear here." icon={Settings} />;
+  return <SettingsWorkspace />;
 }

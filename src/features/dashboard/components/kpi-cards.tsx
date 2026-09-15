@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { BadgeCheck, CalendarClock, CircleDollarSign, Handshake, UserPlus, UsersRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -7,6 +8,7 @@ type KPICardProps = {
   icon: LucideIcon;
   colorScheme: "default" | "blue" | "purple" | "green" | "orange" | "emerald";
   supportText?: string;
+  href?: string;
 };
 
 const colorStyles = {
@@ -18,12 +20,12 @@ const colorStyles = {
   emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 icon-emerald-500",
 };
 
-export function KPICard({ label, value, icon: Icon, colorScheme, supportText }: KPICardProps) {
+export function KPICard({ label, value, icon: Icon, colorScheme, supportText, href }: KPICardProps) {
   const styles = colorStyles[colorScheme];
   const [bg, text, border] = styles.split(" ");
   
-  return (
-    <div className={`relative overflow-hidden rounded-2xl border bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-all hover:shadow-md`}>
+  const content = (
+    <div className={`relative overflow-hidden rounded-2xl border bg-white p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-all ${href ? "hover:border-slate-300 hover:shadow-md cursor-pointer" : "hover:shadow-md"}`}>
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-slate-500">{label}</p>
         <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${bg} ${border}`}>
@@ -36,6 +38,16 @@ export function KPICard({ label, value, icon: Icon, colorScheme, supportText }: 
       </div>
     </div>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="block group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 rounded-2xl">
+        {content}
+      </Link>
+    );
+  }
+
+  return content;
 }
 
 export function KPICards({ data }: { data: { totalLeads: number; newLeads: number; qualifiedLeads: number; wonClients: number; followUpsToday: number; wonRevenue: number } }) {
@@ -47,12 +59,12 @@ export function KPICards({ data }: { data: { totalLeads: number; newLeads: numbe
   }).format(data.wonRevenue);
 
   const stats = [
-    { label: "Total Leads", value: data.totalLeads, icon: UsersRound, colorScheme: "default" as const },
-    { label: "New Leads", value: data.newLeads, icon: UserPlus, colorScheme: "blue" as const },
-    { label: "Qualified", value: data.qualifiedLeads, icon: BadgeCheck, colorScheme: "purple" as const },
-    { label: "Won Clients", value: data.wonClients, icon: Handshake, colorScheme: "green" as const },
-    { label: "Follow-ups Today", value: data.followUpsToday, icon: CalendarClock, colorScheme: "orange" as const },
-    { label: "Revenue", value: formattedRevenue, icon: CircleDollarSign, colorScheme: "emerald" as const },
+    { label: "Total Leads", value: data.totalLeads, icon: UsersRound, colorScheme: "default" as const, href: "/leads" },
+    { label: "New Leads", value: data.newLeads, icon: UserPlus, colorScheme: "blue" as const, href: "/leads" },
+    { label: "Qualified", value: data.qualifiedLeads, icon: BadgeCheck, colorScheme: "purple" as const, href: "/pipeline" },
+    { label: "Won Clients", value: data.wonClients, icon: Handshake, colorScheme: "green" as const, href: "/pipeline" },
+    { label: "Follow-ups Today", value: data.followUpsToday, icon: CalendarClock, colorScheme: "orange" as const, href: "/follow-ups" },
+    { label: "Revenue", value: formattedRevenue, icon: CircleDollarSign, colorScheme: "emerald" as const, href: "/analytics" },
   ];
 
   return (
@@ -63,3 +75,4 @@ export function KPICards({ data }: { data: { totalLeads: number; newLeads: numbe
     </div>
   );
 }
+

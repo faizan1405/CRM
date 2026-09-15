@@ -251,9 +251,12 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
 
   let createdCount = 0;
 
+  // Clean all previous demo leads first to guarantee a fresh deterministic seed
+  await clearDemoLeads();
+
   for (const item of demoData) {
-    // Delete any existing demo lead with same phone to make seeder idempotent
-    const existing = await db.lead.findFirst({
+    // Delete any existing lead with same phone or email to avoid collisions
+    await db.lead.deleteMany({
       where: {
         OR: [
           { phone: item.phone },
@@ -261,10 +264,6 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
         ],
       },
     });
-
-    if (existing) {
-      await db.lead.delete({ where: { id: existing.id } });
-    }
 
     const lead = await db.lead.create({
       data: {
@@ -332,11 +331,32 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
 }
 
 export async function clearDemoLeads(): Promise<{ deletedCount: number }> {
+  const demoLeads = await db.lead.findMany({
+    where: {
+      OR: [
+        { name: { startsWith: DEMO_TAG } },
+        { email: { endsWith: ".demo@example.com" } },
+        { email: { contains: ".demo@" } },
+      ],
+    },
+    select: { id: true },
+  });
+
+  const ids = demoLeads.map((l) => l.id);
+  if (ids.length > 0) {
+    await db.salesNotification.deleteMany({ where: { leadId: { in: ids } } });
+    await db.leadLossEvent.deleteMany({ where: { leadId: { in: ids } } });
+    await db.followUp.deleteMany({ where: { leadId: { in: ids } } });
+    await db.leadActivity.deleteMany({ where: { leadId: { in: ids } } });
+    await db.leadAIInsight.deleteMany({ where: { leadId: { in: ids } } });
+  }
+
   const deleteResult = await db.lead.deleteMany({
     where: {
       OR: [
         { name: { startsWith: DEMO_TAG } },
         { email: { endsWith: ".demo@example.com" } },
+        { email: { contains: ".demo@" } },
       ],
     },
   });

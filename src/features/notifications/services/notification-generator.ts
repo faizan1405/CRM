@@ -256,20 +256,29 @@ export async function generateSmartNotifications(): Promise<{
 
   let created = 0;
   if (toCreate.length > 0) {
-    const insertResult = await db.salesNotification.createMany({
-      data: toCreate.map((item) => ({
-        leadId: item.leadId,
-        type: item.type,
-        priority: item.priority,
-        title: item.title,
-        reason: item.reason,
-        recommendedAction: item.recommendedAction,
-        dedupeKey: item.dedupeKey,
-        status: NotificationStatus.UNREAD,
-      })),
-      skipDuplicates: true,
+    const validLeads = await db.lead.findMany({
+      where: { id: { in: toCreate.map((c) => c.leadId) } },
+      select: { id: true },
     });
-    created = insertResult.count;
+    const validLeadIdSet = new Set(validLeads.map((l) => l.id));
+    const validToCreate = toCreate.filter((c) => validLeadIdSet.has(c.leadId));
+
+    if (validToCreate.length > 0) {
+      const insertResult = await db.salesNotification.createMany({
+        data: validToCreate.map((item) => ({
+          leadId: item.leadId,
+          type: item.type,
+          priority: item.priority,
+          title: item.title,
+          reason: item.reason,
+          recommendedAction: item.recommendedAction,
+          dedupeKey: item.dedupeKey,
+          status: NotificationStatus.UNREAD,
+        })),
+        skipDuplicates: true,
+      });
+      created = insertResult.count;
+    }
   }
 
   return { created, skipped };
