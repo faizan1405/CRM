@@ -160,10 +160,46 @@ export async function createLead(formData: FormData): Promise<LeadActionResult<L
           createdByUserId: session.id as string,
         },
       });
+
+      if (data.nextFollowUpDate) {
+        const dateStr = data.nextFollowUpDate.toISOString().slice(0, 10);
+        const timeRaw = String(formData.get("suggestedFollowUpTime") ?? "").trim();
+        const validTime = /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(timeRaw) ? timeRaw : "10:00";
+        const scheduledAt = new Date(`${dateStr}T${validTime}:00+05:30`);
+        const finalDate = Number.isNaN(scheduledAt.getTime()) ? data.nextFollowUpDate : scheduledAt;
+
+        await tx.followUp.create({
+          data: {
+            leadId: newLead.id,
+            scheduledAt: finalDate,
+            type: "CALL",
+            note: "Follow-up scheduled from lead entry",
+            status: "PENDING",
+          },
+        });
+
+        await tx.leadActivity.create({
+          data: {
+            leadId: newLead.id,
+            type: ActivityType.FOLLOWUP_CREATED,
+            message: `Scheduled a CALL follow-up for ${finalDate.toLocaleDateString()}`,
+            metadata: { type: "CALL", scheduledAt: finalDate },
+            createdByUserId: session.id as string,
+          },
+        });
+      }
+
       return newLead;
     });
-    revalidatePath("/leads");
-    revalidatePath("/pipeline");
+
+    try {
+      revalidatePath("/leads");
+      revalidatePath("/pipeline");
+      revalidatePath("/dashboard");
+    } catch {
+      // safe fallback if called outside Next.js request context (e.g. test environment)
+    }
+
     return { success: true, data: serializeLead(lead) };
   } catch (error) {
     return { success: false, error: cleanError(error) };

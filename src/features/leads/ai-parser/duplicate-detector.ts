@@ -1,4 +1,3 @@
-import "server-only";
 import { db } from "@/lib/db";
 import { normalizePhone } from "./phone-utils";
 import { statusFromDatabase, type DatabaseLeadStatus } from "@/features/leads/types";

@@ -1,5 +1,5 @@
 import { CalendarClock, Check, Pencil } from "lucide-react";
-import { useRef, useState, useEffect } from "react";
+import { useState, useRef } from "react";
 
 type FollowUpSuggestionProps = {
   date: string;
@@ -15,13 +15,14 @@ export function FollowUpSuggestion({
   onTimeChange,
 }: FollowUpSuggestionProps) {
   const [accepted, setAccepted] = useState(Boolean(date));
-  const dateRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
+  const [prevDate, setPrevDate] = useState(date);
+  if (date !== prevDate) {
+    setPrevDate(date);
     if (date) {
       setAccepted(true);
     }
-  }, [date]);
+  }
+  const dateRef = useRef<HTMLInputElement>(null);
 
   let summary = "Not provided";
   if (date) {

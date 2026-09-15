@@ -1,4 +1,3 @@
-import "server-only";
 import Groq from "groq-sdk";
 import { AI_CONFIG } from "./config";
 

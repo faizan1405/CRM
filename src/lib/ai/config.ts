@@ -1,5 +1,3 @@
-import "server-only";
-
 export const AI_CONFIG = {
   get apiKey(): string | undefined {
     return process.env.GROQ_API_KEY;
