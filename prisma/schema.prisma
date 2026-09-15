@@ -22,35 +22,40 @@ enum LeadStatus {
 }
 
 model User {
-  id           String         @id @default(uuid())
-  name         String
-  email        String         @unique
-  passwordHash String
-  role         Role           @default(ADMIN)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  activities   LeadActivity[]
+  id               String               @id @default(uuid())
+  name             String
+  email            String               @unique
+  passwordHash     String
+  role             Role                 @default(ADMIN)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  activities       LeadActivity[]
+  createdTemplates WhatsAppTemplate[]
+  lossEvents       LeadLossEvent[]
+  notifications    SalesNotification[]
 }
 
 model Lead {
-  id               String         @id @default(uuid())
+  id               String              @id @default(uuid())
   name             String
   phone            String
   email            String?
   business         String?
   industry         String?
   leadSource       String?
-  budget           Decimal?       @db.Decimal(12, 2)
-  status           LeadStatus     @default(NEW)
-  quotedAmount     Decimal?       @db.Decimal(12, 2)
-  lastContactDate  DateTime?      @db.Date
-  nextFollowUpDate DateTime?      @db.Date
-  notes            String?        @db.Text
+  budget           Decimal?            @db.Decimal(12, 2)
+  status           LeadStatus          @default(NEW)
+  quotedAmount     Decimal?            @db.Decimal(12, 2)
+  lastContactDate  DateTime?           @db.Date
+  nextFollowUpDate DateTime?           @db.Date
+  notes            String?             @db.Text
   followUps        FollowUp[]
   activities       LeadActivity[]
   aiInsight        LeadAIInsight?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  lossEvents       LeadLossEvent[]
+  notifications    SalesNotification[]
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@index([status])
   @@index([leadSource])
@@ -148,5 +153,121 @@ model LeadAIInsight {
   @@index([score])
   @@index([needsRefresh])
   @@index([lastAnalyzedAt])
+}
+
+enum WhatsAppTemplateCategory {
+  FIRST_CONTACT
+  AFTER_CALL
+  FOLLOW_UP
+  QUOTATION_SENT
+  QUOTATION_FOLLOW_UP
+  NO_RESPONSE
+  FINAL_FOLLOW_UP
+  CONVERTED_THANK_YOU
+}
+
+model WhatsAppTemplate {
+  id              String                   @id @default(uuid())
+  title           String
+  category        WhatsAppTemplateCategory
+  message         String                   @db.Text
+  isActive        Boolean                  @default(true)
+  createdByUserId String?
+  createdByUser   User?                    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+}
+
+enum LeadLossReason {
+  PRICE
+  NO_RESPONSE
+  TIMING
+  COMPETITOR
+  TRUST
+  NOT_QUALIFIED
+  REQUIREMENT_CHANGED
+  NO_URGENCY
+  OTHER
+}
+
+model LeadLossEvent {
+  id              String         @id @default(uuid())
+  leadId          String
+  lead            Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  reason          LeadLossReason
+  note            String?        @db.Text
+  lostAt          DateTime       @default(now())
+  createdByUserId String?
+  createdByUser   User?          @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime       @default(now())
+
+  @@index([leadId])
+  @@index([reason])
+  @@index([lostAt])
+}
+
+enum NotificationPriority {
+  CRITICAL
+  IMPORTANT
+  NORMAL
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+  RESOLVED
+  DISMISSED
+}
+
+enum NotificationType {
+  OVERDUE_FOLLOWUP
+  FOLLOWUP_DUE_TODAY
+  NEW_LEAD_NOT_CONTACTED
+  STALE_LEAD
+  HOT_LEAD_ATTENTION
+  HIGH_VALUE_OPPORTUNITY
+  PROPOSAL_FOLLOWUP
+  AI_RECOMMENDED_ACTION
+  MISSED_FOLLOWUP
+}
+
+model SalesNotification {
+  id                String               @id @default(uuid())
+  userId            String?
+  user              User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+  leadId            String?
+  lead              Lead?                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type              NotificationType
+  priority          NotificationPriority
+  title             String
+  reason            String               @db.Text
+  recommendedAction String               @db.Text
+  dedupeKey         String               @unique
+  status            NotificationStatus   @default(UNREAD)
+  readAt            DateTime?
+  resolvedAt        DateTime?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@index([userId])
+  @@index([leadId])
+}
+
+model DailySalesBriefing {
+  id           String   @id @default(uuid())
+  userId       String   @default("system")
+  briefingDate String
+  summary      String   @db.Text
+  metadata     Json
+  generatedAt  DateTime @default(now())
+
+  @@unique([userId, briefingDate])
+  @@index([briefingDate])
 }
 

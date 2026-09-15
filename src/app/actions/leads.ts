@@ -239,6 +239,32 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
       const oldLead = await tx.lead.findUnique({ where: { id: leadId } });
       if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
       
+      // Prevent marking LOST without a reason
+      if (data.status === PrismaLeadStatus.LOST && oldLead.status !== PrismaLeadStatus.LOST) {
+        const lossReasonRaw = String(formData.get("lossReason") ?? "").trim();
+        const lossNote = String(formData.get("lossNote") ?? "").trim() || null;
+        if (!lossReasonRaw) {
+          throw new UserFacingError("Marking a lead as Lost requires a loss reason. Use markLeadLost.");
+        }
+        const { UI_TO_PRISMA_LOST_REASON } = await import("@/features/lost-reasons/types");
+        const prismaReason = UI_TO_PRISMA_LOST_REASON[lossReasonRaw];
+        if (!prismaReason) {
+          throw new UserFacingError("Invalid lost reason provided.");
+        }
+        if (prismaReason === "OTHER" && (!lossNote || lossNote.length === 0)) {
+          throw new UserFacingError("A note is required when reason is Other.");
+        }
+        await tx.leadLossEvent.create({
+          data: {
+            leadId,
+            reason: prismaReason,
+            note: lossNote,
+            lostAt: new Date(),
+            createdByUserId: session.id as string,
+          },
+        });
+      }
+
       const updatedLead = await tx.lead.update({ where: { id: leadId }, data });
       
       // Determine if meaningful fields changed
@@ -265,8 +291,12 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
       return updatedLead;
     });
 
-    revalidatePath("/leads");
-    revalidatePath("/pipeline");
+    try {
+      revalidatePath("/leads");
+      revalidatePath("/pipeline");
+    } catch {
+      // safe in test execution
+    }
     return { success: true, data: serializeLead(lead) };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return { success: false, error: "Lead not found." };
@@ -274,16 +304,53 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
   }
 }
 
-export async function changeLeadStatus(id: string, status: LeadStatus): Promise<LeadActionResult<Lead>> {
+export async function changeLeadStatus(
+  id: string,
+  status: LeadStatus,
+  lossReasonInput?: string,
+  lossNoteInput?: string
+): Promise<LeadActionResult<Lead>> {
   try {
     const session = await requireAuthenticatedUser();
     const databaseStatus = statusToDatabase[status];
     if (!databaseStatus) return { success: false, error: "Select a valid lead status." };
     const leadId = readLeadId(id);
 
+    // If attempting to mark as LOST without going through markLeadLost:
+    if (databaseStatus === PrismaLeadStatus.LOST) {
+      if (!lossReasonInput) {
+        return {
+          success: false,
+          error: "Marking a lead as Lost requires a loss reason. Use markLeadLost.",
+        };
+      }
+      const { UI_TO_PRISMA_LOST_REASON } = await import("@/features/lost-reasons/types");
+      const prismaReason = UI_TO_PRISMA_LOST_REASON[lossReasonInput];
+      if (!prismaReason) {
+        return { success: false, error: `Invalid loss reason: '${lossReasonInput}'.` };
+      }
+      if (prismaReason === "OTHER" && (!lossNoteInput || !lossNoteInput.trim())) {
+        return { success: false, error: "A note/explanation is required when loss reason is Other." };
+      }
+    }
+
     const lead = await db.$transaction(async (tx) => {
       const oldLead = await tx.lead.findUnique({ where: { id: leadId } });
       if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
+
+      if (databaseStatus === PrismaLeadStatus.LOST && oldLead.status !== PrismaLeadStatus.LOST) {
+        const { UI_TO_PRISMA_LOST_REASON } = await import("@/features/lost-reasons/types");
+        const prismaReason = UI_TO_PRISMA_LOST_REASON[lossReasonInput!];
+        await tx.leadLossEvent.create({
+          data: {
+            leadId,
+            reason: prismaReason,
+            note: lossNoteInput?.trim() || null,
+            lostAt: new Date(),
+            createdByUserId: session.id as string,
+          },
+        });
+      }
 
       const updatedLead = await tx.lead.update({ where: { id: leadId }, data: { status: databaseStatus } });
       
@@ -293,7 +360,11 @@ export async function changeLeadStatus(id: string, status: LeadStatus): Promise<
             leadId,
             type: ActivityType.STATUS_CHANGED,
             message: `Status changed from ${statusFromDatabase[oldLead.status as DatabaseLeadStatus]} to ${status}`,
-            metadata: { oldStatus: oldLead.status, newStatus: databaseStatus },
+            metadata: {
+              oldStatus: oldLead.status,
+              newStatus: databaseStatus,
+              ...(lossReasonInput ? { lossReason: lossReasonInput, lossNote: lossNoteInput } : {}),
+            },
             createdByUserId: session.id as string,
           },
         });
@@ -302,8 +373,12 @@ export async function changeLeadStatus(id: string, status: LeadStatus): Promise<
       return updatedLead;
     });
 
-    revalidatePath("/leads");
-    revalidatePath("/pipeline");
+    try {
+      revalidatePath("/leads");
+      revalidatePath("/pipeline");
+    } catch {
+      // safe in test execution
+    }
     return { success: true, data: serializeLead(lead) };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return { success: false, error: "Lead not found." };
@@ -332,8 +407,12 @@ export async function deleteLead(id: string): Promise<LeadActionResult<{ id: str
   try {
     await requireAuthenticatedUser();
     const deleted = await db.lead.delete({ where: { id: readLeadId(id) }, select: { id: true } });
-    revalidatePath("/leads");
-    revalidatePath("/pipeline");
+    try {
+      revalidatePath("/leads");
+      revalidatePath("/pipeline");
+    } catch {
+      // safe in test execution
+    }
     return { success: true, data: deleted };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return { success: false, error: "Lead not found." };

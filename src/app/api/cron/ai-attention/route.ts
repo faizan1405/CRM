@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { batchAnalyzeLeads } from "@/features/ai-attention/services/attention-engine";
+import { generateSmartNotifications } from "@/features/notifications/services/notification-generator";
+import { getDailySalesBriefingData } from "@/features/daily-briefing/services/briefing-service";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // 60 seconds max execution
@@ -29,11 +31,32 @@ async function handleCron(request: Request) {
   }
 
   try {
-    const result = await batchAnalyzeLeads({ limit: 25, concurrency: 3 });
+    // 1. Batch analyze active leads
+    const attentionResult = await batchAnalyzeLeads({ limit: 25, concurrency: 3 });
+
+    // 2. Refresh smart notifications based on updated facts
+    let notificationsResult = { created: 0, skipped: 0 };
+    try {
+      notificationsResult = await generateSmartNotifications();
+    } catch (notifErr) {
+      console.warn("[Cron] Notification generation warning:", notifErr);
+    }
+
+    // 3. Ensure today's daily sales briefing snapshot is ready
+    let briefingReady = false;
+    try {
+      await getDailySalesBriefingData();
+      briefingReady = true;
+    } catch (briefingErr) {
+      console.warn("[Cron] Daily briefing generation warning:", briefingErr);
+    }
+
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
-      result,
+      result: attentionResult,
+      notifications: notificationsResult,
+      briefingReady,
     });
   } catch (error: unknown) {
     return NextResponse.json(
@@ -45,3 +68,4 @@ async function handleCron(request: Request) {
     );
   }
 }
+
