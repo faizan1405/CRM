@@ -102,3 +102,71 @@ export async function requestGroqJson({
     clearTimeout(timeoutId);
   }
 }
+
+export type GroqTextCompletionOptions = {
+  systemPrompt: string;
+  userPrompt: string;
+  temperature?: number;
+  timeoutMs?: number;
+};
+
+export async function requestGroqText({
+  systemPrompt,
+  userPrompt,
+  temperature = 0.2,
+  timeoutMs = AI_CONFIG.timeoutMs,
+}: GroqTextCompletionOptions): Promise<{ text: string }> {
+  const groq = getGroqClient();
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await groq.chat.completions.create(
+      {
+        model: AI_CONFIG.model,
+        temperature,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      },
+      {
+        signal: controller.signal,
+      }
+    );
+
+    const messageContent = response.choices[0]?.message?.content;
+    if (!messageContent || !messageContent.trim()) {
+      throw new AIServiceError("AI returned an empty response. Please retry.");
+    }
+
+    return { text: messageContent.trim() };
+  } catch (error: unknown) {
+    if (error instanceof AIConfigError) {
+      throw error;
+    }
+
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new AIServiceError("AI request timed out. Please retry.");
+    }
+
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (message.toLowerCase().includes("rate limit") || message.toLowerCase().includes("429")) {
+      throw new AIServiceError("AI service is currently rate limited. Please retry in a few moments.");
+    }
+
+    if (
+      message.toLowerCase().includes("authentication") ||
+      message.toLowerCase().includes("invalid api key") ||
+      message.toLowerCase().includes("401")
+    ) {
+      throw new AIServiceError("AI provider authentication failed. Please check system configuration.");
+    }
+
+    throw new AIServiceError("AI transformation failed. Please retry.");
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+

@@ -12,6 +12,7 @@ const protectedRoutes = [
   '/notifications',
   '/daily-briefing',
   '/whatsapp-templates',
+  '/personal-notes',
 ];
 
 export async function proxy(request: NextRequest) {
