@@ -60,7 +60,7 @@ export function ActivityIcon({ activity }: ActivityIconProps) {
   const info = iconMap[activity.type] ?? { bg: "bg-slate-50", text: "text-slate-600", label: "Activity" };
 
   return (
-    <span className={`relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full ${info.bg} ${info.text}`} aria-hidden="true">
+    <span className={`relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full transition-all duration-150 hover:scale-110 ${info.bg} ${info.text}`} aria-hidden="true">
       {getIcon(activity.type)}
     </span>
   );

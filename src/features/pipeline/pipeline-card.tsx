@@ -20,7 +20,7 @@ export function PipelineCard({
     <ActionCard
       onActivate={onClick}
       aria-label={`Open lead ${lead.name}`}
-      className="group flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:border-blue-300 hover:shadow-md transition-shadow text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+      className="group flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:border-blue-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-sm transition-[transform,box-shadow,border-color] duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
     >
       <div className="flex justify-between items-start gap-2">
         <h4 className="font-semibold text-slate-900 text-sm break-words line-clamp-2">

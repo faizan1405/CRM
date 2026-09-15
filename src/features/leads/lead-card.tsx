@@ -32,9 +32,10 @@ export function LeadCard({
 }: LeadCardProps) {
   const ai = aiAttention || lead.aiAttention || deriveAIAttention(lead);
   const isTerminal = lead.status === "Won" || lead.status === "Lost";
+  const isCritical = !isTerminal && (ai.priority === "critical" || ai.score >= 85);
 
   return (
-    <ActionCard onActivate={() => onSelect(lead)} aria-label={`Open lead ${lead.name}`} className="min-w-0 rounded-xl border border-[var(--border)] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md active:translate-y-0">
+    <ActionCard onActivate={() => onSelect(lead)} aria-label={`Open lead ${lead.name}`} className={`min-w-0 rounded-xl border bg-white p-4 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[var(--shadow-elevated)] active:scale-[0.97] ${isCritical ? "border-l-2 border-l-rose-400 hover:border-rose-300" : "border-[var(--border)] hover:border-blue-300"}`}>
       {/* Top Header: Title & Badges */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -104,7 +105,7 @@ export function LeadCard({
         onAddNote={() => onSelect(lead, "note")}
         onAddFollowUp={() => onAddFollowUp(lead)}
         onChangeStatus={() => onSelect(lead, "status")}
-        className="mt-3 border-y border-slate-100 py-1"
+        className="mt-3 border-y border-slate-100 py-1 transition-opacity duration-200 opacity-80 group-hover:opacity-100"
       />
 
       {/* View Details */}

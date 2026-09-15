@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, AlertTriangle, Check, X, Users, Trash2 } from "lucide-react";
+import { Sparkles, AlertTriangle, Check, X, Users, Trash2, Bomb } from "lucide-react";
 import { populateDemoDataAction, clearDemoDataAction } from "@/app/actions/demo-data";
+import { deleteAllLeadsAction } from "@/app/actions/leads";
 
 export interface DemoDataControlProps {
   onCreateDemoLeads?: () => Promise<{ success: boolean; message?: string; count?: number }> | { success: boolean; message?: string; count?: number } | void;
@@ -10,7 +11,7 @@ export interface DemoDataControlProps {
 }
 
 export function DemoDataControl({ onCreateDemoLeads, onClearDemoLeads }: DemoDataControlProps) {
-  const [modalMode, setModalMode] = useState<"create" | "clear" | null>(null);
+  const [modalMode, setModalMode] = useState<"create" | "clear" | "purge" | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
@@ -110,6 +111,41 @@ export function DemoDataControl({ onCreateDemoLeads, onClearDemoLeads }: DemoDat
     }
   };
 
+  const handlePurgeConfirm = async () => {
+    setIsLoading(true);
+    setFeedback(null);
+    try {
+      const res = await deleteAllLeadsAction();
+      if (!res.success) {
+        setFeedback({
+          type: "error",
+          message: res.error || "Failed to purge all leads.",
+        });
+        setModalMode(null);
+        return;
+      }
+      const parts = [`Purged ${res.leadCount} leads`];
+      if (res.followUpCount) parts.push(`${res.followUpCount} follow-ups`);
+      if (res.activityCount) parts.push(`${res.activityCount} activities`);
+      if (res.insightCount) parts.push(`${res.insightCount} AI insights`);
+      if (res.notificationCount) parts.push(`${res.notificationCount} notifications`);
+      if (res.lossEventCount) parts.push(`${res.lossEventCount} loss events`);
+      setFeedback({
+        type: "success",
+        message: parts.join(", ") + ". Production workspace is now clean.",
+      });
+      setModalMode(null);
+    } catch {
+      setFeedback({
+        type: "error",
+        message: "An error occurred while purging leads.",
+      });
+      setModalMode(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <section
       aria-labelledby="demo-data-heading"
@@ -175,6 +211,15 @@ export function DemoDataControl({ onCreateDemoLeads, onClearDemoLeads }: DemoDat
           <Trash2 size={16} className="text-rose-600" aria-hidden="true" />
           <span>Clean Demo Leads</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setModalMode("purge")}
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 shadow-2xs hover:bg-red-50 active:bg-red-100 transition-colors"
+        >
+          <Bomb size={16} className="text-red-600" aria-hidden="true" />
+          <span>Purge All Leads</span>
+        </button>
       </div>
 
       {/* Confirmation Modal */}
@@ -207,11 +252,15 @@ export function DemoDataControl({ onCreateDemoLeads, onClearDemoLeads }: DemoDat
 
             <div className="flex items-start gap-4">
               <div className={`grid size-11 shrink-0 place-items-center rounded-xl border ${
-                modalMode === "create"
+                modalMode === "purge"
+                  ? "bg-red-50 text-red-600 border-red-100"
+                  : modalMode === "create"
                   ? "bg-amber-50 text-amber-600 border-amber-100"
                   : "bg-rose-50 text-rose-600 border-rose-100"
               }`}>
-                {modalMode === "create" ? (
+                {modalMode === "purge" ? (
+                  <Bomb size={22} aria-hidden="true" />
+                ) : modalMode === "create" ? (
                   <Sparkles size={22} aria-hidden="true" />
                 ) : (
                   <Trash2 size={22} aria-hidden="true" />
@@ -220,10 +269,18 @@ export function DemoDataControl({ onCreateDemoLeads, onClearDemoLeads }: DemoDat
 
               <div className="min-w-0 flex-1">
                 <h3 id="confirm-demo-title" className="text-base font-bold text-slate-950">
-                  {modalMode === "create" ? "Create Demo Leads?" : "Clear All Demo Leads?"}
+                  {modalMode === "purge"
+                    ? "Purge ALL Leads?"
+                    : modalMode === "create"
+                    ? "Create Demo Leads?"
+                    : "Clear All Demo Leads?"}
                 </h3>
                 <p id="confirm-demo-desc" className="mt-1.5 text-sm text-slate-600 leading-relaxed">
-                  {modalMode === "create" ? (
+                  {modalMode === "purge" ? (
+                    <>
+                      <span className="font-semibold text-red-700">This will permanently delete every lead</span> in the workspace, including follow-ups, activities, AI insights, notifications, and loss events. Users, personal notes, WhatsApp templates, and settings are NOT affected. This action cannot be undone.
+                    </>
+                  ) : modalMode === "create" ? (
                     <>
                       <span className="font-semibold text-slate-900">Demo data is for testing and training.</span> This will generate 10 realistic leads with activity histories and AI insights.
                     </>
@@ -249,15 +306,22 @@ export function DemoDataControl({ onCreateDemoLeads, onClearDemoLeads }: DemoDat
               <button
                 ref={confirmBtnRef}
                 type="button"
-                onClick={modalMode === "create" ? handleCreateConfirm : handleClearConfirm}
+                onClick={modalMode === "create" ? handleCreateConfirm : modalMode === "clear" ? handleClearConfirm : handlePurgeConfirm}
                 disabled={isLoading}
                 className={`inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-white shadow-xs disabled:opacity-50 ${
-                  modalMode === "create"
+                  modalMode === "purge"
+                    ? "bg-red-600 hover:bg-red-700 active:bg-red-800"
+                    : modalMode === "create"
                     ? "bg-blue-600 hover:bg-blue-700 active:bg-blue-800"
                     : "bg-rose-600 hover:bg-rose-700 active:bg-rose-800"
                 }`}
               >
-                {modalMode === "create" ? (
+                {modalMode === "purge" ? (
+                  <>
+                    <Bomb size={15} aria-hidden="true" />
+                    <span>{isLoading ? "Purging..." : "Confirm & Purge"}</span>
+                  </>
+                ) : modalMode === "create" ? (
                   <>
                     <Sparkles size={15} aria-hidden="true" />
                     <span>{isLoading ? "Generating..." : "Confirm & Create"}</span>

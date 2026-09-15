@@ -26,7 +26,7 @@ export function LeadTable({ leads, onSelect }: { leads: Lead[]; onSelect: (lead:
             const ai = lead.aiAttention || deriveAIAttention(lead);
             const isTerminal = lead.status === "Won" || lead.status === "Lost";
             return (
-              <tr key={lead.id} className="bg-white transition-colors hover:bg-slate-50/70">
+              <tr key={lead.id} className="bg-white transition-all duration-150 hover:bg-slate-50/70 active:bg-slate-100 cursor-pointer">
                 <td className="px-5 py-4">
                   <p className="font-semibold text-slate-900">{lead.name}</p>
                   <p className="mt-0.5 text-sm text-[var(--muted)]">{lead.business || "No business added"}</p>

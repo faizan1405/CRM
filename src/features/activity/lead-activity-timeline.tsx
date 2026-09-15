@@ -90,14 +90,24 @@ export function LeadActivityTimeline({
         {filtered.length === 0 ? (
           <ActivityEmptyState filter={filter} hasNotes={activities.some((a) => a.type.startsWith("NOTE"))} />
         ) : (
-          <ol className="px-4 py-3 sm:px-6" aria-label="Activity timeline">
-            {filtered.map((activity) => (
-              <ActivityItem
+          <ol className="relative px-4 py-3 sm:px-6" aria-label="Activity timeline">
+            {/* Timeline connector */}
+            <div className="absolute left-[15px] top-2 bottom-2 w-px bg-slate-100" aria-hidden="true" />
+            {filtered.map((activity, index) => (
+              <li
                 key={activity.id}
-                activity={activity}
-                onEditNote={onEditNote}
-                onDeleteNote={onDeleteNote}
-              />
+                style={{
+                  animationDelay: `${Math.min(index * 40, 300)}ms`,
+                  animationFillMode: "backwards",
+                }}
+                className="motion-safe:animate-fade-in-up"
+              >
+                <ActivityItem
+                  activity={activity}
+                  onEditNote={onEditNote}
+                  onDeleteNote={onDeleteNote}
+                />
+              </li>
             ))}
           </ol>
         )}
