@@ -316,14 +316,16 @@ describe("Phase 7: AI Lead Entry Backend", () => {
   // =========================================================================
   describe("Duplicate Detection", () => {
     let existingLeadId: string;
-    const testPhone = "9876512340";
+    const uniqueSuffix = Date.now().toString().slice(-6);
+    const testPhone = `98765${uniqueSuffix}`;
+    const testEmail = `lead_${uniqueSuffix}@example.com`;
 
     beforeAll(async () => {
       const lead = await db.lead.create({
         data: {
           name: "Original Lead",
           phone: `+91 ${testPhone.slice(0, 5)} ${testPhone.slice(5)}`,
-          email: "original.lead@example.com",
+          email: testEmail,
           business: "Acme Corp",
           status: "NEW",
         },
@@ -358,7 +360,7 @@ describe("Phase 7: AI Lead Entry Backend", () => {
       const candidate = await findPossibleDuplicateLead({
         name: "New Person",
         phone: "9111222333",
-        email: "ORIGINAL.LEAD@example.com",
+        email: testEmail.toUpperCase(),
         business: null,
         industryOrRequirement: null,
         budget: null,
