@@ -529,7 +529,7 @@ describe("Phase 9: Sales Communication + Follow-up Intelligence", () => {
       // 1. Mark Waste
       const wasteRes = await markLeadWaste(lead.id);
       expect(wasteRes.success).toBe(true);
-      if (wasteRes.success && wasteRes.data) {
+      if (wasteRes.success) {
         expect(wasteRes.data.status).toBe("Contacted");
         expect(wasteRes.data.isWaste).toBe(true);
       }
@@ -545,7 +545,7 @@ describe("Phase 9: Sales Communication + Follow-up Intelligence", () => {
       // 2. Restore from Waste
       const restoreRes = await restoreWasteLead(lead.id);
       expect(restoreRes.success).toBe(true);
-      if (restoreRes.success && restoreRes.data) {
+      if (restoreRes.success) {
         expect(restoreRes.data.status).toBe("Contacted");
         expect(restoreRes.data.isWaste).toBe(false);
       }

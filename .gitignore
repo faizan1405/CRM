@@ -53,3 +53,6 @@ export_*.csv
 export_*.json
 temp_*.json
 temp_*.csv
+
+.vercel
+.env*

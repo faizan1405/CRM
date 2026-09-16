@@ -41,25 +41,24 @@ async function main() {
   console.log("FollowUps on Won:              ", wonFollowUps);
   console.log("FollowUps on Lost:             ", lostFollowUps);
   console.log("Demo/Test Leads in Production: ", demoLeads);
+  const lossEventsOnLost = await db.leadLossEvent.count({ where: { lead: { status: "LOST" } } });
+  const lossEventsOnNonLost = await db.leadLossEvent.count({ where: { lead: { status: { not: "LOST" } } } });
+
+  console.log("=== AGGREGATE POST-CORRECTION VERIFICATION ===");
+  console.log("Lead Total:                 ", leads);
+  console.log("FollowUp Total:             ", followUps);
+  console.log("LOST Count:                 ", lost);
+  console.log("WON Count:                  ", won);
+  console.log("Waste Count:                ", waste);
+  console.log("LOST+Waste Intersection:    ", wasteAndLost);
+  console.log("LossEvents on LOST:         ", lossEventsOnLost);
+  console.log("LossEvents on Non-LOST:     ", lossEventsOnNonLost);
+  console.log("Demo/Test Lead Count:       ", demoLeads);
   const allStatuses = await db.lead.groupBy({
     by: ["status"],
     _count: { id: true },
   });
-
-  const wasteLeads = await db.lead.findMany({
-    where: { isWaste: true },
-    select: { id: true, name: true, phone: true, status: true, isWaste: true, notes: true, leadSource: true }
-  });
-
-  const nonWasteLost = await db.lead.findMany({
-    where: { status: "LOST", isWaste: false },
-    select: { id: true, name: true, phone: true, status: true, isWaste: true, notes: true }
-  });
-
-  console.log("All Status Distribution:      ", JSON.stringify(allStatuses));
-  console.log("Non-Waste LOST count:         ", nonWasteLost.length);
-  console.log("Non-Waste LOST Leads:         ", JSON.stringify(nonWasteLost, null, 2));
-  console.log("Waste Leads Details:          ", JSON.stringify(wasteLeads, null, 2));
+  console.log("All Status Distribution:    ", JSON.stringify(allStatuses));
 }
 
 main().catch(console.error).finally(() => db.$disconnect());
