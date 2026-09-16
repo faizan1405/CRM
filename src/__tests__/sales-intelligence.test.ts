@@ -90,6 +90,8 @@ describe("Phase 9: Sales Communication + Follow-up Intelligence", () => {
     await db.dailySalesBriefing.deleteMany({
       where: { userId: "test-sales-intelligence-user", briefingDate: todayDate },
     });
+    
+    await db.user.deleteMany({ where: { id: "test-sales-intelligence-user" } });
   });
 
   describe("1. WhatsApp Message Templates & Personalization", () => {
