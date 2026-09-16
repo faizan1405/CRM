@@ -4,7 +4,7 @@ import { Building2, Phone, FileText } from "lucide-react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import type { Lead } from "@/features/leads/types";
 import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
-import { QuickStatusChip } from "@/features/leads/quick-status-chip";
+import { StatusSelector } from "@/features/leads/status-selector";
 import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
 
 export function PipelineCard({
@@ -24,10 +24,10 @@ export function PipelineCard({
     <ActionCard
       onActivate={onClick}
       aria-label={`Open lead ${lead.name}`}
-      className={`group flex flex-col gap-2 rounded-xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-sm transition-[transform,box-shadow,border-color] duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer`}
+      className={`group flex flex-col gap-1.5 sm:gap-2 rounded-xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-2.5 sm:p-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-sm transition-[transform,box-shadow,border-color] duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer`}
     >
       <div className="flex justify-between items-start gap-2">
-        <h4 className="font-semibold text-slate-900 text-sm break-words line-clamp-2">
+        <h4 className="font-semibold text-slate-900 text-sm break-words line-clamp-1 sm:line-clamp-2">
           {lead.name}
         </h4>
         <div className="flex shrink-0 items-center gap-1">
@@ -36,23 +36,17 @@ export function PipelineCard({
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
         {(theme.state === "FOLLOW_UP_NOW" || theme.state === "FUTURE_FOLLOW_UP" || theme.state === "WASTE") && (
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${theme.badgeClass}`}>
+          <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] sm:text-xs font-semibold ${theme.badgeClass}`}>
             {theme.badgeLabel}
           </span>
         )}
-        {lead.quickStatus && lead.quickStatus !== "NONE" ? (
-          <QuickStatusChip quickStatus={lead.quickStatus} leadStatus={lead.status} readOnly size="sm" />
-        ) : (
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${theme.badgeClass}`}>
-            {theme.badgeLabel}
-          </span>
-        )}
+        <StatusSelector status={lead.status} readOnly size="sm" />
       </div>
 
       {(lead.business || lead.phone) && (
-        <div className="flex flex-col gap-1 text-xs text-slate-600 mt-0.5">
+        <div className="flex flex-col gap-0.5 text-[11px] sm:text-xs text-slate-600 mt-0.5">
           {lead.business && (
             <div className="flex items-start gap-1.5">
               <Building2 size={12} className="text-slate-400 shrink-0 mt-0.5" />
@@ -69,14 +63,14 @@ export function PipelineCard({
       )}
 
       {notesText && (
-        <div className="rounded-lg bg-slate-50 p-2 text-xs text-slate-600 line-clamp-2 break-words border border-slate-100 flex items-start gap-1.5">
-          <FileText size={12} className="text-slate-400 shrink-0 mt-0.5" />
-          <span>{notesText}</span>
+        <div className="rounded-lg bg-slate-50 p-1.5 sm:p-2 text-[11px] sm:text-xs text-slate-600 line-clamp-1 sm:line-clamp-2 break-words border border-slate-100 flex items-start gap-1.5 mt-0.5">
+          <FileText size={10} className="text-slate-400 shrink-0 mt-0.5 sm:mt-0" />
+          <span className="leading-tight">{notesText}</span>
         </div>
       )}
 
       {(lead.quotedAmount !== null || lead.nextFollowUpDate) && (
-        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-slate-100 pt-2 text-[11px]">
+        <div className="mt-0.5 sm:mt-1 flex flex-wrap gap-x-3 gap-y-1 border-t border-slate-100 pt-1.5 sm:pt-2 text-[10px] sm:text-[11px]">
           {lead.quotedAmount !== null && (
             <div className="flex flex-col">
               <span className="text-slate-400 leading-tight">Quoted</span>

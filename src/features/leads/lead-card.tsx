@@ -4,9 +4,9 @@ import { ActionCard } from "@/components/action-card";
 import { Phone, MessageCircle, CalendarPlus, Trash2, FileText } from "lucide-react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
-import { QuickStatusChip } from "@/features/leads/quick-status-chip";
+import { StatusSelector } from "@/features/leads/status-selector";
 import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
-import type { Lead, QuickStatusType } from "@/features/leads/types";
+import type { Lead } from "@/features/leads/types";
 import {
   AIScoreBadge,
   deriveAIAttention,
@@ -18,7 +18,7 @@ type LeadCardProps = {
   onSelect: (lead: Lead, action?: "note" | "status") => void;
   onAddFollowUp: (lead: Lead) => void;
   onDelete?: (lead: Lead) => void;
-  onUpdateQuickStatus?: (lead: Lead, statusKey: QuickStatusType | "WON" | "LOST") => void;
+  onUpdateStatus?: (lead: Lead, status: import("@/features/leads/types").LeadStatus) => void;
   whatsAppMessage?: string;
   aiAttention?: AIAttentionLeadData;
 };
@@ -28,7 +28,7 @@ export function LeadCard({
   onSelect,
   onAddFollowUp,
   onDelete,
-  onUpdateQuickStatus,
+  onUpdateStatus,
   whatsAppMessage,
   aiAttention,
 }: LeadCardProps) {
@@ -66,10 +66,9 @@ export function LeadCard({
               {theme.badgeLabel}
             </span>
           )}
-          <QuickStatusChip
-            quickStatus={lead.quickStatus}
-            leadStatus={lead.status}
-            onSelectStatus={onUpdateQuickStatus ? (statusKey) => onUpdateQuickStatus(lead, statusKey) : undefined}
+          <StatusSelector
+            status={lead.status}
+            onSelectStatus={onUpdateStatus ? (statusKey) => onUpdateStatus(lead, statusKey) : undefined}
             size="sm"
           />
           {onDelete && (

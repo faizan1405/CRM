@@ -6,9 +6,9 @@ import dynamic from "next/dynamic";
 import { Pencil, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
-import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
+import { StatusSelector } from "@/features/leads/status-selector";
 import { OperationalStateBadge } from "@/features/leads/operational-state-badge";
-import { leadStatuses, type Lead, type LeadStatus } from "@/features/leads/types";
+import { type Lead, type LeadStatus } from "@/features/leads/types";
 import { LeadActivityTimeline } from "@/features/activity/lead-activity-timeline";
 import type { Activity, ActivityFilter } from "@/features/activity/types";
 import { NoteComposer } from "@/features/activity/note-composer";
@@ -72,7 +72,7 @@ export function LeadDetailPanel({
   onDeleteNote,
 }: LeadDetailPanelProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const statusSelectRef = useRef<HTMLSelectElement>(null);
+  const statusSelectRef = useRef<HTMLDivElement>(null);
   const leadId = lead?.id;
   const [lossHistory, setLossHistory] = useState<LeadLossRecord[]>([]);
   const [noteMode, setNoteMode] = useState<"standard" | "ai">("standard");
@@ -149,7 +149,7 @@ export function LeadDetailPanel({
               >
                 {lead.name}
               </h2>
-              <LeadStatusBadge status={lead.status} />
+              <StatusSelector status={lead.status} readOnly size="sm" />
               <OperationalStateBadge state={lead.operationalState || "ACTIVE_NEUTRAL"} />
             </div>
             <p className="mt-1 text-sm text-[var(--muted)]">{lead.business || "No business added"}</p>
@@ -343,22 +343,17 @@ export function LeadDetailPanel({
         </div>
 
         <footer className="shrink-0 border-t border-slate-200 bg-white px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] sm:px-6">
-          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Current status
-            <select
-              ref={statusSelectRef}
-              value={lead.status}
-              onChange={(event) => onStatusChange(event.target.value as LeadStatus)}
-              disabled={saving}
-              className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
-            >
-              {leadStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex items-center gap-3 w-full">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500 min-w-max">
+              Current status
+            </span>
+            <div className="flex-1" ref={statusSelectRef} tabIndex={-1}>
+              <StatusSelector 
+                status={lead.status}
+                onSelectStatus={saving ? undefined : (statusKey) => onStatusChange(statusKey)}
+              />
+            </div>
+          </div>
           <LeadQuickActions
             lead={lead}
             whatsAppMessage={whatsAppMessage}

@@ -5,9 +5,7 @@ export type LeadVisualState =
   | "FOLLOW_UP_NOW"
   | "FUTURE_FOLLOW_UP"
   | "PROPOSAL_SENT"
-  | "INTERESTED"
-  | "CALL_NOT_PICK"
-  | "CALL_AGAIN"
+  | "QUALIFIED"
   | "CONTACTED"
   | "NEW";
 
@@ -28,16 +26,13 @@ export type LeadTheme = {
   badgeLabel: string;
   badgeClass: string;
   accentColor:
-    | "blue"
-    | "green"
-    | "yellow"
-    | "purple"
-    | "lavender"
-    | "pink"
+    | "sky"
+    | "emerald"
+    | "amber"
+    | "fuchsia"
     | "violet"
     | "indigo"
-    | "emerald"
-    | "red"
+    | "rose"
     | "neutral";
   dotClass: string;
   hoverBorder: string;
@@ -143,41 +138,31 @@ export function getLeadVisualState(lead: LeadLike): LeadVisualState {
     return "PROPOSAL_SENT";
   }
 
-  // 7. INTERESTED / QUALIFIED
-  if (quickUpper === "INTERESTED" || statusUpper === "QUALIFIED") {
-    return "INTERESTED";
+  // 7. QUALIFIED
+  if (statusUpper === "QUALIFIED") {
+    return "QUALIFIED";
   }
 
-  // 8. CALL_NOT_PICK
-  if (quickUpper === "CALL_NOT_PICK") {
-    return "CALL_NOT_PICK";
-  }
-
-  // 9. CALL_AGAIN
-  if (quickUpper === "CALL_AGAIN") {
-    return "CALL_AGAIN";
-  }
-
-  // 10. CONTACTED
-  if (quickUpper === "CONTACTED" || statusUpper === "CONTACTED") {
+  // 8. CONTACTED
+  if (statusUpper === "CONTACTED" || quickUpper === "CONTACTED") {
     return "CONTACTED";
   }
 
-  // 11. NEW
+  // 9. NEW
   return "NEW";
 }
 
 export const LEAD_THEMES: Record<LeadVisualState, LeadTheme> = {
   NEW: {
     state: "NEW",
-    cardBg: "bg-blue-50/40",
-    leftBorder: "border-l-4 border-l-blue-500",
+    cardBg: "bg-sky-50/40",
+    leftBorder: "border-l-4 border-l-sky-500",
     borderBase: "border-slate-200/80",
     badgeLabel: "New",
-    badgeClass: "bg-blue-100 text-blue-800 ring-1 ring-inset ring-blue-200",
-    accentColor: "blue",
-    dotClass: "bg-blue-500",
-    hoverBorder: "hover:border-blue-300",
+    badgeClass: "bg-sky-100 text-sky-800 ring-1 ring-inset ring-sky-200",
+    accentColor: "sky",
+    dotClass: "bg-sky-500",
+    hoverBorder: "hover:border-sky-300",
   },
   FOLLOW_UP_NOW: {
     state: "FOLLOW_UP_NOW",
@@ -186,7 +171,7 @@ export const LEAD_THEMES: Record<LeadVisualState, LeadTheme> = {
     borderBase: "border-slate-200/80",
     badgeLabel: "Follow up now",
     badgeClass: "bg-emerald-100 text-emerald-800 ring-1 ring-inset ring-emerald-200",
-    accentColor: "green",
+    accentColor: "emerald",
     dotClass: "bg-emerald-500",
     hoverBorder: "hover:border-emerald-300",
   },
@@ -197,52 +182,30 @@ export const LEAD_THEMES: Record<LeadVisualState, LeadTheme> = {
     borderBase: "border-slate-200/80",
     badgeLabel: "Future follow-up",
     badgeClass: "bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-200",
-    accentColor: "yellow",
+    accentColor: "amber",
     dotClass: "bg-amber-500",
     hoverBorder: "hover:border-amber-300",
   },
-  INTERESTED: {
-    state: "INTERESTED",
-    cardBg: "bg-purple-50/40",
-    leftBorder: "border-l-4 border-l-purple-500",
+  QUALIFIED: {
+    state: "QUALIFIED",
+    cardBg: "bg-fuchsia-50/40",
+    leftBorder: "border-l-4 border-l-fuchsia-500",
     borderBase: "border-slate-200/80",
-    badgeLabel: "Interested",
-    badgeClass: "bg-purple-100 text-purple-800 ring-1 ring-inset ring-purple-200",
-    accentColor: "purple",
-    dotClass: "bg-purple-500",
-    hoverBorder: "hover:border-purple-300",
+    badgeLabel: "Qualified",
+    badgeClass: "bg-fuchsia-100 text-fuchsia-800 ring-1 ring-inset ring-fuchsia-200",
+    accentColor: "fuchsia",
+    dotClass: "bg-fuchsia-500",
+    hoverBorder: "hover:border-fuchsia-300",
   },
   CONTACTED: {
     state: "CONTACTED",
-    cardBg: "bg-indigo-50/30",
-    leftBorder: "border-l-4 border-l-indigo-400",
+    cardBg: "bg-violet-50/30",
+    leftBorder: "border-l-4 border-l-violet-400",
     borderBase: "border-slate-200/80",
     badgeLabel: "Contacted",
-    badgeClass: "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200",
-    accentColor: "lavender",
-    dotClass: "bg-indigo-400",
-    hoverBorder: "hover:border-indigo-300",
-  },
-  CALL_NOT_PICK: {
-    state: "CALL_NOT_PICK",
-    cardBg: "bg-pink-50/40",
-    leftBorder: "border-l-4 border-l-pink-500",
-    borderBase: "border-slate-200/80",
-    badgeLabel: "Call not pick",
-    badgeClass: "bg-pink-100 text-pink-800 ring-1 ring-inset ring-pink-200",
-    accentColor: "pink",
-    dotClass: "bg-pink-400",
-    hoverBorder: "hover:border-pink-300",
-  },
-  CALL_AGAIN: {
-    state: "CALL_AGAIN",
-    cardBg: "bg-violet-50/40",
-    leftBorder: "border-l-4 border-l-violet-500",
-    borderBase: "border-slate-200/80",
-    badgeLabel: "Call again",
-    badgeClass: "bg-violet-100 text-violet-800 ring-1 ring-inset ring-violet-200",
+    badgeClass: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200",
     accentColor: "violet",
-    dotClass: "bg-violet-500",
+    dotClass: "bg-violet-400",
     hoverBorder: "hover:border-violet-300",
   },
   PROPOSAL_SENT: {
@@ -274,7 +237,7 @@ export const LEAD_THEMES: Record<LeadVisualState, LeadTheme> = {
     borderBase: "border-slate-200/80",
     badgeLabel: "Lost",
     badgeClass: "bg-rose-100 text-rose-800 ring-1 ring-inset ring-rose-200",
-    accentColor: "red",
+    accentColor: "rose",
     dotClass: "bg-rose-500",
     hoverBorder: "hover:border-rose-300",
   },

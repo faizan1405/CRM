@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useLeadNavigation } from "./lead-navigation-provider";
 import { statusFromDatabase, type DatabaseLeadStatus } from "./types";
 import { useEffect, useMemo, useState } from "react";
-import { changeLeadStatus, createLead, deleteLead, getLead, updateLead, updateQuickStatus } from "@/app/actions/leads";
+import { changeLeadStatus, createLead, deleteLead, getLead, updateLead } from "@/app/actions/leads";
 import { createFollowUp } from "@/app/actions/follow-ups";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -16,7 +16,7 @@ import { LeadFilters } from "@/features/leads/lead-filters";
 const LeadForm = dynamic(() => import("@/features/leads/lead-form").then(m => m.LeadForm));
 import { LeadTable } from "@/features/leads/lead-table";
 import { DeleteLeadDialog } from "./delete-lead-dialog";
-import type { Lead, LeadStatus, QuickStatusType } from "@/features/leads/types";
+import type { Lead, LeadStatus } from "@/features/leads/types";
 import { LostReasonDialog } from "@/features/lost-reasons/lost-reason-dialog";
 import type { LostReasonSubmission } from "@/features/lost-reasons/types";
 import { useLeadActivities } from "@/features/activity/use-activities";
@@ -181,14 +181,15 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     setFeedback({ tone: "success", message: "Follow-up added." });
   }
 
-  async function setLeadStatus(nextStatus: LeadStatus) {
-    if (!selectedLead || nextStatus === selectedLead.status) return;
+  async function setLeadStatus(nextStatus: LeadStatus, targetLead?: Lead) {
+    const leadToUpdate = targetLead || selectedLead;
+    if (!leadToUpdate || nextStatus === leadToUpdate.status) return;
     if (nextStatus === "Lost") {
-      setLostReasonLead(selectedLead);
+      setLostReasonLead(leadToUpdate);
       return;
     }
     setSaving(true);
-    const result = await changeLeadStatus(selectedLead.id, nextStatus);
+    const result = await changeLeadStatus(leadToUpdate.id, nextStatus);
     setSaving(false);
     if (!result.success) return setFeedback({ tone: "error", message: result.error });
     replaceLead(result.data);
@@ -227,29 +228,6 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     setFeedback({ tone: "success", message: "Lead deleted." });
     } catch { setFeedback({ tone: "error", message: "Could not delete this lead. Please retry." }); }
     finally { setSaving(false); }
-  }
-
-  async function handleUpdateQuickStatus(lead: Lead, statusKey: QuickStatusType | "WON" | "LOST") {
-    if (statusKey === "LOST") {
-      setLostReasonLead(lead);
-      return;
-    }
-    if (statusKey === "WON") {
-      setSaving(true);
-      const result = await changeLeadStatus(lead.id, "Won");
-      setSaving(false);
-      if (!result.success) return setFeedback({ tone: "error", message: result.error });
-      replaceLead(result.data);
-      setFeedback({ tone: "success", message: `Lead marked as Won.` });
-      return;
-    }
-
-    setSaving(true);
-    const result = await updateQuickStatus(lead.id, statusKey);
-    setSaving(false);
-    if (!result.success) return setFeedback({ tone: "error", message: result.error });
-    replaceLead(result.data);
-    setFeedback({ tone: "success", message: "Quick status updated." });
   }
 
   function clearFilters() {
@@ -327,7 +305,9 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
                   onSelect={selectLead}
                   onAddFollowUp={setFollowUpLead}
                   onDelete={setDeleteTarget}
-                  onUpdateQuickStatus={handleUpdateQuickStatus}
+                  onUpdateStatus={(lead, newStatus) => {
+                    setLeadStatus(newStatus, lead);
+                  }}
                 />
               ))}
             </div>

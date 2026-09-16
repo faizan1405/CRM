@@ -17,7 +17,7 @@ export default async function PipelinePage() {
   const initialLeads = result.success ? result.data : [];
 
   return (
-    <div className="flex h-full flex-col space-y-6">
+    <div className="flex h-full flex-col space-y-3 sm:space-y-6">
       <div className="shrink-0">
         <PageHeader 
           title="Sales Pipeline" 

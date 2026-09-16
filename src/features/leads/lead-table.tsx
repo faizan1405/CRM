@@ -1,7 +1,7 @@
 import { ChevronRight, MessageCircle, Phone, Trash2 } from "lucide-react";
 import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
-import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
+import { StatusSelector } from "@/features/leads/status-selector";
 import type { Lead } from "@/features/leads/types";
 import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
 
@@ -39,7 +39,7 @@ export function LeadTable({ leads, onSelect, onDelete }: { leads: Lead[]; onSele
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-700">{lead.phone}</td>
-                <td className="px-4 py-4"><LeadStatusBadge status={lead.status} /></td>
+                <td className="px-4 py-4"><StatusSelector status={lead.status} readOnly /></td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm text-slate-700">{formatDate(lead.nextFollowUpDate)}</td>
                 <td className="whitespace-nowrap px-4 py-4 text-sm font-medium text-slate-700">{formatCurrency(lead.quotedAmount)}</td>
                 <td className="px-5 py-4 text-right">
