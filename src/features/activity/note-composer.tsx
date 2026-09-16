@@ -26,6 +26,7 @@ export function NoteComposer({ onAddNote, disabled = false, autoFocus = false, i
   }, [autoFocus, disabled]);
 
   const handleSubmit = async () => {
+    if (disabled || saving || improving) return;
     const trimmed = text.trim();
     if (!trimmed) return;
 
