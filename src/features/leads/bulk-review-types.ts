@@ -1,12 +1,14 @@
 import type { DuplicateLeadCandidate, StructuredLeadDraft, StructuredLeadResult } from "./ai-entry-types";
 
-export type BulkParsedItem = StructuredLeadDraft & {
+export type UILeadDraft = StructuredLeadDraft & { quotedAmount?: number | null };
+
+export type BulkParsedItem = UILeadDraft & {
   id?: string;
   itemStatus?: "READY" | "DUPLICATE_PHONE" | "DUPLICATE_EMAIL" | "INVALID" | "NEEDS_REVIEW";
   possibleDuplicate?: DuplicateLeadCandidate | null;
   validationErrors?: string[];
 };
-export type ReviewLeadResult = StructuredLeadResult & Pick<BulkParsedItem, "itemStatus" | "validationErrors">;
+export type ReviewLeadResult = Omit<StructuredLeadResult, "draft"> & { draft: UILeadDraft } & Pick<BulkParsedItem, "itemStatus" | "validationErrors">;
 
 /** Frontend adapter contract for Agent A; the single-lead backend stays intact. */
 export type BulkStructureLeadResponse =

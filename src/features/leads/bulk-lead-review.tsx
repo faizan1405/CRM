@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createLead } from "@/app/actions/leads";
 import { updateExistingLeadWithDraftAction } from "@/app/actions/ai-lead-entry";
 import { ActionCard } from "@/components/action-card";
-import type { StructuredLeadDraft } from "./ai-entry-types";
+import type { UILeadDraft as StructuredLeadDraft } from "./bulk-review-types";
 import type { ReviewLeadResult } from "./bulk-review-types";
 import { StructuredLeadPreview } from "./structured-lead-preview";
 import { useLeadNavigation } from "./lead-navigation-provider";
@@ -16,7 +16,7 @@ const buttonClass = "min-h-11 rounded-lg border border-slate-200 bg-white px-3 t
 
 export function draftToFormData(draft: StructuredLeadDraft): FormData {
   const form = new FormData();
-  for (const [key, value] of Object.entries({ name: draft.name, phone: draft.phone, email: draft.email, business: draft.business, industry: draft.industryOrRequirement, budget: draft.budget, status: draft.status, notes: draft.notes, source: "", nextFollowUpDate: draft.suggestedFollowUpDate, nextFollowUpTime: draft.suggestedFollowUpTime })) {
+  for (const [key, value] of Object.entries({ name: draft.name, phone: draft.phone, email: draft.email, business: draft.business, industry: draft.industryOrRequirement, quotedAmount: draft.quotedAmount, status: draft.status, notes: draft.notes, source: "", nextFollowUpDate: draft.suggestedFollowUpDate, nextFollowUpTime: draft.suggestedFollowUpTime })) {
     form.set(key, value === null || value === undefined ? "" : String(value));
   }
   return form;
@@ -28,7 +28,7 @@ export function reviewState(item: ReviewLeadResult): "Ready" | "Duplicate" | "Ne
   if (!d.name?.trim() || !d.phone?.trim() || !d.status) return "Needs Review";
   if (d.name.length > 120 || d.phone.length > 40 || d.phone.replace(/\D/g, "").length < 7 ||
     (d.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email)) ||
-    (d.budget !== null && d.budget !== undefined && (!Number.isFinite(d.budget) || d.budget < 0 || d.budget > 9999999999.99))) return "Invalid";
+    (d.quotedAmount !== null && d.quotedAmount !== undefined && (!Number.isFinite(d.quotedAmount) || d.quotedAmount < 0 || d.quotedAmount > 9999999999.99))) return "Invalid";
   if (item.possibleDuplicate || item.itemStatus?.startsWith("DUPLICATE")) return "Duplicate";
   if (item.itemStatus === "NEEDS_REVIEW") return "Needs Review";
   if (Object.values(d.confidence || {}).some(confidence => confidence === "review")) return "Needs Review";
@@ -76,7 +76,7 @@ export function BulkLeadReview({ leads, saving, onSaved, onBusyChange }: { leads
         return <ActionCard onActivate={!item.saved && !disabled ? () => setEditingId(item.id) : undefined} key={item.id} aria-label={`Review lead ${item.id + 1}: ${item.draft.name || "Unnamed"}`} className={`min-w-0 rounded-xl border bg-white p-3 sm:p-4 ${item.excluded || item.saved ? "border-slate-200 opacity-70" : "border-slate-200"}`}>
           <div className="flex items-start justify-between gap-2"><h3 className="min-w-0 break-words text-sm font-bold text-slate-950">{item.id + 1}. {item.draft.name || "Name missing"}</h3><span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${state === "Ready" || state === "Saved" ? "bg-emerald-50 text-emerald-800" : state === "Invalid" ? "bg-rose-50 text-rose-800" : "bg-amber-50 text-amber-900"}`}>{state}</span></div>
           <dl className="mt-3 grid min-w-0 grid-cols-2 gap-2 text-xs">
-            {[["Phone", item.draft.phone], ["Email", item.draft.email], ["Business", item.draft.business], ["Budget", item.draft.budget === null || item.draft.budget === undefined ? null : `₹${item.draft.budget.toLocaleString("en-IN")}`]].map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-slate-500">{label}</dt><dd className="break-words font-medium text-slate-800">{value || "Not provided"}</dd></div>)}
+            {[["Phone", item.draft.phone], ["Email", item.draft.email], ["Business", item.draft.business], ["Quoted Amount", item.draft.quotedAmount === null || item.draft.quotedAmount === undefined ? null : `₹${item.draft.quotedAmount.toLocaleString("en-IN")}`]].map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-slate-500">{label}</dt><dd className="break-words font-medium text-slate-800">{value || "Not provided"}</dd></div>)}
           </dl>
           <p className="mt-2 text-xs text-slate-500">Duplicate: {item.possibleDuplicate ? `Possible match: ${item.possibleDuplicate.name}` : "No match reported"}</p>
           {item.validationErrors?.map(message => <p key={message} className="mt-2 text-xs text-rose-700">{message}</p>)}

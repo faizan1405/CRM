@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { compactCurrency } from "../compact-currency";
 import { BadgeCheck, CalendarClock, CircleDollarSign, Handshake, UserPlus, UsersRound } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -9,34 +10,32 @@ type KPICardProps = {
   colorScheme: "default" | "blue" | "purple" | "green" | "orange" | "emerald";
   supportText?: string;
   href?: string;
+  fullValue?: string;
 };
 
 const colorStyles = {
-  default: { bg: "bg-slate-50", text: "text-slate-700", border: "border-slate-200", accent: "bg-slate-400" },
-  blue: { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200", accent: "bg-blue-400" },
-  purple: { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200", accent: "bg-purple-400" },
-  green: { bg: "bg-green-50", text: "text-green-700", border: "border-green-200", accent: "bg-green-500" },
-  orange: { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200", accent: "bg-amber-400" },
-  emerald: { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200", accent: "bg-emerald-400" },
+  default: "bg-slate-50 text-slate-700 border-slate-200 icon-slate-500",
+  blue: "bg-blue-50 text-blue-700 border-blue-200 icon-blue-500",
+  purple: "bg-purple-50 text-purple-700 border-purple-200 icon-purple-500",
+  green: "bg-green-50 text-green-700 border-green-200 icon-green-500",
+  orange: "bg-amber-50 text-amber-700 border-amber-200 icon-amber-500",
+  emerald: "bg-emerald-50 text-emerald-700 border-emerald-200 icon-emerald-500",
 };
 
-export function KPICard({ label, value, icon: Icon, colorScheme, supportText, href }: KPICardProps) {
+export function KPICard({ label, value, icon: Icon, colorScheme, supportText, href, fullValue }: KPICardProps) {
   const styles = colorStyles[colorScheme];
-
+  const [bg, text, border] = styles.split(" ");
+  
   const content = (
-    <div
-      className={`group relative overflow-hidden rounded-2xl border bg-white p-5 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[var(--shadow-elevated)] ${href ? "cursor-pointer hover:border-blue-300 active:scale-[0.97]" : "hover:border-slate-300"}`}
-    >
-      {/* Subtle accent left border */}
-      <div className={`absolute inset-y-0 left-0 w-[3px] ${styles.accent} opacity-60`} />
+    <div className={`relative min-w-0 rounded-2xl border bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-colors duration-150 ${href ? "hover:border-slate-300 hover:shadow-md cursor-pointer" : "hover:shadow-md"}`}>
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium text-slate-500">{label}</p>
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${styles.bg} ${styles.border} transition-transform duration-200 group-hover:scale-110`}>
-          <Icon className={`h-5 w-5 ${styles.text}`} />
+        <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${bg} ${border}`}>
+          <Icon className={`h-5 w-5 ${text}`} />
         </div>
       </div>
-      <div className="mt-4 flex items-baseline gap-2">
-        <span className="text-3xl font-bold tracking-tight text-slate-900 transition-all duration-200">{value}</span>
+      <div className="mt-4 flex min-w-0 flex-wrap items-baseline gap-2">
+        <span title={fullValue} aria-label={fullValue} className="break-all text-[clamp(1.25rem,2vw,1.875rem)] font-bold tracking-tight text-slate-900">{value}</span>
         {supportText && <span className="text-xs font-medium text-slate-500">{supportText}</span>}
       </div>
     </div>
@@ -67,7 +66,7 @@ export function KPICards({ data }: { data: { totalLeads: number; newLeads: numbe
     { label: "Qualified", value: data.qualifiedLeads, icon: BadgeCheck, colorScheme: "purple" as const, href: "/leads?status=QUALIFIED" },
     { label: "Won Clients", value: data.wonClients, icon: Handshake, colorScheme: "green" as const, href: "/leads?status=WON" },
     { label: "Follow-ups Today", value: data.followUpsToday, icon: CalendarClock, colorScheme: "orange" as const, href: "/follow-ups?filter=today" },
-    { label: "Revenue", value: formattedRevenue, icon: CircleDollarSign, colorScheme: "emerald" as const, href: "/analytics" },
+    { label: "Revenue", value: compactCurrency(data.wonRevenue), fullValue: formattedRevenue, icon: CircleDollarSign, colorScheme: "emerald" as const, href: "/analytics" },
   ];
 
   return (

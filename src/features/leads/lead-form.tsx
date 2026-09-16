@@ -34,6 +34,7 @@ function ManualLeadEntry({
   return (
     <form action={onSubmit} className="min-w-0">
       <div className="mx-auto max-w-2xl">
+        <input type="hidden" name="budget" value={lead?.budget ?? ""} />
         <input type="hidden" name="source" value={lead?.source ?? ""} />
         <div className="grid gap-5 px-5 py-5 sm:grid-cols-2 sm:px-6">
           <label className="text-sm font-medium text-slate-700">
@@ -92,20 +93,6 @@ function ManualLeadEntry({
               maxLength={100}
               placeholder="Industry or website requirement"
               defaultValue={lead?.industry ?? ""}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Budget
-            <input
-              className={inputClass}
-              name="budget"
-              type="number"
-              min="0"
-              max="9999999999.99"
-              step="0.01"
-              inputMode="decimal"
-              placeholder="Estimated budget"
-              defaultValue={lead?.budget ?? ""}
             />
           </label>
           <label className="text-sm font-medium text-slate-700">
@@ -204,6 +191,7 @@ function NewLeadEntry({
         >
           <button
             type="button"
+            disabled={saving}
             aria-pressed={mode === "ai"}
             onClick={() => setMode("ai")}
             className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors ${
@@ -215,6 +203,7 @@ function NewLeadEntry({
           </button>
           <button
             type="button"
+            disabled={saving}
             aria-pressed={mode === "manual"}
             onClick={() => setMode("manual")}
             className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors ${

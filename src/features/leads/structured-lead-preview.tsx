@@ -2,7 +2,8 @@
 
 import { BadgeCheck, Save } from "lucide-react";
 import { leadStatuses } from "./types";
-import type { DuplicateLeadCandidate, StructuredLeadDraft, StructuredLeadField } from "./ai-entry-types";
+import type { UILeadDraft as StructuredLeadDraft } from "./bulk-review-types";
+import type { DuplicateLeadCandidate, StructuredLeadField } from "./ai-entry-types";
 import { DuplicateLeadWarning } from "./duplicate-lead-warning";
 import { FollowUpSuggestion } from "./follow-up-suggestion";
 
@@ -90,7 +91,6 @@ export function StructuredLeadPreview({
     "email",
     "business",
     "industryOrRequirement",
-    "budget",
     "status",
     "notes",
     "suggestedFollowUpDate",
@@ -190,19 +190,8 @@ export function StructuredLeadPreview({
           />
         </label>
         <label>
-          <FieldLabel label="Budget" field="budget" draft={draft} />
-          <input
-            name="budget"
-            type="number"
-            min="0"
-            max="9999999999.99"
-            step="0.01"
-            inputMode="decimal"
-            value={draft.budget ?? ""}
-            onChange={(event) => update("budget", event.target.value ? Number(event.target.value) : null)}
-            placeholder="Not provided"
-            className={inputClass}
-          />
+          <span className="text-sm font-medium text-slate-700">Quoted Amount</span>
+          <input name="quotedAmount" type="number" min="0" max="9999999999.99" step="0.01" inputMode="decimal" value={draft.quotedAmount ?? ""} onChange={event => update("quotedAmount", event.target.value ? Number(event.target.value) : null)} placeholder="Only if actually quoted" className={inputClass} />
         </label>
         <label>
           <FieldLabel label="Status" field="status" draft={draft} required />

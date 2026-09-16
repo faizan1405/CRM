@@ -221,7 +221,6 @@ export function LeadDetailPanel({
             <h3 className="font-semibold text-slate-950">Sales</h3>
             <dl className="mt-4 grid grid-cols-2 gap-5">
               <DetailItem label="Status" value={lead.status} />
-              <DetailItem label="Budget" value={formatCurrency(lead.budget)} />
               <DetailItem label="Quoted amount" value={formatCurrency(lead.quotedAmount)} />
               <DetailItem label="Industry" value={lead.industry} />
             </dl>

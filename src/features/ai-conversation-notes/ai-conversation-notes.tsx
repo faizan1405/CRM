@@ -3,7 +3,6 @@
 import {
   AlertCircle,
   ArrowRightCircle,
-  Coins,
   FileSpreadsheet,
   FileText,
   Info,
@@ -260,15 +259,6 @@ export function AIConversationNotes({
                   disabled={disabled}
                 />
 
-                <StructuredFieldRow
-                  label="Budget"
-                  fieldKey="budget"
-                  value={structuredData.budget}
-                  onChange={(val) => updateField("budget", val)}
-                  icon={Coins}
-                  placeholder="e.g. ₹25,000"
-                  disabled={disabled}
-                />
 
                 <StructuredFieldRow
                   label="Interest Level"

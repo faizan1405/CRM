@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import type { DuplicateLeadCandidate, StructuredLeadDraft, StructuredLeadResult } from "./ai-entry-types";
-import type { BulkStructureLeadCallback, ReviewLeadResult } from "./bulk-review-types";
+import type { DuplicateLeadCandidate, StructuredLeadDraft } from "./ai-entry-types";
+import type { UILeadDraft, BulkStructureLeadCallback, ReviewLeadResult } from "./bulk-review-types";
 import { BulkLeadReview } from "./bulk-lead-review";
 import type { Lead } from "./types";
 import { StructuredLeadPreview } from "./structured-lead-preview";
 import { UnstructuredAIInput } from "./unstructured-ai-input";
-import { structureLeadAction } from "@/app/actions/ai-lead-entry";
+import { structureBulkLeadAction } from "@/app/actions/ai-lead-entry";
 
 type AILeadEntryProps = {
   saving: boolean;
@@ -34,7 +34,7 @@ export function AILeadEntry({
   const [rawInput, setRawInput] = useState("");
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<StructuredLeadResult | null>(null);
+  const [result, setResult] = useState<ReviewLeadResult | null>(null);
 
   async function structureLead() {
     const input = rawInput.trim();
@@ -43,7 +43,7 @@ export function AILeadEntry({
     setProcessing(true);
 
     try {
-      const runner = onStructureLead || structureLeadAction;
+      const runner = onStructureLead || structureBulkLeadAction;
       const response = await runner(input);
       if (!response.success) {
         setError(response.error);
@@ -68,7 +68,7 @@ export function AILeadEntry({
     }
   }
 
-  function updateDraft(draft: StructuredLeadDraft) {
+  function updateDraft(draft: UILeadDraft) {
     setResult((current) => (current ? { ...current, draft } : current));
   }
 

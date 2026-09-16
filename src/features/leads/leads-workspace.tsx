@@ -3,9 +3,9 @@
 import { Plus, SearchX, UsersRound } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useLeadNavigation } from "./lead-navigation-provider";
-import { statusFromDatabase, type DatabaseLeadStatus, type LeadOperationalState } from "./types";
+import { statusFromDatabase, type DatabaseLeadStatus } from "./types";
 import { useEffect, useMemo, useState } from "react";
-import { changeLeadStatus, createLead, deleteLead, getLead, updateLead, markLeadWaste, restoreWasteLead } from "@/app/actions/leads";
+import { changeLeadStatus, createLead, deleteLead, getLead, updateLead } from "@/app/actions/leads";
 import { createFollowUp } from "@/app/actions/follow-ups";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -15,6 +15,7 @@ const LeadDetailPanel = dynamic(() => import("@/features/leads/lead-detail-panel
 import { LeadFilters } from "@/features/leads/lead-filters";
 const LeadForm = dynamic(() => import("@/features/leads/lead-form").then(m => m.LeadForm));
 import { LeadTable } from "@/features/leads/lead-table";
+import { DeleteLeadDialog } from "./delete-lead-dialog";
 import type { Lead, LeadStatus } from "@/features/leads/types";
 import { LostReasonDialog } from "@/features/lost-reasons/lost-reason-dialog";
 import type { LostReasonSubmission } from "@/features/lost-reasons/types";
@@ -23,7 +24,7 @@ import { FollowUpForm } from "@/features/followups/follow-up-form";
 import type { NewFollowUpInput } from "@/features/followups/types";
 import type { DuplicateLeadCandidate, StructuredLeadDraft } from "@/features/leads/ai-entry-types";
 import type { BulkStructureLeadCallback } from "./bulk-review-types";
-import { structureLeadAction, updateExistingLeadWithDraftAction } from "@/app/actions/ai-lead-entry";
+import { structureBulkLeadAction, updateExistingLeadWithDraftAction } from "@/app/actions/ai-lead-entry";
 
 type Feedback = { tone: "success" | "error"; message: string } | null;
 
@@ -43,10 +44,10 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<LeadStatus | "All">("All");
-  const [operationalFilter, setOperationalFilter] = useState<LeadOperationalState | undefined>(undefined);
   const [formOpen, setFormOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
   const [detailAction, setDetailAction] = useState<"note" | "status" | null>(null);
   const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
   const [lostReasonLead, setLostReasonLead] = useState<Lead | null>(null);
@@ -83,12 +84,9 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     const needle = query.trim().toLowerCase();
     return leads.filter((lead) => {
       const searchable = [lead.name, lead.business, lead.phone, lead.email].join(" ").toLowerCase();
-      const matchesQuery = !needle || searchable.includes(needle);
-      const matchesStatus = status === "All" || lead.status === status;
-      const matchesOperational = !operationalFilter || lead.operationalState === operationalFilter;
-      return matchesQuery && matchesStatus && matchesOperational;
+      return (!needle || searchable.includes(needle)) && (status === "All" || lead.status === status);
     });
-  }, [leads, query, status, operationalFilter]);
+  }, [leads, query, status]);
 
   function replaceLead(updatedLead: Lead) {
     setLeads((current) => current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead)));
@@ -217,42 +215,23 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
   }
 
   async function removeLead() {
-    if (!selectedLead || !window.confirm(`Delete ${selectedLead.name}? This cannot be undone.`)) return;
+    const target = deleteTarget;
+    if (!target || saving) return;
     setSaving(true);
-    const result = await deleteLead(selectedLead.id);
-    setSaving(false);
+    try {
+    const result = await deleteLead(target.id);
     if (!result.success) return setFeedback({ tone: "error", message: result.error });
     setLeads((current) => current.filter((lead) => lead.id !== result.data.id));
-    setSelectedLead(null);
+    setSelectedLead(current => current?.id === target.id ? null : current);
+    setDeleteTarget(null);
     setFeedback({ tone: "success", message: "Lead deleted." });
-  }
-
-  async function markAsWaste() {
-    if (!selectedLead) return;
-    setSaving(true);
-    const result = await markLeadWaste(selectedLead.id);
-    setSaving(false);
-    if (!result.success) return setFeedback({ tone: "error", message: result.error });
-    replaceLead(result.data);
-    setSelectedLead(result.data);
-    setFeedback({ tone: "success", message: "Lead marked as waste." });
-  }
-
-  async function restoreFromWaste() {
-    if (!selectedLead) return;
-    setSaving(true);
-    const result = await restoreWasteLead(selectedLead.id);
-    setSaving(false);
-    if (!result.success) return setFeedback({ tone: "error", message: result.error });
-    replaceLead(result.data);
-    setSelectedLead(result.data);
-    setFeedback({ tone: "success", message: "Lead restored." });
+    } catch { setFeedback({ tone: "error", message: "Could not delete this lead. Please retry." }); }
+    finally { setSaving(false); }
   }
 
   function clearFilters() {
     setQuery("");
     setStatus("All");
-    setOperationalFilter(undefined);
   }
 
   return (
@@ -290,15 +269,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
         </div>
       )}
 
-      <LeadFilters
-        query={query}
-        status={status}
-        operationalFilter={operationalFilter}
-        onQueryChange={setQuery}
-        onStatusChange={setStatus}
-        onOperationalFilterChange={setOperationalFilter}
-        onClear={clearFilters}
-      />
+      <LeadFilters query={query} status={status} onQueryChange={setQuery} onStatusChange={setStatus} onClear={clearFilters} />
 
       <section
         aria-label="Lead list"
@@ -324,17 +295,10 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
           </div>
         ) : (
           <>
-            <LeadTable leads={filteredLeads} onSelect={selectLead} />
+            <LeadTable leads={filteredLeads} onSelect={selectLead} onDelete={setDeleteTarget} />
             <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4 lg:hidden">
               {filteredLeads.map((lead) => (
-                <LeadCard
-                  key={lead.id}
-                  lead={lead}
-                  onSelect={selectLead}
-                  onAddFollowUp={setFollowUpLead}
-                  onMarkWaste={!lead.isWaste ? markAsWaste : undefined}
-                  onRestoreWaste={lead.isWaste ? restoreFromWaste : undefined}
-                />
+                <LeadCard key={lead.id} lead={lead} onSelect={selectLead} onAddFollowUp={setFollowUpLead} onDelete={setDeleteTarget} />
               ))}
             </div>
           </>
@@ -352,7 +316,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
           }
         }}
         onSubmit={saveLead}
-        onStructureLead={onStructureLead || structureLeadAction}
+        onStructureLead={onStructureLead || structureBulkLeadAction}
         onBulkSaved={saved => setLeads(current => [...saved, ...current.filter(lead => !saved.some(item => item.id === lead.id))])}
         onOpenDuplicate={openDuplicate}
         onUpdateDuplicate={updateDuplicate}
@@ -372,7 +336,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
           }
         }}
         onStatusChange={setLeadStatus}
-        onDelete={removeLead}
+        onDelete={async () => setDeleteTarget(selectedLead)}
         activities={activities}
         activityFilter={activityFilter}
         onActivityFilterChange={setActivityFilter}
@@ -393,6 +357,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
         }}
         onSubmit={saveFollowUp}
       />
+      <DeleteLeadDialog lead={deleteTarget} saving={saving} onCancel={() => { if (!saving) setDeleteTarget(null); }} onDelete={removeLead} />
       <LostReasonDialog
         isOpen={Boolean(lostReasonLead)}
         leadId={lostReasonLead?.id}

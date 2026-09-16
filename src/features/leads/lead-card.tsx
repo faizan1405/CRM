@@ -1,10 +1,9 @@
 import { ActionCard } from "@/components/action-card";
-import { ChevronRight, Phone } from "lucide-react";
+import { ChevronRight, Phone, Trash2 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import { getTelephoneHref } from "@/features/leads/contact-links";
 import { LeadQuickActions } from "@/features/leads/lead-quick-actions";
 import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
-import { OperationalStateBadge } from "@/features/leads/operational-state-badge";
 import type { Lead } from "@/features/leads/types";
 import {
   AIScoreBadge,
@@ -20,32 +19,24 @@ type LeadCardProps = {
   lead: Lead;
   onSelect: (lead: Lead, action?: "note" | "status") => void;
   onAddFollowUp: (lead: Lead) => void;
+  onDelete?: (lead: Lead) => void;
   whatsAppMessage?: string;
   aiAttention?: AIAttentionLeadData;
-  onMarkWaste?: () => void;
-  onRestoreWaste?: () => void;
 };
 
 export function LeadCard({
   lead,
   onSelect,
   onAddFollowUp,
+  onDelete,
   whatsAppMessage,
   aiAttention,
 }: LeadCardProps) {
   const ai = aiAttention || lead.aiAttention || deriveAIAttention(lead);
   const isTerminal = lead.status === "Won" || lead.status === "Lost";
-  const isCritical = !isTerminal && (ai.priority === "critical" || ai.score >= 85);
 
   return (
-    <ActionCard onActivate={() => onSelect(lead)} aria-label={`Open lead ${lead.name}`} className={`min-w-0 rounded-xl border bg-white p-4 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[var(--shadow-elevated)] active:scale-[0.97] ${
-      lead.operationalState === "FOLLOW_UP_NOW" ? "ring-1 ring-emerald-200 border-emerald-200 hover:border-emerald-300"
-      : lead.operationalState === "FUTURE_FOLLOW_UP" ? "ring-1 ring-amber-200 border-amber-200 hover:border-amber-300"
-      : lead.operationalState === "LOST" ? "border-rose-200 bg-rose-50/30"
-      : lead.operationalState === "WASTE" ? "border-slate-200 bg-slate-50 opacity-75"
-      : isCritical ? "border-l-2 border-l-rose-400 hover:border-rose-300"
-      : "border-[var(--border)] hover:border-blue-300"
-    }`}>
+    <ActionCard onActivate={() => onSelect(lead)} aria-label={`Open lead ${lead.name}`} className="min-w-0 rounded-xl border border-[var(--border)] bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md active:translate-y-0">
       {/* Top Header: Title & Badges */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -55,12 +46,10 @@ export function LeadCard({
           </p>
         </div>
 
-        {/* Status, Operational, and Score */}
+        {onDelete && <button type="button" onClick={() => onDelete(lead)} aria-label={`Delete ${lead.name}`} className="grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700 focus-visible:ring-2 focus-visible:ring-rose-600"><Trash2 size={18} /></button>}
+        {/* Status and Score */}
         <div className="flex shrink-0 flex-col items-end gap-1">
-          <div className="flex flex-wrap items-center justify-end gap-1">
-            <LeadStatusBadge status={lead.status} />
-            <OperationalStateBadge state={lead.operationalState || "ACTIVE_NEUTRAL"} />
-          </div>
+          <LeadStatusBadge status={lead.status} />
           {!isTerminal && (
             <div className="flex items-center gap-1">
               <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" />
@@ -88,7 +77,7 @@ export function LeadCard({
       {/* Phone Link */}
       <a
         href={getTelephoneHref(lead.phone)}
-        className="mt-3 flex min-h-10 items-center gap-2 rounded-md text-sm text-slate-700 hover:text-blue-700 focus-visible:outline-offset-2"
+        className="mt-3 flex min-h-10 items-center gap-2 break-all rounded-md text-sm text-slate-700 hover:text-blue-700 focus-visible:outline-offset-2"
         aria-label={`Call ${lead.name} at ${lead.phone}`}
       >
         <Phone aria-hidden="true" size={16} className="text-slate-400" />
@@ -99,13 +88,13 @@ export function LeadCard({
       <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
         <div>
           <dt className="text-xs font-medium text-slate-500">Next follow-up</dt>
-          <dd className="mt-0.5 text-sm font-medium text-slate-800">
+          <dd className="mt-0.5 break-all text-sm font-medium text-slate-800">
             {formatDate(lead.nextFollowUpDate)}
           </dd>
         </div>
         <div>
           <dt className="text-xs font-medium text-slate-500">Quoted amount</dt>
-          <dd className="mt-0.5 text-sm font-medium text-slate-800">
+          <dd className="mt-0.5 break-all text-sm font-medium text-slate-800">
             {formatCurrency(lead.quotedAmount)}
           </dd>
         </div>
@@ -118,7 +107,7 @@ export function LeadCard({
         onAddNote={() => onSelect(lead, "note")}
         onAddFollowUp={() => onAddFollowUp(lead)}
         onChangeStatus={() => onSelect(lead, "status")}
-        className="mt-3 border-y border-slate-100 py-1 transition-opacity duration-200 opacity-80 group-hover:opacity-100"
+        className="mt-3 border-y border-slate-100 py-1"
       />
 
       {/* View Details */}
