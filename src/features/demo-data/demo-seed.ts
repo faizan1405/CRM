@@ -98,153 +98,155 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
         score: 78,
         priority: AIPriority.IMPORTANT,
         scoreReason: "Demo scheduled with core management.",
-        recommendedAction: "Confirm demo time and attendees.",
-        recommendedActionType: AIActionType.WHATSAPP,
+        recommendedAction: "Send calendar invite with meeting link.",
+        recommendedActionType: AIActionType.CALL,
       },
     },
-    // 4. Qualified
+    // 4. Qualified Lead
     {
-      name: `${DEMO_TAG} Sneha Patel`,
+      name: `${DEMO_TAG} Sunita Rao`,
       phone: "+91 98444 55667",
-      email: "sneha.patel.demo@example.com",
-      business: "Patel Global Logistics",
-      industry: "Logistics",
-      budget: new Prisma.Decimal("350000.00"),
+      email: "sunita.rao.demo@example.com",
+      business: "Rao Health Tech",
+      industry: "Healthcare",
+      budget: new Prisma.Decimal("300000.00"),
       status: LeadStatus.QUALIFIED,
       lastContactDate: yesterday,
-      notes: "Budget approved by board. Meets all technical prerequisites.",
+      notes: "Technical requirements matched. Ready for commercial proposal.",
       insight: {
         score: 82,
-        priority: AIPriority.IMPORTANT,
-        scoreReason: "High purchasing authority and confirmed budget allocation.",
-        recommendedAction: "Draft formal commercial proposal.",
-        recommendedActionType: AIActionType.EMAIL,
+        priority: AIPriority.CRITICAL,
+        scoreReason: "Qualified decision maker with approved budget.",
+        recommendedAction: "Send formal proposal with SLA terms.",
+        recommendedActionType: AIActionType.REVIEW,
       },
     },
-    // 5. Hot Lead
+    // 5. Proposal Sent - High Value
     {
       name: `${DEMO_TAG} Vikram Malhotra`,
       phone: "+91 98555 66778",
       email: "vikram.malhotra.demo@example.com",
-      business: "Malhotra Enterprises",
-      industry: "Manufacturing",
-      budget: new Prisma.Decimal("500000.00"),
-      status: LeadStatus.QUALIFIED,
-      lastContactDate: now,
-      notes: "High intent. Wants implementation kickoff by end of month.",
+      business: "Malhotra Logistics Hub",
+      industry: "Logistics",
+      budget: new Prisma.Decimal("450000.00"),
+      quotedAmount: new Prisma.Decimal("420000.00"),
+      status: LeadStatus.PROPOSAL_SENT,
+      lastContactDate: twoDaysAgo,
+      notes: "Proposal of ₹4,20,000 sent for automated tracking suite.",
       insight: {
-        score: 94,
+        score: 88,
         priority: AIPriority.CRITICAL,
-        scoreReason: "Immediate decision timeframe with substantial budget.",
-        recommendedAction: "Close deal with executive contract signing.",
+        scoreReason: "High-value proposal pending board review.",
+        recommendedAction: "Schedule proposal review call with CFO.",
         recommendedActionType: AIActionType.CALL,
       },
     },
-    // 6. Proposal Sent
+    // 6. Proposal Sent - Follow-up Needed
     {
-      name: `${DEMO_TAG} Ananya Gupta`,
+      name: `${DEMO_TAG} Neha Kapoor`,
       phone: "+91 98666 77889",
-      email: "ananya.gupta.demo@example.com",
-      business: "Gupta Tech Labs",
-      industry: "IT Services",
-      budget: new Prisma.Decimal("220000.00"),
-      quotedAmount: new Prisma.Decimal("220000.00"),
+      email: "neha.kapoor.demo@example.com",
+      business: "Kapoor EduConsulting",
+      industry: "Education",
+      budget: new Prisma.Decimal("120000.00"),
+      quotedAmount: new Prisma.Decimal("110000.00"),
       status: LeadStatus.PROPOSAL_SENT,
-      lastContactDate: yesterday,
-      notes: "Formal proposal sent. Decision expected in 48 hours.",
+      lastContactDate: twoDaysAgo,
+      notes: "Proposal shared. Client evaluating options against competitors.",
+      followUp: {
+        scheduledAt: tomorrow,
+        type: FollowUpType.WHATSAPP,
+        note: "Follow up on proposal feedback via WhatsApp.",
+      },
       insight: {
-        score: 80,
+        score: 72,
         priority: AIPriority.IMPORTANT,
-        scoreReason: "Commercials under active client stakeholder review.",
-        recommendedAction: "Send polite check-in via WhatsApp.",
+        scoreReason: "Quotation in hand, follow-up scheduled.",
+        recommendedAction: "Send WhatsApp message addressing questions.",
         recommendedActionType: AIActionType.WHATSAPP,
       },
     },
-    // 7. Converted / Won
+    // 7. Won Deal
     {
-      name: `${DEMO_TAG} Rajesh Iyer`,
+      name: `${DEMO_TAG} Arjun Singhania`,
       phone: "+91 98777 88990",
-      email: "rajesh.iyer.demo@example.com",
-      business: "Iyer Cloud Systems",
-      industry: "Cloud Infrastructure",
-      budget: new Prisma.Decimal("450000.00"),
-      quotedAmount: new Prisma.Decimal("450000.00"),
+      email: "arjun.singhania.demo@example.com",
+      business: "Singhania FinTech",
+      industry: "Financial Services",
+      budget: new Prisma.Decimal("500000.00"),
+      quotedAmount: new Prisma.Decimal("480000.00"),
+      status: LeadStatus.WON,
+      lastContactDate: now,
+      notes: "Agreement signed. Annual subscription paid upfront.",
+      insight: {
+        score: 95,
+        priority: AIPriority.NORMAL,
+        scoreReason: "Deal successfully won.",
+        recommendedAction: "Hand off to client onboarding team.",
+        recommendedActionType: AIActionType.OTHER,
+      },
+    },
+    // 8. Won Deal
+    {
+      name: `${DEMO_TAG} Deepika Joshi`,
+      phone: "+91 98888 99001",
+      email: "deepika.joshi.demo@example.com",
+      business: "Joshi Hospitality Group",
+      industry: "Hospitality",
+      budget: new Prisma.Decimal("250000.00"),
+      quotedAmount: new Prisma.Decimal("240000.00"),
       status: LeadStatus.WON,
       lastContactDate: yesterday,
-      notes: "Contract executed. Full payment advance received.",
+      notes: "Onboarding initiated for 3 hotel properties.",
       insight: {
-        score: 100,
+        score: 92,
         priority: AIPriority.NORMAL,
-        scoreReason: "Deal successfully won and closed.",
-        recommendedAction: "Initiate client onboarding workflow.",
-        recommendedActionType: AIActionType.OTHER,
+        scoreReason: "Deal won.",
+        recommendedAction: "Schedule kick-off call with property managers.",
+        recommendedActionType: AIActionType.CALL,
       },
     },
-    // 8. Lost (with valid LeadLossEvent)
+    // 9. Lost Deal
     {
-      name: `${DEMO_TAG} Sunita Rao`,
-      phone: "+91 98888 99001",
-      email: "sunita.rao.demo@example.com",
-      business: "Rao Healthcare Supplies",
-      industry: "Healthcare",
-      budget: new Prisma.Decimal("100000.00"),
+      name: `${DEMO_TAG} Kabir Mehta`,
+      phone: "+91 98999 00112",
+      email: "kabir.mehta.demo@example.com",
+      business: "Mehta Auto Components",
+      industry: "Manufacturing",
+      budget: new Prisma.Decimal("180000.00"),
+      quotedAmount: new Prisma.Decimal("160000.00"),
       status: LeadStatus.LOST,
       lastContactDate: twoDaysAgo,
-      notes: "Client chose lower-tier competitor with cheaper pricing.",
+      notes: "Client decided to build an internal spreadsheet system.",
       lossEvent: {
         reason: LeadLossReason.PRICE,
-        note: "Competitor offered 40% discount on basic tier.",
+        note: "Client chose DIY internal tooling due to budget freeze.",
       },
       insight: {
-        score: 20,
+        score: 30,
         priority: AIPriority.NORMAL,
-        scoreReason: "Lead closed as lost due to price constraints.",
-        recommendedAction: "Schedule long-term nurture campaign in 6 months.",
+        scoreReason: "Deal lost to internal tooling / price constraint.",
+        recommendedAction: "Add to quarterly re-engagement nurture list.",
         recommendedActionType: AIActionType.OTHER,
       },
     },
-    // 9. No Response
+    // 10. Stale Lead
     {
-      name: `${DEMO_TAG} Deepak Joshi`,
-      phone: "+91 98999 00112",
-      email: "deepak.joshi.demo@example.com",
-      business: "Joshi Consulting",
-      industry: "Consulting",
+      name: `${DEMO_TAG} Ananya Sen`,
+      phone: "+91 98000 11223",
+      email: "ananya.sen.demo@example.com",
+      business: "Sen Creative Studio",
+      industry: "Creative Agency",
       budget: new Prisma.Decimal("80000.00"),
       status: LeadStatus.CONTACTED,
-      lastContactDate: twoDaysAgo,
-      notes: "Multiple contact attempts made without response.",
+      lastContactDate: new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000),
+      notes: "No response after initial pricing discussion 10 days ago.",
       insight: {
-        score: 40,
+        score: 45,
         priority: AIPriority.NORMAL,
-        scoreReason: "Unresponsive prospect after multiple touchpoints.",
-        recommendedAction: "Send final follow-up WhatsApp template before archiving.",
+        scoreReason: "Stale opportunity with 10 days of inactivity.",
+        recommendedAction: "Send final check-in message before archiving.",
         recommendedActionType: AIActionType.WHATSAPP,
-      },
-    },
-    // 10. Urgent Follow-up
-    {
-      name: `${DEMO_TAG} Kavita Nair`,
-      phone: "+91 98000 11223",
-      email: "kavita.nair.demo@example.com",
-      business: "Nair FinTech Solutions",
-      industry: "FinTech",
-      budget: new Prisma.Decimal("600000.00"),
-      status: LeadStatus.QUALIFIED,
-      lastContactDate: twoDaysAgo,
-      nextFollowUpDate: yesterday,
-      notes: "Follow-up overdue for high-value FinTech opportunity.",
-      followUp: {
-        scheduledAt: twoDaysAgo,
-        type: FollowUpType.CALL,
-        note: "Overdue discussion regarding custom security compliance.",
-      },
-      insight: {
-        score: 91,
-        priority: AIPriority.CRITICAL,
-        scoreReason: "High-value deal with overdue action required immediately.",
-        recommendedAction: "Call client immediately to reschedule missed touchpoint.",
-        recommendedActionType: AIActionType.CALL,
       },
     },
   ];
@@ -254,11 +256,25 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
   // Clean all previous demo leads first to guarantee a fresh deterministic seed
   await clearDemoLeads();
 
+  let validUserId: string | null = null;
+  if (userId) {
+    const userExists = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (userExists) {
+      validUserId = userExists.id;
+    }
+  }
+
   for (const item of demoData) {
-    const lead = await db.lead.create({
+    let phoneToUse = item.phone;
+    const existing = await db.lead.findFirst({ where: { phone: phoneToUse } });
+    if (existing) {
+      phoneToUse = `${item.phone.slice(0, 10)}${createdCount}`;
+    }
+
+    await db.lead.create({
       data: {
         name: item.name,
-        phone: item.phone,
+        phone: phoneToUse,
         email: item.email,
         business: item.business,
         industry: item.industry,
@@ -272,7 +288,7 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
           create: {
             type: ActivityType.LEAD_CREATED,
             message: `Demo lead created: ${item.name}`,
-            createdByUserId: userId ?? null,
+            createdByUserId: validUserId,
           },
         },
         aiInsight: {
@@ -285,34 +301,28 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
             needsRefresh: false,
           },
         },
+        followUps: item.followUp
+          ? {
+              create: {
+                scheduledAt: item.followUp.scheduledAt,
+                type: item.followUp.type,
+                note: item.followUp.note,
+                status: FollowUpStatus.PENDING,
+              },
+            }
+          : undefined,
+        lossEvents: item.lossEvent
+          ? {
+              create: {
+                reason: item.lossEvent.reason,
+                note: item.lossEvent.note,
+                lostAt: now,
+                createdByUserId: validUserId,
+              },
+            }
+          : undefined,
       },
     });
-
-    if (item.followUp) {
-      const fu = item.followUp;
-      await db.followUp.create({
-        data: {
-          leadId: lead.id,
-          scheduledAt: fu.scheduledAt,
-          type: fu.type,
-          note: fu.note,
-          status: FollowUpStatus.PENDING,
-        },
-      });
-    }
-
-    if (item.lossEvent) {
-      const le = item.lossEvent;
-      await db.leadLossEvent.create({
-        data: {
-          leadId: lead.id,
-          reason: le.reason,
-          note: le.note,
-          lostAt: now,
-          createdByUserId: userId ?? null,
-        },
-      });
-    }
 
     createdCount++;
   }
@@ -324,7 +334,6 @@ export async function clearDemoLeads(): Promise<{ deletedCount: number }> {
   const demoLeads = await db.lead.findMany({
     where: {
       name: { startsWith: DEMO_TAG },
-      email: { endsWith: ".demo@example.com" },
     },
     select: { id: true },
   });

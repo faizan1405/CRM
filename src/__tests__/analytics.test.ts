@@ -46,18 +46,17 @@ async function createActivity(leadId: string) {
   });
 }
 
-async function createFollowUp(leadId: string, overrides: Record<string, unknown> = {}) {
-  return db.followUp.create({
-    data: {
-      lead: { connect: { id: leadId } },
-      type: "CALL",
-      status: "PENDING",
-      scheduledAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      ...overrides,
-    },
-  });
+async function createFollowUp(leadId: string, overrides: Partial<Prisma.FollowUpUncheckedCreateInput> = {}) {
+  const data: Prisma.FollowUpUncheckedCreateInput = {
+    leadId,
+    type: "CALL",
+    status: "PENDING",
+    scheduledAt: new Date(),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+  return db.followUp.create({ data });
 }
 
 // ─── Tests ─────────────────────────────────────────────────────────────────────

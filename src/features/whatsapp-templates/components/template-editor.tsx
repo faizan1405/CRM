@@ -85,9 +85,9 @@ export function TemplateEditor({
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 sm:px-6">
+      <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-2">
           <div className="flex size-7 items-center justify-center rounded-lg bg-emerald-600 text-white">
             <MessageSquare size={15} aria-hidden="true" />
@@ -115,7 +115,7 @@ export function TemplateEditor({
       </div>
 
       {/* Editor Body */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
         {/* Title and Category Row */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
@@ -211,7 +211,7 @@ export function TemplateEditor({
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between border-t border-slate-100 bg-white px-4 py-3 sm:px-6">
+      <div className="flex shrink-0 items-center justify-between border-t border-slate-100 bg-white px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6">
         <button
           type="button"
           onClick={onClose}

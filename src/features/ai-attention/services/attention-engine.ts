@@ -275,8 +275,9 @@ export async function batchAnalyzeLeads(options: {
   // Find active leads (exclude WON / LOST from recurring heavy analysis if already analyzed)
   const candidates = await db.lead.findMany({
     where: forceAll
-      ? {}
+      ? { isWaste: false }
       : {
+          isWaste: false,
           status: { notIn: ["WON", "LOST"] },
           OR: [
             { aiInsight: null },

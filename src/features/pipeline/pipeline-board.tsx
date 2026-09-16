@@ -12,10 +12,10 @@ import dynamic from "next/dynamic";
 const LeadDetailPanel = dynamic(() => import("@/features/leads/lead-detail-panel").then(m => m.LeadDetailPanel));
 const LeadForm = dynamic(() => import("@/features/leads/lead-form").then(m => m.LeadForm));
 import type { Lead, LeadStatus } from "@/features/leads/types";
+import { DeleteLeadDialog } from "@/features/leads/delete-lead-dialog";
 import { PipelineCard } from "./pipeline-card";
 import { PipelineSummary } from "./pipeline-summary";
 import { PipelineColumnHeader, PipelineEmptyState } from "./pipeline-column";
-import { PipelineMobileView } from "./pipeline-mobile-view";
 import { LostReasonDialog } from "@/features/lost-reasons/lost-reason-dialog";
 import type { LostReasonSubmission } from "@/features/lost-reasons/types";
 import { useLeadActivities } from "@/features/activity/use-activities";
@@ -40,6 +40,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   }, [requestedStage]);
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -162,17 +163,20 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   };
 
   const handleRemoveLead = async () => {
-    if (!selectedLead || !window.confirm(`Delete ${selectedLead.name}? This cannot be undone.`)) return;
+    if (!deleteTarget || saving) return;
     setSaving(true);
-    const result = await deleteLead(selectedLead.id);
-    setSaving(false);
+    try {
+    const result = await deleteLead(deleteTarget.id);
     if (!result.success) {
       setError(result.error);
       return;
     }
     setLeads((current) => current.filter((l) => l.id !== result.data.id));
     setSelectedLead(null);
+    setDeleteTarget(null);
     setError(null);
+    } catch { setError("Could not delete this lead. Please retry."); }
+    finally { setSaving(false); }
   };
 
   const handleSaveLead = async (formData: FormData) => {
@@ -215,7 +219,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-hidden pb-4">
+    <div className="flex h-[min(75dvh,52rem)] min-h-80 min-w-0 flex-col overflow-hidden pb-4">
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm font-medium text-red-800 shadow-sm border border-red-200 flex justify-between">
           {error}
@@ -230,17 +234,13 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         <PipelineSummary leads={leads} grouped={grouped} />
       </div>
 
-      {/* Mobile View (Agent B UI) */}
-      <div className="flex-1 min-h-0 lg:hidden">
-        <PipelineMobileView initialStage={requestedStage} leads={leads} grouped={grouped} onSelectLead={handleSelectLead} />
-      </div>
-
-      {/* Kanban Board (Agent A UI for Desktop) */}
-      <div ref={stageRef} className="hidden lg:flex flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar">
+      <p className="mb-2 text-xs text-slate-500">Drag the grip toward either board edge to reach more stages. You can also change Status in lead details.</p>
+      {/* Every droppable shares one scroll parent; nested scroll parents disable DnD auto-scroll. */}
+      <div ref={stageRef} aria-label="Pipeline stages" className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain custom-scrollbar" style={{ scrollBehavior: "auto" }}>
         <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex h-full min-w-max gap-4 items-start pb-4">
+          <div className="flex min-h-full min-w-max items-stretch gap-4 pb-4">
             {COLUMNS.map((status) => (
-              <div key={status} data-stage={status} className="flex h-full w-80 shrink-0 flex-col rounded-xl bg-slate-50 border border-slate-200 overflow-hidden">
+              <div key={status} data-stage={status} className="flex w-[min(18rem,calc(100vw-3rem))] shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-50 lg:w-80">
                 <PipelineColumnHeader status={status} count={grouped[status].length} />
 
                 <Droppable droppableId={status}>
@@ -248,19 +248,19 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`flex-1 overflow-y-auto p-3 custom-scrollbar rounded-lg transition-colors duration-200 ${
-                        snapshot.isDraggingOver ? "bg-blue-50/80 ring-1 ring-blue-200/50" : ""
+                      className={`min-h-40 flex-1 rounded-b-xl p-3 transition-colors duration-150 ${
+                        snapshot.isDraggingOver ? "bg-blue-50 ring-2 ring-inset ring-blue-400" : ""
                       }`}
                     >
                       <div className="flex flex-col gap-3 min-h-[100px]">
                         {grouped[status].map((lead, index) => (
-                          <Draggable key={lead.id} draggableId={lead.id} index={index}>
+                          <Draggable key={lead.id} draggableId={lead.id} index={index} disableInteractiveElementBlocking>
                             {(provided, snapshot) => (
                               <div
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 style={provided.draggableProps.style}
-                                className={snapshot.isDragging ? "z-50 scale-[1.02] rotate-1 shadow-lg" : ""}
+                                className={snapshot.isDragging ? "z-50" : ""}
                               >
                                 <PipelineCard
                                   lead={lead}
@@ -296,7 +296,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
           }
         }}
         onStatusChange={handleStatusChange}
-        onDelete={handleRemoveLead}
+        onDelete={async () => setDeleteTarget(selectedLead)}
         activities={activities}
         activityFilter={activityFilter}
         onActivityFilterChange={setActivityFilter}
@@ -322,6 +322,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         onSubmit={handleSaveLead} 
       />}
 
+      <DeleteLeadDialog lead={deleteTarget} saving={saving} onCancel={() => { if (!saving) setDeleteTarget(null); }} onDelete={handleRemoveLead} />
       <LostReasonDialog
         isOpen={Boolean(lostReasonLead)}
         leadId={lostReasonLead?.id}

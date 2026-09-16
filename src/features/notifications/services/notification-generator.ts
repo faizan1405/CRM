@@ -51,7 +51,7 @@ export async function generateSmartNotifications(): Promise<{
   // 1. Fetch Active Leads and Pending Follow-Ups
   const [activeLeads, pendingFollowUps] = await Promise.all([
     db.lead.findMany({
-      where: { status: { notIn: ["WON", "LOST"] } },
+      where: { isWaste: false,  status: { notIn: ["WON", "LOST"] } },
       include: {
         aiInsight: true,
         activities: {
@@ -65,7 +65,7 @@ export async function generateSmartNotifications(): Promise<{
       },
     }),
     db.followUp.findMany({
-      where: { status: "PENDING" },
+      where: { status: "PENDING", lead: { isWaste: false } },
       include: { lead: true },
       orderBy: { scheduledAt: "asc" },
     }),
@@ -257,7 +257,7 @@ export async function generateSmartNotifications(): Promise<{
   let created = 0;
   if (toCreate.length > 0) {
     const validLeads = await db.lead.findMany({
-      where: { id: { in: toCreate.map((c) => c.leadId) } },
+      where: { isWaste: false,  id: { in: toCreate.map((c) => c.leadId) } },
       select: { id: true },
     });
     const validLeadIdSet = new Set(validLeads.map((l) => l.id));

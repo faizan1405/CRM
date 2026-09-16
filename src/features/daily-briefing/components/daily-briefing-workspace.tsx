@@ -177,7 +177,7 @@ export function DailyBriefingWorkspace({
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 uppercase tracking-wider">
-              ⚡ 30-Sec Daily Scan
+              ⚡ HOURLY SALES SCAN
             </span>
             <span className="text-xs font-medium text-slate-500">
               {new Date().toLocaleDateString("en-IN", {

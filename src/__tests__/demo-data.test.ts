@@ -20,37 +20,36 @@ vi.mock("next/cache", () => ({
 }));
 
 describe("Demo Data & Production Purge", () => {
+  const createdRealLeadIds: string[] = [];
   beforeAll(async () => {
-    const existingUser = await db.user.findUnique({ where: { email: mockUser.email } });
-    if (!existingUser) {
-      await db.user.create({
-        data: {
-          id: mockUser.id,
-          name: mockUser.name,
-          email: mockUser.email,
-          passwordHash: "test_hash_demo",
-          role: "ADMIN",
-        },
-      });
-    }
+    await clearDemoLeads();
+    await db.user.deleteMany({ where: { email: mockUser.email } });
+    await db.user.create({
+      data: {
+        id: mockUser.id,
+        name: mockUser.name,
+        email: mockUser.email,
+        passwordHash: "test_hash_demo",
+        role: "ADMIN",
+      },
+    });
   });
 
   afterAll(async () => {
     // Clean up any remaining demo leads
     await clearDemoLeads();
-    // Clean up any remaining real leads (safety)
-    const remainingLeads = await db.lead.findMany({ where: { name: { not: { startsWith: DEMO_TAG } } }, select: { id: true } });
-    if (remainingLeads.length > 0) {
-      const ids = remainingLeads.map(l => l.id);
-      await db.salesNotification.deleteMany({ where: { leadId: { in: ids } } });
-      await db.leadLossEvent.deleteMany({ where: { leadId: { in: ids } } });
-      await db.followUp.deleteMany({ where: { leadId: { in: ids } } });
-      await db.leadActivity.deleteMany({ where: { leadId: { in: ids } } });
-      await db.leadAIInsight.deleteMany({ where: { leadId: { in: ids } } });
-      await db.lead.deleteMany({ where: { id: { in: ids } } });
+    
+    // Clean up real leads created in this suite
+    if (createdRealLeadIds.length > 0) {
+      await db.salesNotification.deleteMany({ where: { leadId: { in: createdRealLeadIds } } });
+      await db.leadLossEvent.deleteMany({ where: { leadId: { in: createdRealLeadIds } } });
+      await db.followUp.deleteMany({ where: { leadId: { in: createdRealLeadIds } } });
+      await db.leadActivity.deleteMany({ where: { leadId: { in: createdRealLeadIds } } });
+      await db.leadAIInsight.deleteMany({ where: { leadId: { in: createdRealLeadIds } } });
+      await db.lead.deleteMany({ where: { id: { in: createdRealLeadIds } } });
     }
+    
     await db.user.deleteMany({ where: { email: mockUser.email } });
-    await db.$disconnect();
   });
 
   // ============================================================
@@ -139,6 +138,7 @@ describe("Demo Data & Production Purge", () => {
         },
         include: { activities: true },
       });
+      createdRealLeadIds.push(realLead.id);
 
       // Seed demo leads
       await seedDemoLeads(mockUser.id);
@@ -177,6 +177,7 @@ describe("Demo Data & Production Purge", () => {
           status: "QUALIFIED",
         },
       });
+      createdRealLeadIds.push(realLead.id);
 
       const leadCountBefore = await db.lead.count();
       expect(leadCountBefore).toBeGreaterThan(0);

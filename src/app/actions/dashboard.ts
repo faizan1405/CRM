@@ -78,18 +78,17 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
 
     const now = new Date();
     
-    // Calculate IST boundaries
-    const parts = new Intl.DateTimeFormat("en-US", {
+    const todayIST = new Intl.DateTimeFormat("en-US", {
       timeZone: "Asia/Kolkata",
       year: "numeric", month: "numeric", day: "numeric"
-    }).formatToParts(now);
+    }).format(now);
     
-    const y = parseInt(parts.find(p => p.type === 'year')!.value);
-    const m = parseInt(parts.find(p => p.type === 'month')!.value) - 1;
-    const d = parseInt(parts.find(p => p.type === 'day')!.value);
+    // Parse the MM/DD/YYYY from Intl.DateTimeFormat
+    const [m, d, y] = todayIST.split('/').map(Number);
 
-    const startOfTodayIST = new Date(Date.UTC(y, m, d, -5, -30, 0, 0));
-    const endOfTodayIST = new Date(Date.UTC(y, m, d, 18, 29, 59, 999));
+    // Convert IST midnight to UTC (subtract 5 hours 30 mins)
+    const startOfTodayIST = new Date(Date.UTC(y, m - 1, d, -5, -30, 0, 0));
+    const endOfTodayIST = new Date(Date.UTC(y, m - 1, d, 18, 29, 59, 999));
 
     // Parallel aggregate queries
     const [
@@ -106,10 +105,10 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
       recentActivities,
       activeLeadsWithAI
     ] = await Promise.all([
-      db.lead.count(),
-      db.lead.groupBy({ by: ["status"], _count: true }),
-      db.lead.aggregate({ _sum: { quotedAmount: true }, _avg: { quotedAmount: true }, where: { status: LeadStatus.WON } }),
-      db.lead.aggregate({ _sum: { quotedAmount: true }, where: { status: { in: [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED, LeadStatus.PROPOSAL_SENT] } } }),
+      db.lead.count({ where: { isWaste: false } }),
+      db.lead.groupBy({ by: ["status"], _count: true, where: { isWaste: false } }),
+      db.lead.aggregate({ _sum: { quotedAmount: true }, _avg: { quotedAmount: true }, where: { status: LeadStatus.WON, isWaste: false } }),
+      db.lead.aggregate({ _sum: { quotedAmount: true }, where: { status: { in: [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED, LeadStatus.PROPOSAL_SENT] }, isWaste: false } }),
       db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST } } }),
       db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST } } }),
       db.followUp.findMany({
@@ -124,13 +123,13 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
         take: 5
       }),
       db.lead.findMany({
-        where: { status: LeadStatus.PROPOSAL_SENT },
+        where: { isWaste: false,  status: LeadStatus.PROPOSAL_SENT },
         select: { id: true, name: true, phone: true, business: true, status: true },
         orderBy: { updatedAt: "desc" },
         take: 5
       }),
       db.lead.findMany({
-        where: { status: LeadStatus.NEW },
+        where: { isWaste: false,  status: LeadStatus.NEW },
         select: { id: true, name: true, phone: true, business: true, status: true },
         orderBy: { createdAt: "desc" },
         take: 5
@@ -141,7 +140,7 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
         include: { lead: { select: { id: true, name: true } } }
       }),
       db.lead.findMany({
-        where: {
+        where: { isWaste: false, 
           status: { in: [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED, LeadStatus.PROPOSAL_SENT] },
         },
         include: {

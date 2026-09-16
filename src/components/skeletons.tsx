@@ -1,5 +1,3 @@
-import { type ReactNode } from "react";
-
 function Skeleton({ className }: { className?: string }) {
   return (
     <div className={`skeleton-shimmer ${className ?? ""}`} aria-hidden="true" />

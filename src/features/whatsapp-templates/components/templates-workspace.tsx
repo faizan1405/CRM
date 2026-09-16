@@ -294,7 +294,7 @@ export function WhatsAppTemplatesWorkspace({
                   isSelected={selectedTemplate?.id === tpl.id}
                   onSelect={(t) => {
                     setSelectedTemplate(t);
-                    if (!window.matchMedia("(min-width: 1024px)").matches) handleOpenEditor(t);
+                    handleOpenEditor(t);
                   }}
                   onEdit={(t) => handleOpenEditor(t)}
                   onDuplicate={handleDuplicateTemplate}
@@ -342,7 +342,7 @@ export function WhatsAppTemplatesWorkspace({
       {/* Editor Modal (Slide up / Full dialog) */}
       {isEditorOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-2 sm:p-4">
-          <div className="flex-1 w-full max-w-3xl max-h-[92vh] overflow-hidden">
+          <div className="h-[92dvh] min-h-0 w-full max-w-3xl overflow-hidden">
             <TemplateEditor
               template={editingTemplate}
               onSave={handleSaveTemplate}

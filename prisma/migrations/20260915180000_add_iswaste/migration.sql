@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Lead" ADD COLUMN "isWaste" BOOLEAN NOT NULL DEFAULT false;

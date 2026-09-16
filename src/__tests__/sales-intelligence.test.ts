@@ -26,7 +26,7 @@ import {
   getLeadLossHistory,
   getLostReasonsAnalytics,
 } from "@/app/actions/lost-reasons";
-import { changeLeadStatus } from "@/app/actions/leads";
+import { changeLeadStatus, markLeadWaste, restoreWasteLead } from "@/app/actions/leads";
 import {
   generateSmartNotifications,
 } from "@/features/notifications/services/notification-generator";
@@ -511,6 +511,112 @@ describe("Phase 9: Sales Communication + Follow-up Intelligence", () => {
       // Second call returns matching summary from cache
       const call2 = await getDailyBriefing();
       expect(call2.data?.aiBriefing.summary).toBe(call1.data?.aiBriefing.summary);
+    });
+  });
+
+  describe("6. Waste Status & Pipeline Preservation Semantics", () => {
+    it("preserves CONTACTED status when marking as Waste and when restoring", async () => {
+      const lead = await db.lead.create({
+        data: {
+          name: "Test Contacted Waste Lead",
+          phone: "+919998887701",
+          status: LeadStatus.CONTACTED,
+          isWaste: false,
+        },
+      });
+      createdLeadIds.push(lead.id);
+
+      // 1. Mark Waste
+      const wasteRes = await markLeadWaste(lead.id);
+      expect(wasteRes.success).toBe(true);
+      if (wasteRes.success) {
+        expect(wasteRes.data.status).toBe("Contacted");
+        expect(wasteRes.data.isWaste).toBe(true);
+      }
+
+      const dbWaste = await db.lead.findUnique({ where: { id: lead.id } });
+      expect(dbWaste?.status).toBe(LeadStatus.CONTACTED);
+      expect(dbWaste?.isWaste).toBe(true);
+
+      // Verify no LeadLossEvent was created
+      const lossEvents = await db.leadLossEvent.findMany({ where: { leadId: lead.id } });
+      expect(lossEvents.length).toBe(0);
+
+      // 2. Restore from Waste
+      const restoreRes = await restoreWasteLead(lead.id);
+      expect(restoreRes.success).toBe(true);
+      if (restoreRes.success) {
+        expect(restoreRes.data.status).toBe("Contacted");
+        expect(restoreRes.data.isWaste).toBe(false);
+      }
+
+      const dbRestored = await db.lead.findUnique({ where: { id: lead.id } });
+      expect(dbRestored?.status).toBe(LeadStatus.CONTACTED);
+      expect(dbRestored?.isWaste).toBe(false);
+    });
+
+    it("preserves NEW status through mark Waste and restore cycle without creating loss events", async () => {
+      const lead = await db.lead.create({
+        data: {
+          name: "Test New Waste Lead",
+          phone: "+919998887702",
+          status: LeadStatus.NEW,
+          isWaste: false,
+        },
+      });
+      createdLeadIds.push(lead.id);
+
+      // Mark Waste
+      const wasteRes = await markLeadWaste(lead.id);
+      expect(wasteRes.success).toBe(true);
+      if (wasteRes.success) {
+        expect(wasteRes.data.status).toBe("New");
+        expect(wasteRes.data.isWaste).toBe(true);
+      }
+
+      const dbWaste = await db.lead.findUnique({ where: { id: lead.id } });
+      expect(dbWaste?.status).toBe(LeadStatus.NEW);
+      expect(dbWaste?.isWaste).toBe(true);
+
+      const lossEvents = await db.leadLossEvent.findMany({ where: { leadId: lead.id } });
+      expect(lossEvents.length).toBe(0);
+
+      // Restore Waste
+      const restoreRes = await restoreWasteLead(lead.id);
+      expect(restoreRes.success).toBe(true);
+      if (restoreRes.success) {
+        expect(restoreRes.data.status).toBe("New");
+        expect(restoreRes.data.isWaste).toBe(false);
+      }
+
+      const dbRestored = await db.lead.findUnique({ where: { id: lead.id } });
+      expect(dbRestored?.status).toBe(LeadStatus.NEW);
+      expect(dbRestored?.isWaste).toBe(false);
+    });
+
+    it("ensures LOST lead remains LOST independently of Waste feature and retains loss event", async () => {
+      const lead = await db.lead.create({
+        data: {
+          name: "Test Genuine Lost Lead",
+          phone: "+919998887703",
+          status: LeadStatus.NEW,
+          isWaste: false,
+        },
+      });
+      createdLeadIds.push(lead.id);
+
+      // Explicitly mark as LOST
+      const lostRes = await markLeadLost(lead.id, "PRICE", "Too expensive for budget");
+      expect(lostRes.success).toBe(true);
+
+      const dbLost = await db.lead.findUnique({
+        where: { id: lead.id },
+        include: { lossEvents: true },
+      });
+      expect(dbLost?.status).toBe(LeadStatus.LOST);
+      expect(dbLost?.isWaste).toBe(false);
+      expect(dbLost?.lossEvents.length).toBe(1);
+      expect(dbLost?.lossEvents[0].reason).toBe("PRICE");
     });
   });
 });

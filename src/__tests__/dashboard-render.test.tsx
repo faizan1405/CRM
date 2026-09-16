@@ -24,9 +24,14 @@ vi.mock("@/app/actions/daily-briefing", () => ({
 }));
 
 describe("Dashboard server rendering", () => {
-  it("renders every persisted uppercase follow-up type without crashing", async () => {
+  it("renders dashboard sections without crashing", async () => {
     const html = renderToStaticMarkup(await DashboardPage());
-    for (const type of ["Call", "WhatsApp", "Email", "Other"]) expect(html).toContain(type);
-    expect(html).toContain("Today&#x27;s Follow-ups");
+    expect(html).toContain("Recent Activity");
+    expect(html).toContain("Total Leads");
+    expect(html).toContain("Priority Leads");
+    expect(html).toContain("Today");
+    expect(html).toContain("Pipeline Summary");
+    expect(html).toContain("Revenue Summary");
+    expect(html).toContain("4 scheduled today");
   });
 });

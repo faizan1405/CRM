@@ -15,6 +15,7 @@ const LeadDetailPanel = dynamic(() => import("@/features/leads/lead-detail-panel
 import { LeadFilters } from "@/features/leads/lead-filters";
 const LeadForm = dynamic(() => import("@/features/leads/lead-form").then(m => m.LeadForm));
 import { LeadTable } from "@/features/leads/lead-table";
+import { DeleteLeadDialog } from "./delete-lead-dialog";
 import type { Lead, LeadStatus } from "@/features/leads/types";
 import { LostReasonDialog } from "@/features/lost-reasons/lost-reason-dialog";
 import type { LostReasonSubmission } from "@/features/lost-reasons/types";
@@ -23,7 +24,7 @@ import { FollowUpForm } from "@/features/followups/follow-up-form";
 import type { NewFollowUpInput } from "@/features/followups/types";
 import type { DuplicateLeadCandidate, StructuredLeadDraft } from "@/features/leads/ai-entry-types";
 import type { BulkStructureLeadCallback } from "./bulk-review-types";
-import { structureLeadAction, updateExistingLeadWithDraftAction } from "@/app/actions/ai-lead-entry";
+import { structureBulkLeadAction, updateExistingLeadWithDraftAction } from "@/app/actions/ai-lead-entry";
 
 type Feedback = { tone: "success" | "error"; message: string } | null;
 
@@ -46,6 +47,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
   const [formOpen, setFormOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
   const [detailAction, setDetailAction] = useState<"note" | "status" | null>(null);
   const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
   const [lostReasonLead, setLostReasonLead] = useState<Lead | null>(null);
@@ -213,14 +215,18 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
   }
 
   async function removeLead() {
-    if (!selectedLead || !window.confirm(`Delete ${selectedLead.name}? This cannot be undone.`)) return;
+    const target = deleteTarget;
+    if (!target || saving) return;
     setSaving(true);
-    const result = await deleteLead(selectedLead.id);
-    setSaving(false);
+    try {
+    const result = await deleteLead(target.id);
     if (!result.success) return setFeedback({ tone: "error", message: result.error });
     setLeads((current) => current.filter((lead) => lead.id !== result.data.id));
-    setSelectedLead(null);
+    setSelectedLead(current => current?.id === target.id ? null : current);
+    setDeleteTarget(null);
     setFeedback({ tone: "success", message: "Lead deleted." });
+    } catch { setFeedback({ tone: "error", message: "Could not delete this lead. Please retry." }); }
+    finally { setSaving(false); }
   }
 
   function clearFilters() {
@@ -289,10 +295,10 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
           </div>
         ) : (
           <>
-            <LeadTable leads={filteredLeads} onSelect={selectLead} />
+            <LeadTable leads={filteredLeads} onSelect={selectLead} onDelete={setDeleteTarget} />
             <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4 lg:hidden">
               {filteredLeads.map((lead) => (
-                <LeadCard key={lead.id} lead={lead} onSelect={selectLead} onAddFollowUp={setFollowUpLead} />
+                <LeadCard key={lead.id} lead={lead} onSelect={selectLead} onAddFollowUp={setFollowUpLead} onDelete={setDeleteTarget} />
               ))}
             </div>
           </>
@@ -310,7 +316,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
           }
         }}
         onSubmit={saveLead}
-        onStructureLead={onStructureLead || structureLeadAction}
+        onStructureLead={onStructureLead || structureBulkLeadAction}
         onBulkSaved={saved => setLeads(current => [...saved, ...current.filter(lead => !saved.some(item => item.id === lead.id))])}
         onOpenDuplicate={openDuplicate}
         onUpdateDuplicate={updateDuplicate}
@@ -330,7 +336,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
           }
         }}
         onStatusChange={setLeadStatus}
-        onDelete={removeLead}
+        onDelete={async () => setDeleteTarget(selectedLead)}
         activities={activities}
         activityFilter={activityFilter}
         onActivityFilterChange={setActivityFilter}
@@ -351,6 +357,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
         }}
         onSubmit={saveFollowUp}
       />
+      <DeleteLeadDialog lead={deleteTarget} saving={saving} onCancel={() => { if (!saving) setDeleteTarget(null); }} onDelete={removeLead} />
       <LostReasonDialog
         isOpen={Boolean(lostReasonLead)}
         leadId={lostReasonLead?.id}

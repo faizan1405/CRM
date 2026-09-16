@@ -42,3 +42,17 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# PII and Temporary Migration Artifacts
+C R M - Scale Flow leads.pdf
+parsed_pdf*.json
+parse_pdf*.py
+patch_*.py
+venv/
+export_*.csv
+export_*.json
+temp_*.json
+temp_*.csv
+
+.vercel
+.env*

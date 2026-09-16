@@ -153,7 +153,7 @@ export async function getAnalyticsData(
 
       // 2 — Count WON leads that have a quotedAmount (for avg won deal)
       db.lead.count({
-        where: {
+        where: { isWaste: false, 
           status: LeadStatus.WON,
           quotedAmount: { not: null },
           ...(dateFilter ? { createdAt: dateFilter } : {}),
@@ -242,7 +242,7 @@ export async function getAnalyticsData(
     let legacyLeadCount = 0;
     if (activityStart) {
       legacyLeadCount = await db.lead.count({
-        where: { createdAt: { lt: activityStart } },
+        where: { isWaste: false,  createdAt: { lt: activityStart } },
       });
     }
 
@@ -478,7 +478,7 @@ export async function getAnalyticsData(
     //
     // Fetch WON leads with updatedAt for fallback
     const wonLeadsForTrend = await db.lead.findMany({
-      where: {
+      where: { isWaste: false, 
         status: LeadStatus.WON,
         ...(dateFilter ? { createdAt: dateFilter } : {}),
       },
