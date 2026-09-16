@@ -296,4 +296,67 @@ describe("Phase 12: Follow-up & Notes Regression and Quick Status Tests", () => 
       expect(result.data.quickStatus).toBe("CALL_AGAIN");
     });
   });
+
+  describe("resolveValidUserId Safety & Determinism", () => {
+    const SECOND_USER_ID = "test-phase12-second-user";
+
+    beforeAll(async () => {
+      await db.user.upsert({
+        where: { id: SECOND_USER_ID },
+        update: {},
+        create: {
+          id: SECOND_USER_ID,
+          name: "Second User",
+          email: "seconduser@example.com",
+          passwordHash: "dummyhash",
+          role: "ADMIN",
+        },
+      });
+    });
+
+    afterAll(async () => {
+      await db.user.deleteMany({ where: { id: SECOND_USER_ID } });
+    });
+
+    it("should strictly assign activity and follow-up to the exact authenticated user, never an arbitrary user", async () => {
+      // Authenticated as SECOND_USER_ID
+      vi.mocked(getSession).mockResolvedValueOnce({
+        id: SECOND_USER_ID,
+        email: "seconduser@example.com",
+        role: "ADMIN",
+      });
+
+      const lead = await createTestLead("Multi-User Determinism");
+      const noteResult = await addLeadNote(lead.id, "Note created by second user");
+      expect(noteResult.success).toBe(true);
+
+      const dbActivity = await db.leadActivity.findFirst({
+        where: { leadId: lead.id, message: "Note created by second user" },
+      });
+      // MUST be exactly SECOND_USER_ID, never TEST_USER_ID or first user
+      expect(dbActivity?.createdByUserId).toBe(SECOND_USER_ID);
+      expect(dbActivity?.createdByUserId).not.toBe(TEST_USER_ID);
+    });
+
+    it("should never fallback to first/arbitrary database user when session user does not exist in DB", async () => {
+      const NON_EXISTENT_USER_ID = "non-existent-user-id-9999999";
+      vi.mocked(getSession).mockResolvedValueOnce({
+        id: NON_EXISTENT_USER_ID,
+        email: "ghost@example.com",
+        role: "ADMIN",
+      });
+
+      const lead = await createTestLead("Non-Existent User Test");
+      const noteResult = await addLeadNote(lead.id, "Note with ghost session");
+      expect(noteResult.success).toBe(true);
+
+      const dbActivity = await db.leadActivity.findFirst({
+        where: { leadId: lead.id, message: "Note with ghost session" },
+      });
+      // createdByUserId must be null, and NEVER TEST_USER_ID or SECOND_USER_ID
+      expect(dbActivity?.createdByUserId).toBeNull();
+      expect(dbActivity?.createdByUserId).not.toBe(TEST_USER_ID);
+      expect(dbActivity?.createdByUserId).not.toBe(SECOND_USER_ID);
+    });
+  });
 });
