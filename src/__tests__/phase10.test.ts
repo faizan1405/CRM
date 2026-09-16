@@ -300,7 +300,6 @@ describe("Phase 10: Personal Notes & Demo System Hardening", () => {
     });
     it("seeds realistic demo leads with insights, followups, and loss events", async () => {
       const res = await populateDemoDataAction();
-      if (!res.success) console.log("POPULATE ERROR:", res.error);
       expect(res.success).toBe(true);
 
       const demoLeads = await db.lead.findMany({

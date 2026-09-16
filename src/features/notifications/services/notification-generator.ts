@@ -65,7 +65,7 @@ export async function generateSmartNotifications(): Promise<{
       },
     }),
     db.followUp.findMany({
-      where: { status: "PENDING" },
+      where: { status: "PENDING", lead: { isWaste: false } },
       include: { lead: true },
       orderBy: { scheduledAt: "asc" },
     }),

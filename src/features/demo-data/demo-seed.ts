@@ -256,6 +256,14 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
   // Clean all previous demo leads first to guarantee a fresh deterministic seed
   await clearDemoLeads();
 
+  let validUserId: string | null = null;
+  if (userId) {
+    const userExists = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (userExists) {
+      validUserId = userExists.id;
+    }
+  }
+
   for (const item of demoData) {
     let phoneToUse = item.phone;
     const existing = await db.lead.findFirst({ where: { phone: phoneToUse } });
@@ -263,7 +271,7 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
       phoneToUse = `${item.phone.slice(0, 10)}${createdCount}`;
     }
 
-    const lead = await db.lead.create({
+    await db.lead.create({
       data: {
         name: item.name,
         phone: phoneToUse,
@@ -280,7 +288,7 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
           create: {
             type: ActivityType.LEAD_CREATED,
             message: `Demo lead created: ${item.name}`,
-            createdByUserId: userId ?? null,
+            createdByUserId: validUserId,
           },
         },
         aiInsight: {
@@ -293,34 +301,28 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
             needsRefresh: false,
           },
         },
+        followUps: item.followUp
+          ? {
+              create: {
+                scheduledAt: item.followUp.scheduledAt,
+                type: item.followUp.type,
+                note: item.followUp.note,
+                status: FollowUpStatus.PENDING,
+              },
+            }
+          : undefined,
+        lossEvents: item.lossEvent
+          ? {
+              create: {
+                reason: item.lossEvent.reason,
+                note: item.lossEvent.note,
+                lostAt: now,
+                createdByUserId: validUserId,
+              },
+            }
+          : undefined,
       },
     });
-
-    if (item.followUp) {
-      const fu = item.followUp;
-      await db.followUp.create({
-        data: {
-          leadId: lead.id,
-          scheduledAt: fu.scheduledAt,
-          type: fu.type,
-          note: fu.note,
-          status: FollowUpStatus.PENDING,
-        },
-      });
-    }
-
-    if (item.lossEvent) {
-      const le = item.lossEvent;
-      await db.leadLossEvent.create({
-        data: {
-          leadId: lead.id,
-          reason: le.reason,
-          note: le.note,
-          lostAt: now,
-          createdByUserId: userId ?? null,
-        },
-      });
-    }
 
     createdCount++;
   }

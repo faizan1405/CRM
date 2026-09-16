@@ -429,7 +429,12 @@ export async function deleteAllLeadsAction(): Promise<{
       const activityCount = await tx.leadActivity.count();
       const insightCount = await tx.leadAIInsight.count();
 
-      // Dependents are configured with onDelete: Cascade in Prisma schema
+      // Explicitly delete dependent records first for foreign key integrity
+      await tx.salesNotification.deleteMany({ where: { leadId: { not: null } } });
+      await tx.leadLossEvent.deleteMany({});
+      await tx.followUp.deleteMany({});
+      await tx.leadActivity.deleteMany({});
+      await tx.leadAIInsight.deleteMany({});
       const leadCount = await tx.lead.deleteMany({});
 
       return {
