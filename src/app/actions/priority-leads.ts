@@ -45,13 +45,13 @@ export async function getPriorityLeads(page: number = 1): Promise<{ success: boo
       newLeadsList
     ] = await Promise.all([
       db.followUp.findMany({
-        where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST } },
+        where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST }, lead: { isWaste: false } },
         include: { lead: { select: { id: true, name: true, phone: true, business: true, status: true } } },
         orderBy: { scheduledAt: "asc" },
         take: fetchLimit
       }),
       db.followUp.findMany({
-        where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST } },
+        where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { isWaste: false } },
         include: { lead: { select: { id: true, name: true, phone: true, business: true, status: true } } },
         orderBy: { scheduledAt: "asc" },
         take: fetchLimit

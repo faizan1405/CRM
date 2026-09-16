@@ -21,6 +21,12 @@ async function main() {
     },
   });
 
+  const wasteLossEvents = await db.leadLossEvent.count({ where: { lead: { isWaste: true } } });
+  const nonWasteLossEvents = await db.leadLossEvent.count({ where: { lead: { isWaste: false } } });
+  const wasteFollowUps = await db.followUp.count({ where: { lead: { isWaste: true } } });
+  const wonFollowUps = await db.followUp.count({ where: { lead: { status: "WON" } } });
+  const lostFollowUps = await db.followUp.count({ where: { lead: { status: "LOST" } } });
+
   console.log("=== PRODUCTION DATA VERIFICATION ===");
   console.log("Leads total:                   ", leads);
   console.log("FollowUps total:               ", followUps);
@@ -29,6 +35,11 @@ async function main() {
   console.log("WON status count:              ", won);
   console.log("Waste flag count (isWaste):    ", waste);
   console.log("Waste with status LOST:        ", wasteAndLost);
+  console.log("Waste with LossEvents:         ", wasteLossEvents);
+  console.log("Non-Waste with LossEvents:     ", nonWasteLossEvents);
+  console.log("FollowUps on Waste:            ", wasteFollowUps);
+  console.log("FollowUps on Won:              ", wonFollowUps);
+  console.log("FollowUps on Lost:             ", lostFollowUps);
   console.log("Demo/Test Leads in Production: ", demoLeads);
   const allStatuses = await db.lead.groupBy({
     by: ["status"],
