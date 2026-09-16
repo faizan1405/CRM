@@ -529,8 +529,10 @@ describe("Phase 9: Sales Communication + Follow-up Intelligence", () => {
       // 1. Mark Waste
       const wasteRes = await markLeadWaste(lead.id);
       expect(wasteRes.success).toBe(true);
-      expect(wasteRes.data?.status).toBe("Contacted");
-      expect(wasteRes.data?.isWaste).toBe(true);
+      if (wasteRes.success) {
+        expect(wasteRes.data.status).toBe("Contacted");
+        expect(wasteRes.data.isWaste).toBe(true);
+      }
 
       const dbWaste = await db.lead.findUnique({ where: { id: lead.id } });
       expect(dbWaste?.status).toBe(LeadStatus.CONTACTED);
@@ -543,8 +545,10 @@ describe("Phase 9: Sales Communication + Follow-up Intelligence", () => {
       // 2. Restore from Waste
       const restoreRes = await restoreWasteLead(lead.id);
       expect(restoreRes.success).toBe(true);
-      expect(restoreRes.data?.status).toBe("Contacted");
-      expect(restoreRes.data?.isWaste).toBe(false);
+      if (restoreRes.success) {
+        expect(restoreRes.data.status).toBe("Contacted");
+        expect(restoreRes.data.isWaste).toBe(false);
+      }
 
       const dbRestored = await db.lead.findUnique({ where: { id: lead.id } });
       expect(dbRestored?.status).toBe(LeadStatus.CONTACTED);
@@ -565,8 +569,10 @@ describe("Phase 9: Sales Communication + Follow-up Intelligence", () => {
       // Mark Waste
       const wasteRes = await markLeadWaste(lead.id);
       expect(wasteRes.success).toBe(true);
-      expect(wasteRes.data?.status).toBe("New");
-      expect(wasteRes.data?.isWaste).toBe(true);
+      if (wasteRes.success) {
+        expect(wasteRes.data.status).toBe("New");
+        expect(wasteRes.data.isWaste).toBe(true);
+      }
 
       const dbWaste = await db.lead.findUnique({ where: { id: lead.id } });
       expect(dbWaste?.status).toBe(LeadStatus.NEW);
@@ -578,8 +584,10 @@ describe("Phase 9: Sales Communication + Follow-up Intelligence", () => {
       // Restore Waste
       const restoreRes = await restoreWasteLead(lead.id);
       expect(restoreRes.success).toBe(true);
-      expect(restoreRes.data?.status).toBe("New");
-      expect(restoreRes.data?.isWaste).toBe(false);
+      if (restoreRes.success) {
+        expect(restoreRes.data.status).toBe("New");
+        expect(restoreRes.data.isWaste).toBe(false);
+      }
 
       const dbRestored = await db.lead.findUnique({ where: { id: lead.id } });
       expect(dbRestored?.status).toBe(LeadStatus.NEW);
