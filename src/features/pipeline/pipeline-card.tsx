@@ -5,6 +5,7 @@ import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import type { Lead } from "@/features/leads/types";
 import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
 import { QuickStatusChip } from "@/features/leads/quick-status-chip";
+import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
 
 export function PipelineCard({
   lead,
@@ -17,12 +18,13 @@ export function PipelineCard({
 }) {
   const ai = lead.aiAttention || deriveAIAttention(lead);
   const notesText = lead.latestNote || lead.notes || "";
+  const theme = getLeadCardTheme(lead);
 
   return (
     <ActionCard
       onActivate={onClick}
       aria-label={`Open lead ${lead.name}`}
-      className="group flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm hover:border-blue-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-sm transition-[transform,box-shadow,border-color] duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+      className={`group flex flex-col gap-2 rounded-xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-sm transition-[transform,box-shadow,border-color] duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer`}
     >
       <div className="flex justify-between items-start gap-2">
         <h4 className="font-semibold text-slate-900 text-sm break-words line-clamp-2">
@@ -35,8 +37,17 @@ export function PipelineCard({
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap">
-        {lead.quickStatus && lead.quickStatus !== "NONE" && (
+        {(theme.state === "FOLLOW_UP_NOW" || theme.state === "FUTURE_FOLLOW_UP" || theme.state === "WASTE") && (
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${theme.badgeClass}`}>
+            {theme.badgeLabel}
+          </span>
+        )}
+        {lead.quickStatus && lead.quickStatus !== "NONE" ? (
           <QuickStatusChip quickStatus={lead.quickStatus} leadStatus={lead.status} readOnly size="sm" />
+        ) : (
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${theme.badgeClass}`}>
+            {theme.badgeLabel}
+          </span>
         )}
       </div>
 

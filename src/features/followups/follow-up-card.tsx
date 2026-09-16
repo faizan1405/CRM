@@ -7,12 +7,42 @@ import type { FollowUp } from "./types";
 import { formatFollowUpDate, formatTime } from "./formatters";
 import { getTypeIcon, typeStyles } from "./follow-up-types";
 
-const statusConfig: Record<string, { label: string; className: string }> = {
-  Overdue: { label: "Overdue", className: "bg-amber-50 text-amber-700 ring-amber-200" },
-  Today: { label: "Today", className: "bg-blue-50 text-blue-700 ring-blue-200" },
-  Upcoming: { label: "Upcoming", className: "bg-slate-100 text-slate-600 ring-slate-200" },
-  Completed: { label: "Done", className: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
-  Cancelled: { label: "Cancelled", className: "bg-slate-50 text-slate-400 ring-slate-200" },
+const statusConfig: Record<string, { label: string; className: string; cardBg: string; leftBorder: string; hoverBorder: string }> = {
+  Overdue: {
+    label: "Follow up now",
+    className: "bg-emerald-100 text-emerald-800 ring-emerald-200",
+    cardBg: "bg-emerald-50/40",
+    leftBorder: "border-l-4 border-l-emerald-500",
+    hoverBorder: "hover:border-emerald-300",
+  },
+  Today: {
+    label: "Follow up now",
+    className: "bg-emerald-100 text-emerald-800 ring-emerald-200",
+    cardBg: "bg-emerald-50/40",
+    leftBorder: "border-l-4 border-l-emerald-500",
+    hoverBorder: "hover:border-emerald-300",
+  },
+  Upcoming: {
+    label: "Future follow-up",
+    className: "bg-amber-100 text-amber-800 ring-amber-200",
+    cardBg: "bg-amber-50/40",
+    leftBorder: "border-l-4 border-l-amber-500",
+    hoverBorder: "hover:border-amber-300",
+  },
+  Completed: {
+    label: "Done",
+    className: "bg-emerald-100 text-emerald-800 ring-emerald-300",
+    cardBg: "bg-emerald-50/50",
+    leftBorder: "border-l-4 border-l-emerald-600",
+    hoverBorder: "hover:border-emerald-400",
+  },
+  Cancelled: {
+    label: "Cancelled",
+    className: "bg-slate-100 text-slate-600 ring-slate-200",
+    cardBg: "bg-slate-50/70",
+    leftBorder: "border-l-4 border-l-slate-400",
+    hoverBorder: "hover:border-slate-300",
+  },
 };
 
 export function FollowUpCard({
@@ -42,11 +72,7 @@ export function FollowUpCard({
 
   return (
     <ActionCard onActivate={onOpenLead} aria-label={`Open follow-up context for ${followUp.lead?.name || "lead"}`}
-      className={`rounded-xl border bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all ${
-        statusInfo === "Overdue"
-          ? "border-amber-200 ring-1 ring-amber-100"
-          : "border-[var(--border)]"
-      } ${isPast ? "opacity-80" : ""}`}
+      className={`rounded-xl border ${status.cardBg} ${status.leftBorder} ${status.hoverBorder} border-slate-200/80 p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all ${isPast ? "opacity-80" : ""}`}
     >
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">

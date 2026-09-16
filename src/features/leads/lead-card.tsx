@@ -5,6 +5,7 @@ import { Phone, MessageCircle, CalendarPlus, Trash2, FileText } from "lucide-rea
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
 import { QuickStatusChip } from "@/features/leads/quick-status-chip";
+import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
 import type { Lead, QuickStatusType } from "@/features/leads/types";
 import {
   AIScoreBadge,
@@ -33,7 +34,7 @@ export function LeadCard({
 }: LeadCardProps) {
   const ai = aiAttention || lead.aiAttention || deriveAIAttention(lead);
   const isTerminal = lead.status === "Won" || lead.status === "Lost";
-  const isCritical = !isTerminal && (ai.priority === "critical" || ai.score >= 85);
+  const theme = getLeadCardTheme(lead);
 
   const notesText = lead.latestNote || lead.notes || "";
 
@@ -41,9 +42,7 @@ export function LeadCard({
     <ActionCard
       onActivate={() => onSelect(lead)}
       aria-label={`Open lead ${lead.name}`}
-      className={`group relative min-w-0 rounded-2xl border bg-white p-4 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] active:scale-[0.98] ${
-        isCritical ? "border-l-4 border-l-rose-500 hover:border-rose-400" : "border-slate-200/80 hover:border-blue-300"
-      }`}
+      className={`group relative min-w-0 rounded-2xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-4 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] active:scale-[0.98]`}
     >
       {/* 1. TOP: Lead Name + Business + Quick Status */}
       <div className="flex items-start justify-between gap-3">
@@ -62,6 +61,11 @@ export function LeadCard({
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          {(theme.state === "FOLLOW_UP_NOW" || theme.state === "FUTURE_FOLLOW_UP" || theme.state === "WASTE") && (
+            <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-semibold ${theme.badgeClass}`}>
+              {theme.badgeLabel}
+            </span>
+          )}
           <QuickStatusChip
             quickStatus={lead.quickStatus}
             leadStatus={lead.status}

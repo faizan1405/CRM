@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 
 import { ActionCard } from "@/components/action-card";
 import { LeadRecordLink, ScheduleFollowUpButton } from "@/features/leads/lead-record-link";
 import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
+import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
 import { Phone, MessageCircle } from "lucide-react";
 import { loadPriorityPage } from "../priority-page";
 
@@ -34,16 +35,39 @@ export function PriorityLeads({ initialPage, loadPage = loadPriorityPage }: { in
   return <section aria-labelledby="priority-leads-heading" className="min-w-0 space-y-3">
     <h2 id="priority-leads-heading" className="text-lg font-bold text-slate-900">Priority Leads</h2>
     <div className="grid min-w-0 gap-3 md:grid-cols-2">
-      {items.map(item => <ActionCard key={item.leadId} href={`/leads?selected=${encodeURIComponent(item.leadId)}`} aria-label={`Open lead ${item.leadName}`} className="min-w-0 rounded-xl border bg-white p-4 transition-colors duration-150 hover:border-blue-300">
-        <h3 className="break-words text-sm font-semibold">{item.leadName}</h3>
-        <p className="mt-1 break-words text-xs text-slate-500">{[item.business, item.stage].filter(Boolean).join(" Â· ")}</p>
-        <p className="mt-2 break-words text-sm text-slate-700">{item.reason}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {item.phone && <><a href={getTelephoneHref(item.phone)} aria-label={`Call ${item.leadName}`} className="grid size-11 place-items-center rounded-lg border hover:bg-blue-50"><Phone size={16} /></a><a href={getWhatsAppHref(item.phone, item.leadName)} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp ${item.leadName}`} className="grid size-11 place-items-center rounded-lg border hover:bg-emerald-50"><MessageCircle size={16} /></a></>}
-          <ScheduleFollowUpButton leadId={item.leadId} leadName={item.leadName} />
-          <LeadRecordLink leadId={item.leadId} label={`Review ${item.leadName}`} className="inline-flex min-h-11 items-center rounded-lg px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50">Review</LeadRecordLink>
-        </div>
-      </ActionCard>)}
+      {items.map(item => {
+        const isFollowUp = item.reason.startsWith("Overdue:") || item.reason.startsWith("Follow-up:");
+        const isProposal = item.reason.startsWith("Review Proposal") || item.stage === "Proposal Sent" || item.stage === "PROPOSAL_SENT";
+        const theme = getLeadCardTheme(
+          isFollowUp
+            ? { status: item.stage, operationalState: "FOLLOW_UP_NOW" }
+            : isProposal
+            ? { status: "Proposal Sent" }
+            : { status: item.stage || "New" }
+        );
+        return (
+          <ActionCard
+            key={item.leadId}
+            href={`/leads?selected=${encodeURIComponent(item.leadId)}`}
+            aria-label={`Open lead ${item.leadName}`}
+            className={`min-w-0 rounded-xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-4 transition-colors duration-150`}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="break-words text-sm font-semibold text-slate-950">{item.leadName}</h3>
+              <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${theme.badgeClass}`}>
+                {theme.badgeLabel}
+              </span>
+            </div>
+            <p className="mt-1 break-words text-xs text-slate-500">{[item.business, item.stage].filter(Boolean).join(" · ")}</p>
+            <p className="mt-2 break-words text-sm text-slate-700">{item.reason}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {item.phone && <><a href={getTelephoneHref(item.phone)} aria-label={`Call ${item.leadName}`} className="grid size-11 place-items-center rounded-lg border bg-white hover:bg-blue-50"><Phone size={16} /></a><a href={getWhatsAppHref(item.phone, item.leadName)} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp ${item.leadName}`} className="grid size-11 place-items-center rounded-lg border bg-white hover:bg-emerald-50"><MessageCircle size={16} /></a></>}
+              <ScheduleFollowUpButton leadId={item.leadId} leadName={item.leadName} />
+              <LeadRecordLink leadId={item.leadId} label={`Review ${item.leadName}`} className="inline-flex min-h-11 items-center rounded-lg px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50">Review</LeadRecordLink>
+            </div>
+          </ActionCard>
+        );
+      })}
     </div>
     {!items.length && <p className="rounded-xl border border-dashed p-5 text-sm text-slate-500">No priority leads to show.</p>}
     {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}

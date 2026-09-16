@@ -17,22 +17,22 @@ export const QUICK_STATUS_CONFIG: Record<string, QuickStatusOption> = {
     id: "CONTACTED",
     label: "Contacted",
     icon: Phone,
-    chipClass: "bg-purple-100 text-purple-900 border-purple-200 hover:bg-purple-200/80",
-    dotColor: "bg-purple-500",
+    chipClass: "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100/80",
+    dotColor: "bg-indigo-400",
   },
   INTERESTED: {
     id: "INTERESTED",
     label: "Interested",
     icon: MessageSquare,
-    chipClass: "bg-amber-100 text-amber-900 border-amber-200 hover:bg-amber-200/80",
-    dotColor: "bg-amber-500",
+    chipClass: "bg-purple-100 text-purple-900 border-purple-200 hover:bg-purple-200/80",
+    dotColor: "bg-purple-500",
   },
   CALL_NOT_PICK: {
     id: "CALL_NOT_PICK",
-    label: "call not pick",
+    label: "Call not pick",
     icon: PhoneMissed,
-    chipClass: "bg-rose-100 text-rose-900 border-rose-200 hover:bg-rose-200/80",
-    dotColor: "bg-rose-400",
+    chipClass: "bg-pink-100 text-pink-900 border-pink-200 hover:bg-pink-200/80",
+    dotColor: "bg-pink-400",
   },
   WON: {
     id: "WON",
@@ -45,15 +45,15 @@ export const QUICK_STATUS_CONFIG: Record<string, QuickStatusOption> = {
     id: "LOST",
     label: "Lost",
     icon: X,
-    chipClass: "bg-red-100 text-red-900 border-red-200 hover:bg-red-200/80",
-    dotColor: "bg-red-500",
+    chipClass: "bg-rose-100 text-rose-900 border-rose-200 hover:bg-rose-200/80",
+    dotColor: "bg-rose-500",
   },
   CALL_AGAIN: {
     id: "CALL_AGAIN",
-    label: "call again",
+    label: "Call again",
     icon: RotateCcw,
-    chipClass: "bg-indigo-100 text-indigo-900 border-indigo-200 hover:bg-indigo-200/80",
-    dotColor: "bg-indigo-500",
+    chipClass: "bg-violet-100 text-violet-900 border-violet-200 hover:bg-violet-200/80",
+    dotColor: "bg-violet-500",
   },
 };
 
@@ -114,7 +114,13 @@ export function QuickStatusChip({
 
   const Icon = currentConfig?.icon || Phone;
   const label = currentConfig?.label || (leadStatus ? leadStatus : "Select status");
-  const chipClass = currentConfig?.chipClass || "bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80";
+  
+  let chipClass = currentConfig?.chipClass || "bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200/80";
+  if (!currentConfig && leadStatus === "New") {
+    chipClass = "bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200/80";
+  } else if (!currentConfig && leadStatus === "Proposal Sent") {
+    chipClass = "bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200/80";
+  }
 
   const sizeClass = size === "sm"
     ? "px-2 py-0.5 text-xs gap-1"
