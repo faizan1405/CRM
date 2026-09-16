@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import { ActionCard } from "@/components/action-card";
-import { Building2, Phone } from "lucide-react";
+import { Building2, Phone, FileText } from "lucide-react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import type { Lead } from "@/features/leads/types";
 import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
+import { QuickStatusChip } from "@/features/leads/quick-status-chip";
 
 export function PipelineCard({
   lead,
@@ -15,12 +16,13 @@ export function PipelineCard({
   dragHandle?: ReactNode;
 }) {
   const ai = lead.aiAttention || deriveAIAttention(lead);
+  const notesText = lead.latestNote || lead.notes || "";
 
   return (
     <ActionCard
       onActivate={onClick}
       aria-label={`Open lead ${lead.name}`}
-      className="group flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm hover:border-blue-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-sm transition-[transform,box-shadow,border-color] duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+      className="group flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm hover:border-blue-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-sm transition-[transform,box-shadow,border-color] duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
     >
       <div className="flex justify-between items-start gap-2">
         <h4 className="font-semibold text-slate-900 text-sm break-words line-clamp-2">
@@ -30,6 +32,12 @@ export function PipelineCard({
           <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
           {dragHandle}
         </div>
+      </div>
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {lead.quickStatus && lead.quickStatus !== "NONE" && (
+          <QuickStatusChip quickStatus={lead.quickStatus} leadStatus={lead.status} readOnly size="sm" />
+        )}
       </div>
 
       {(lead.business || lead.phone) && (
@@ -46,6 +54,13 @@ export function PipelineCard({
               <span className="break-all">{lead.phone}</span>
             </div>
           )}
+        </div>
+      )}
+
+      {notesText && (
+        <div className="rounded-lg bg-slate-50 p-2 text-xs text-slate-600 line-clamp-2 break-words border border-slate-100 flex items-start gap-1.5">
+          <FileText size={12} className="text-slate-400 shrink-0 mt-0.5" />
+          <span>{notesText}</span>
         </div>
       )}
 

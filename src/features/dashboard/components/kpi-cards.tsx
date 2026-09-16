@@ -27,23 +27,23 @@ export function KPICard({ label, value, icon: Icon, colorScheme, supportText, hr
   const [bg, text, border] = styles.split(" ");
   
   const content = (
-    <div className={`relative min-w-0 rounded-2xl border bg-white p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-colors duration-150 ${href ? "hover:border-slate-300 hover:shadow-md cursor-pointer" : "hover:shadow-md"}`}>
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-slate-500">{label}</p>
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${bg} ${border}`}>
-          <Icon className={`h-5 w-5 ${text}`} />
+    <div className={`relative flex h-full flex-col justify-between rounded-2xl border bg-white p-3.5 sm:p-4 shadow-[0_1px_3px_rgba(15,23,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${href ? "hover:border-slate-300 cursor-pointer" : ""}`}>
+      <div className="flex items-center justify-between gap-2">
+        <p className="truncate text-xs sm:text-sm font-medium text-slate-500">{label}</p>
+        <div className={`flex size-8 sm:size-9 shrink-0 items-center justify-center rounded-xl border ${bg} ${border}`}>
+          <Icon className={`size-4 sm:size-4.5 ${text}`} />
         </div>
       </div>
-      <div className="mt-4 flex min-w-0 flex-wrap items-baseline gap-2">
-        <span title={fullValue} aria-label={fullValue} className="break-all text-[clamp(1.25rem,2vw,1.875rem)] font-bold tracking-tight text-slate-900">{value}</span>
-        {supportText && <span className="text-xs font-medium text-slate-500">{supportText}</span>}
+      <div className="mt-3 sm:mt-4 flex min-w-0 flex-wrap items-baseline gap-1.5 sm:gap-2">
+        <span title={fullValue} aria-label={fullValue} className="break-all text-xl sm:text-2xl lg:text-[1.65rem] font-bold tracking-tight text-slate-900 leading-none">{value}</span>
+        {supportText && <span className="text-[11px] sm:text-xs font-medium text-slate-500">{supportText}</span>}
       </div>
     </div>
   );
 
   if (href) {
     return (
-      <Link href={href} className="block group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 rounded-2xl">
+      <Link href={href} className="block h-full group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 rounded-2xl">
         {content}
       </Link>
     );
@@ -70,11 +70,16 @@ export function KPICards({ data }: { data: { totalLeads: number; newLeads: numbe
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div
+      tabIndex={0}
+      aria-label="Key Performance Indicators"
+      className="flex w-full flex-row flex-nowrap items-stretch gap-3 overflow-x-auto pb-2.5 pt-1 overscroll-x-contain snap-x snap-mandatory scroll-smooth [scrollbar-width:thin] focus:outline-none focus:ring-1 focus:ring-blue-400 rounded-2xl lg:grid lg:grid-cols-6 lg:gap-4 lg:overflow-x-visible lg:pb-0"
+    >
       {stats.map((stat) => (
-        <KPICard key={stat.label} {...stat} />
+        <div key={stat.label} className="min-w-[150px] max-w-[200px] flex-1 shrink-0 snap-start lg:min-w-0 lg:max-w-none lg:shrink">
+          <KPICard {...stat} />
+        </div>
       ))}
     </div>
   );
 }
-

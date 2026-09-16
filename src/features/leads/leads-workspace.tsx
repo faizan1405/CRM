@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useLeadNavigation } from "./lead-navigation-provider";
 import { statusFromDatabase, type DatabaseLeadStatus } from "./types";
 import { useEffect, useMemo, useState } from "react";
-import { changeLeadStatus, createLead, deleteLead, getLead, updateLead } from "@/app/actions/leads";
+import { changeLeadStatus, createLead, deleteLead, getLead, updateLead, updateQuickStatus } from "@/app/actions/leads";
 import { createFollowUp } from "@/app/actions/follow-ups";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
@@ -16,7 +16,7 @@ import { LeadFilters } from "@/features/leads/lead-filters";
 const LeadForm = dynamic(() => import("@/features/leads/lead-form").then(m => m.LeadForm));
 import { LeadTable } from "@/features/leads/lead-table";
 import { DeleteLeadDialog } from "./delete-lead-dialog";
-import type { Lead, LeadStatus } from "@/features/leads/types";
+import type { Lead, LeadStatus, QuickStatusType } from "@/features/leads/types";
 import { LostReasonDialog } from "@/features/lost-reasons/lost-reason-dialog";
 import type { LostReasonSubmission } from "@/features/lost-reasons/types";
 import { useLeadActivities } from "@/features/activity/use-activities";
@@ -229,6 +229,29 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     finally { setSaving(false); }
   }
 
+  async function handleUpdateQuickStatus(lead: Lead, statusKey: QuickStatusType | "WON" | "LOST") {
+    if (statusKey === "LOST") {
+      setLostReasonLead(lead);
+      return;
+    }
+    if (statusKey === "WON") {
+      setSaving(true);
+      const result = await changeLeadStatus(lead.id, "Won");
+      setSaving(false);
+      if (!result.success) return setFeedback({ tone: "error", message: result.error });
+      replaceLead(result.data);
+      setFeedback({ tone: "success", message: `Lead marked as Won.` });
+      return;
+    }
+
+    setSaving(true);
+    const result = await updateQuickStatus(lead.id, statusKey);
+    setSaving(false);
+    if (!result.success) return setFeedback({ tone: "error", message: result.error });
+    replaceLead(result.data);
+    setFeedback({ tone: "success", message: "Quick status updated." });
+  }
+
   function clearFilters() {
     setQuery("");
     setStatus("All");
@@ -298,7 +321,14 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
             <LeadTable leads={filteredLeads} onSelect={selectLead} onDelete={setDeleteTarget} />
             <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4 lg:hidden">
               {filteredLeads.map((lead) => (
-                <LeadCard key={lead.id} lead={lead} onSelect={selectLead} onAddFollowUp={setFollowUpLead} onDelete={setDeleteTarget} />
+                <LeadCard
+                  key={lead.id}
+                  lead={lead}
+                  onSelect={selectLead}
+                  onAddFollowUp={setFollowUpLead}
+                  onDelete={setDeleteTarget}
+                  onUpdateQuickStatus={handleUpdateQuickStatus}
+                />
               ))}
             </div>
           </>

@@ -15,6 +15,14 @@ import { markLeadAIInsightNeedsRefresh } from "@/features/ai-attention/services/
 
 class UserFacingError extends Error {}
 
+function safeRevalidatePath(path: string) {
+  try {
+    revalidatePath(path);
+  } catch {
+    // safe in tests
+  }
+}
+
 async function requireAuthenticatedUser() {
   const session = await getSession();
   if (!session || typeof session.id !== "string") {
@@ -23,9 +31,25 @@ async function requireAuthenticatedUser() {
   return session;
 }
 
+async function resolveValidUserId(userId: unknown): Promise<string | null> {
+  if (!userId || typeof userId !== "string") return null;
+  try {
+    const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
+    return user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function cleanError(error: unknown) {
   if (error instanceof UserFacingError) return error.message;
-  return "We could not save that change. Please try again.";
+  if (error instanceof Error) {
+    console.error("[FollowUp Action Error]:", error.message);
+    if (error.message.includes("Foreign key") || error.message.includes("Unique constraint")) {
+      return error.message;
+    }
+  }
+  return "We could not save that follow-up. Please try again.";
 }
 
 function serializeFollowUp(
@@ -35,8 +59,8 @@ function serializeFollowUp(
     id: followUp.id,
     leadId: followUp.leadId,
     scheduledAt: followUp.scheduledAt.toISOString(),
-    type: typeFromDatabase[followUp.type as keyof typeof typeFromDatabase],
-    status: statusFromDatabase[followUp.status as keyof typeof statusFromDatabase],
+    type: typeFromDatabase[followUp.type as keyof typeof typeFromDatabase] ?? "Call",
+    status: statusFromDatabase[followUp.status as keyof typeof statusFromDatabase] ?? "Pending",
     note: followUp.note ?? "",
     completedAt: followUp.completedAt?.toISOString() ?? null,
     createdAt: followUp.createdAt.toISOString(),
@@ -65,6 +89,20 @@ async function syncNextFollowUpDate(leadId: string) {
   });
 }
 
+function parseScheduledDate(scheduledAtRaw: string): Date {
+  if (!scheduledAtRaw) throw new UserFacingError("Schedule date is required.");
+  const date = new Date(scheduledAtRaw);
+  if (isNaN(date.getTime())) throw new UserFacingError("Invalid schedule date.");
+  return date;
+}
+
+function parseFollowUpType(typeRaw: string): "CALL" | "WHATSAPP" | "EMAIL" | "OTHER" {
+  if (!typeRaw) throw new UserFacingError("Follow-up type is required.");
+  const mapped = typeToDatabase[typeRaw] ?? typeToDatabase[typeRaw.toUpperCase()] ?? typeToDatabase[typeRaw.charAt(0).toUpperCase() + typeRaw.slice(1).toLowerCase()];
+  if (!mapped) throw new UserFacingError("Invalid follow-up type.");
+  return mapped;
+}
+
 export async function createFollowUp(formData: FormData): Promise<FollowUpActionResult<FollowUp>> {
   try {
     const session = await requireAuthenticatedUser();
@@ -72,19 +110,18 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
     if (!leadId) throw new UserFacingError("Lead ID is required.");
 
     const scheduledAtRaw = String(formData.get("scheduledAt") ?? "").trim();
-    if (!scheduledAtRaw) throw new UserFacingError("Schedule date is required.");
-    const scheduledAt = new Date(scheduledAtRaw);
-    if (isNaN(scheduledAt.getTime())) throw new UserFacingError("Invalid schedule date.");
+    const scheduledAt = parseScheduledDate(scheduledAtRaw);
 
-    const typeRaw = String(formData.get("type") ?? "").trim() as keyof typeof typeToDatabase;
-    const type = typeToDatabase[typeRaw];
-    if (!type) throw new UserFacingError("Invalid follow-up type.");
+    const typeRaw = String(formData.get("type") ?? "").trim();
+    const type = parseFollowUpType(typeRaw);
 
     const note = String(formData.get("note") ?? "").trim();
     if (note.length > 5000) throw new UserFacingError("Note must be 5000 characters or fewer.");
 
     const lead = await db.lead.findUnique({ where: { id: leadId } });
     if (!lead) throw new UserFacingError("Lead not found.");
+
+    const validUserId = await resolveValidUserId(session.id);
 
     const followUp = await db.$transaction(async (tx) => {
       const newFollowUp = await tx.followUp.create({
@@ -104,7 +141,7 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
           type: ActivityType.FOLLOWUP_CREATED,
           message: `Scheduled a ${newFollowUp.type} follow-up for ${newFollowUp.scheduledAt.toLocaleDateString()}`,
           metadata: { type: newFollowUp.type, scheduledAt: newFollowUp.scheduledAt },
-          createdByUserId: session.id as string,
+          createdByUserId: validUserId,
         },
       });
 
@@ -115,9 +152,11 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
 
     await syncNextFollowUpDate(leadId);
 
-    revalidatePath("/dashboard");
-    revalidatePath("/leads");
-    revalidatePath(`/leads/${leadId}`);
+    safeRevalidatePath("/dashboard");
+    safeRevalidatePath("/leads");
+    safeRevalidatePath("/follow-ups");
+    safeRevalidatePath("/pipeline");
+    safeRevalidatePath(`/leads/${leadId}`);
     return { success: true, data: serializeFollowUp(followUp) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -148,21 +187,22 @@ export async function getFollowUps(): Promise<FollowUpActionResult<{
       completed: [] as FollowUp[],
     };
 
-    for (const f of followUps) {
-      const serialized = serializeFollowUp(f);
-      if (f.status === "COMPLETED") {
-        result.completed.push(serialized);
+    for (const raw of followUps) {
+      const item = serializeFollowUp(raw);
+      if (item.status === "Completed" || item.status === "Cancelled") {
+        result.completed.push(item);
         continue;
       }
-      if (f.status === "CANCELLED") continue;
 
-      const fDateString = formatter.format(f.scheduledAt);
-      if (fDateString < todayString) {
-        result.overdue.push(serialized);
-      } else if (fDateString === todayString) {
-        result.today.push(serialized);
+      const itemDate = new Date(item.scheduledAt);
+      const itemDateString = formatter.format(itemDate);
+
+      if (itemDateString < todayString) {
+        result.overdue.push(item);
+      } else if (itemDateString === todayString) {
+        result.today.push(item);
       } else {
-        result.upcoming.push(serialized);
+        result.upcoming.push(item);
       }
     }
 
@@ -172,38 +212,39 @@ export async function getFollowUps(): Promise<FollowUpActionResult<{
   }
 }
 
-export async function getFollowUpsForLead(leadId: string): Promise<FollowUpActionResult<FollowUp[]>> {
-  try {
-    await requireAuthenticatedUser();
-    const followUps = await db.followUp.findMany({
-      where: { leadId },
-      include: { lead: true },
-      orderBy: { scheduledAt: "asc" },
-    });
-    return { success: true, data: followUps.map(serializeFollowUp) };
-  } catch (error) {
-    return { success: false, error: cleanError(error) };
-  }
-}
-
-export async function updateFollowUp(id: string, formData: FormData): Promise<FollowUpActionResult<FollowUp>> {
+export async function updateFollowUp(
+  formDataOrId: FormData | string,
+  possibleFormData?: FormData
+): Promise<FollowUpActionResult<FollowUp>> {
   try {
     const session = await requireAuthenticatedUser();
-    
+    let id: string;
+    let formData: FormData;
+
+    if (typeof formDataOrId === "string") {
+      id = formDataOrId.trim();
+      formData = possibleFormData ?? new FormData();
+    } else {
+      formData = formDataOrId;
+      id = String(formData.get("id") ?? "").trim();
+    }
+
+    if (!id) throw new UserFacingError("Follow-up ID is required.");
+
     const existing = await db.followUp.findUnique({ where: { id } });
     if (!existing) throw new UserFacingError("Follow-up not found.");
 
     const scheduledAtRaw = String(formData.get("scheduledAt") ?? "").trim();
-    if (!scheduledAtRaw) throw new UserFacingError("Schedule date is required.");
-    const scheduledAt = new Date(scheduledAtRaw);
-    if (isNaN(scheduledAt.getTime())) throw new UserFacingError("Invalid schedule date.");
+    const scheduledAt = scheduledAtRaw ? parseScheduledDate(scheduledAtRaw) : existing.scheduledAt;
 
-    const typeRaw = String(formData.get("type") ?? "").trim() as keyof typeof typeToDatabase;
-    const type = typeToDatabase[typeRaw];
-    if (!type) throw new UserFacingError("Invalid follow-up type.");
+    const typeRaw = String(formData.get("type") ?? "").trim();
+    const type = typeRaw ? parseFollowUpType(typeRaw) : existing.type;
 
-    const note = String(formData.get("note") ?? "").trim();
+    const noteRaw = formData.has("note") ? String(formData.get("note") ?? "").trim() : existing.note;
+    const note = noteRaw ?? "";
     if (note.length > 5000) throw new UserFacingError("Note must be 5000 characters or fewer.");
+
+    const validUserId = await resolveValidUserId(session.id);
 
     const followUp = await db.$transaction(async (tx) => {
       const updatedFollowUp = await tx.followUp.update({
@@ -227,7 +268,7 @@ export async function updateFollowUp(id: string, formData: FormData): Promise<Fo
               scheduledAtAfter: updatedFollowUp.scheduledAt,
               type: updatedFollowUp.type 
             },
-            createdByUserId: session.id as string,
+            createdByUserId: validUserId,
           },
         });
       }
@@ -239,9 +280,11 @@ export async function updateFollowUp(id: string, formData: FormData): Promise<Fo
 
     await syncNextFollowUpDate(followUp.leadId);
 
-    revalidatePath("/dashboard");
-    revalidatePath("/leads");
-    revalidatePath(`/leads/${followUp.leadId}`);
+    safeRevalidatePath("/dashboard");
+    safeRevalidatePath("/leads");
+    safeRevalidatePath("/follow-ups");
+    safeRevalidatePath("/pipeline");
+    safeRevalidatePath(`/leads/${followUp.leadId}`);
     return { success: true, data: serializeFollowUp(followUp) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -253,6 +296,8 @@ export async function markFollowUpComplete(id: string): Promise<FollowUpActionRe
     const session = await requireAuthenticatedUser();
     const existing = await db.followUp.findUnique({ where: { id } });
     if (!existing) throw new UserFacingError("Follow-up not found.");
+
+    const validUserId = await resolveValidUserId(session.id);
 
     const followUp = await db.$transaction(async (tx) => {
       const updatedFollowUp = await tx.followUp.update({
@@ -271,7 +316,7 @@ export async function markFollowUpComplete(id: string): Promise<FollowUpActionRe
             type: ActivityType.FOLLOWUP_COMPLETED,
             message: `Completed ${updatedFollowUp.type} follow-up`,
             metadata: { type: updatedFollowUp.type },
-            createdByUserId: session.id as string,
+            createdByUserId: validUserId,
           },
         });
       }
@@ -283,9 +328,11 @@ export async function markFollowUpComplete(id: string): Promise<FollowUpActionRe
 
     await syncNextFollowUpDate(followUp.leadId);
 
-    revalidatePath("/dashboard");
-    revalidatePath("/leads");
-    revalidatePath(`/leads/${followUp.leadId}`);
+    safeRevalidatePath("/dashboard");
+    safeRevalidatePath("/leads");
+    safeRevalidatePath("/follow-ups");
+    safeRevalidatePath("/pipeline");
+    safeRevalidatePath(`/leads/${followUp.leadId}`);
     return { success: true, data: serializeFollowUp(followUp) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -297,6 +344,8 @@ export async function cancelFollowUp(id: string): Promise<FollowUpActionResult<F
     const session = await requireAuthenticatedUser();
     const existing = await db.followUp.findUnique({ where: { id } });
     if (!existing) throw new UserFacingError("Follow-up not found.");
+
+    const validUserId = await resolveValidUserId(session.id);
 
     const followUp = await db.$transaction(async (tx) => {
       const updatedFollowUp = await tx.followUp.update({
@@ -315,7 +364,7 @@ export async function cancelFollowUp(id: string): Promise<FollowUpActionResult<F
             type: ActivityType.FOLLOWUP_CANCELLED,
             message: `Cancelled ${updatedFollowUp.type} follow-up`,
             metadata: { type: updatedFollowUp.type },
-            createdByUserId: session.id as string,
+            createdByUserId: validUserId,
           },
         });
       }
@@ -327,9 +376,11 @@ export async function cancelFollowUp(id: string): Promise<FollowUpActionResult<F
 
     await syncNextFollowUpDate(followUp.leadId);
 
-    revalidatePath("/dashboard");
-    revalidatePath("/leads");
-    revalidatePath(`/leads/${followUp.leadId}`);
+    safeRevalidatePath("/dashboard");
+    safeRevalidatePath("/leads");
+    safeRevalidatePath("/follow-ups");
+    safeRevalidatePath("/pipeline");
+    safeRevalidatePath(`/leads/${followUp.leadId}`);
     return { success: true, data: serializeFollowUp(followUp) };
   } catch (error) {
     return { success: false, error: cleanError(error) };

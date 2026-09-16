@@ -24,6 +24,16 @@ async function requireAuthenticatedUser() {
   return session;
 }
 
+async function resolveValidUserId(userId: unknown): Promise<string | null> {
+  if (!userId || typeof userId !== "string") return null;
+  try {
+    const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
+    return user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function cleanError(error: unknown): string {
   if (error instanceof UserFacingError) return error.message;
   if (error instanceof Error) return error.message;
@@ -50,31 +60,38 @@ function serializeLossEvent(event: import("@prisma/client").LeadLossEvent): Lead
  */
 export async function markLeadLost(
   leadId: string,
-  reasonInput: string | PrismaLeadLossReason,
-  noteInput?: string | null
+  rawReason: string,
+  rawNote?: string
 ): Promise<LostReasonActionResult<{ leadId: string; lossEvent: LeadLossRecord }>> {
   try {
     const session = await requireAuthenticatedUser();
+    const validUserId = await resolveValidUserId(session.id);
 
-    if (!leadId) throw new UserFacingError("Lead ID is required.");
-
-    const prismaReason = UI_TO_PRISMA_LOST_REASON[reasonInput];
-    if (!prismaReason) {
-      throw new UserFacingError(
-        `Invalid lost reason: '${reasonInput}'. Must be one of: PRICE, NO_RESPONSE, TIMING, COMPETITOR, TRUST, NOT_QUALIFIED, REQUIREMENT_CHANGED, NO_URGENCY, OTHER.`
-      );
+    if (!leadId) {
+      throw new UserFacingError("Lead ID is required.");
     }
 
-    const note = noteInput?.trim() || null;
+    const prismaReason = UI_TO_PRISMA_LOST_REASON[rawReason as keyof typeof UI_TO_PRISMA_LOST_REASON] as PrismaLeadLossReason;
+    if (!prismaReason) {
+      throw new UserFacingError("A valid lost reason must be selected.");
+    }
+
+    const note = rawNote?.trim() || null;
     if (prismaReason === "OTHER" && (!note || note.length === 0)) {
       throw new UserFacingError("A note/explanation is strictly required when selecting 'Other' as the loss reason.");
     }
 
-    const lead = await db.lead.findUnique({ where: { id: leadId } });
-    if (!lead) throw new UserFacingError("Lead not found.");
+    const lead = await db.lead.findUnique({
+      where: { id: leadId },
+      select: { id: true, status: true, name: true },
+    });
+
+    if (!lead) {
+      throw new UserFacingError("Lead not found.");
+    }
 
     const oldStatus = lead.status;
-    const reasonLabel = LOST_REASON_LABELS[prismaReason];
+    const reasonLabel = LOST_REASON_LABELS[prismaReason] || rawReason;
 
     const lossEvent = await db.$transaction(async (tx) => {
       // 1. Update lead status to LOST
@@ -90,7 +107,7 @@ export async function markLeadLost(
           reason: prismaReason,
           note,
           lostAt: new Date(),
-          createdByUserId: session.id as string,
+          createdByUserId: validUserId,
         },
       });
 
@@ -109,7 +126,7 @@ export async function markLeadLost(
             note,
             lossEventId: event.id,
           },
-          createdByUserId: session.id as string,
+          createdByUserId: validUserId,
         },
       });
 

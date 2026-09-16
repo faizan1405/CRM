@@ -1,6 +1,6 @@
 "use server";
 
-import { LeadStatus as PrismaLeadStatus, Prisma, ActivityType } from "@prisma/client";
+import { LeadStatus as PrismaLeadStatus, QuickStatus as PrismaQuickStatus, Prisma, ActivityType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -11,6 +11,7 @@ import {
   type Lead,
   type LeadActionResult,
   type LeadStatus,
+  type QuickStatusType,
 } from "@/features/leads/types";
 import { deriveAIAttention } from "@/features/ai-attention/helpers";
 import {
@@ -31,6 +32,16 @@ async function requireAuthenticatedUser() {
     throw new UserFacingError("You must be signed in to manage leads.");
   }
   return session;
+}
+
+async function resolveValidUserId(userId: unknown): Promise<string | null> {
+  if (!userId || typeof userId !== "string") return null;
+  try {
+    const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
+    return user?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function readString(formData: FormData, key: string, maxLength: number, required = false) {
@@ -100,6 +111,7 @@ function serializeLead(lead: {
   leadSource: string | null;
   budget: Prisma.Decimal | null;
   status: PrismaLeadStatus;
+  quickStatus?: PrismaQuickStatus | null;
   quotedAmount: Prisma.Decimal | null;
   lastContactDate: Date | null;
   nextFollowUpDate: Date | null;
@@ -109,6 +121,7 @@ function serializeLead(lead: {
   isWaste: boolean;
   followUps?: { scheduledAt: Date; status: string }[];
   aiInsight?: import("@prisma/client").LeadAIInsight | null;
+  activities?: { message: string }[];
 }): Lead {
   const baseLead = {
     id: lead.id,
@@ -120,6 +133,8 @@ function serializeLead(lead: {
     source: lead.leadSource ?? "",
     budget: lead.budget === null ? null : Number(lead.budget),
     status: statusFromDatabase[lead.status as DatabaseLeadStatus],
+    quickStatus: (lead.quickStatus as QuickStatusType) ?? "NONE",
+    latestNote: lead.activities?.[0]?.message || lead.notes || "",
     quotedAmount: lead.quotedAmount === null ? null : Number(lead.quotedAmount),
     lastContactDate: lead.lastContactDate?.toISOString().slice(0, 10) ?? null,
     nextFollowUpDate: lead.nextFollowUpDate?.toISOString().slice(0, 10) ?? null,
@@ -151,6 +166,12 @@ function serializeLead(lead: {
 
 function cleanError(error: unknown) {
   if (error instanceof UserFacingError) return error.message;
+  if (error instanceof Error) {
+    console.error("[Leads Action Error]:", error.message);
+    if (error.message.includes("Foreign key") || error.message.includes("Unique constraint")) {
+      return error.message;
+    }
+  }
   return "We could not save that change. Please try again.";
 }
 
@@ -169,7 +190,16 @@ export async function getLeads(filter?: import('@/features/leads/types').LeadOpe
     }
     const leads = await db.lead.findMany({
       where,
-      include: { aiInsight: true, followUps: { where: { status: "PENDING" } } },
+      include: {
+        aiInsight: true,
+        followUps: { where: { status: "PENDING" } },
+        activities: {
+          where: { type: ActivityType.NOTE_ADDED },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { message: true },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
     let serialized = leads.map(serializeLead);
@@ -187,7 +217,14 @@ export async function getLead(id: string): Promise<LeadActionResult<Lead>> {
     await requireAuthenticatedUser();
     const lead = await db.lead.findUnique({
       where: { id: readLeadId(id) },
-      include: { aiInsight: true },
+      include: {
+        activities: {
+          where: { type: ActivityType.NOTE_ADDED },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { message: true },
+        },
+      },
     });
     if (!lead) return { success: false, error: "Lead not found." };
     return { success: true, data: serializeLead(lead) };
@@ -196,11 +233,12 @@ export async function getLead(id: string): Promise<LeadActionResult<Lead>> {
   }
 }
 
-
 export async function createLead(formData: FormData): Promise<LeadActionResult<Lead>> {
   try {
     const session = await requireAuthenticatedUser();
     const data = leadData(formData);
+    const validUserId = await resolveValidUserId(session.id);
+
     const lead = await db.$transaction(async (tx) => {
       const newLead = await tx.lead.create({ data });
       await tx.leadActivity.create({
@@ -208,7 +246,7 @@ export async function createLead(formData: FormData): Promise<LeadActionResult<L
           leadId: newLead.id,
           type: ActivityType.LEAD_CREATED,
           message: "Lead was created",
-          createdByUserId: session.id as string,
+          createdByUserId: validUserId,
         },
       });
 
@@ -235,7 +273,7 @@ export async function createLead(formData: FormData): Promise<LeadActionResult<L
             type: ActivityType.FOLLOWUP_CREATED,
             message: `Scheduled a CALL follow-up for ${finalDate.toLocaleDateString()}`,
             metadata: { type: "CALL", scheduledAt: finalDate },
-            createdByUserId: session.id as string,
+            createdByUserId: validUserId,
           },
         });
       }
@@ -250,9 +288,8 @@ export async function createLead(formData: FormData): Promise<LeadActionResult<L
       revalidatePath("/pipeline");
       revalidatePath("/dashboard");
     } catch {
-      // safe fallback if called outside Next.js request context (e.g. test environment)
+      // safe in test execution
     }
-
     return { success: true, data: serializeLead(lead) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -264,23 +301,20 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
     const session = await requireAuthenticatedUser();
     const leadId = readLeadId(id);
     const data = leadData(formData);
-    
+    const validUserId = await resolveValidUserId(session.id);
+
     const lead = await db.$transaction(async (tx) => {
       const oldLead = await tx.lead.findUnique({ where: { id: leadId } });
       if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
-      
-      // Prevent marking LOST directly
-      if (data.status === PrismaLeadStatus.LOST && oldLead.status !== PrismaLeadStatus.LOST) {
-        throw new UserFacingError("Marking a lead as Lost requires a loss reason. Use markLeadLost.");
-      }
 
       const updatedLead = await tx.lead.update({ where: { id: leadId }, data });
-      
-      // Determine if meaningful fields changed
+
       const changed: string[] = [];
       if (oldLead.name !== updatedLead.name) changed.push("name");
-      if (oldLead.email !== updatedLead.email) changed.push("email");
       if (oldLead.phone !== updatedLead.phone) changed.push("phone");
+      if (oldLead.email !== updatedLead.email) changed.push("email");
+      if (oldLead.industry !== updatedLead.industry) changed.push("industry");
+      if (oldLead.leadSource !== updatedLead.leadSource) changed.push("source");
       if (oldLead.budget?.toString() !== updatedLead.budget?.toString()) changed.push("budget");
       if (oldLead.quotedAmount?.toString() !== updatedLead.quotedAmount?.toString()) changed.push("quoted amount");
       if (oldLead.business !== updatedLead.business) changed.push("business");
@@ -292,7 +326,7 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
             leadId,
             type: ActivityType.LEAD_UPDATED,
             message: `Lead was updated: changed ${changed.join(", ")}`,
-            createdByUserId: session.id as string,
+            createdByUserId: validUserId,
           },
         });
         await markLeadAIInsightNeedsRefresh(leadId, tx);
@@ -303,6 +337,8 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
     try {
       revalidatePath("/leads");
       revalidatePath("/pipeline");
+      revalidatePath("/dashboard");
+      revalidatePath(`/leads/${leadId}`);
     } catch {
       // safe in test execution
     }
@@ -324,9 +360,10 @@ export async function changeLeadStatus(
     const databaseStatus = statusToDatabase[status];
     if (!databaseStatus) return { success: false, error: "Select a valid lead status." };
     const leadId = readLeadId(id);
+    const validUserId = await resolveValidUserId(session.id);
 
     // If attempting to mark as LOST without going through markLeadLost:
-    if (databaseStatus === PrismaLeadStatus.LOST) {
+    if (databaseStatus === PrismaLeadStatus.LOST && !lossReasonInput) {
       return {
         success: false,
         error: "Marking a lead as Lost requires a loss reason. Use markLeadLost.",
@@ -336,8 +373,6 @@ export async function changeLeadStatus(
     const lead = await db.$transaction(async (tx) => {
       const oldLead = await tx.lead.findUnique({ where: { id: leadId } });
       if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
-
-
 
       const updatedLead = await tx.lead.update({ where: { id: leadId }, data: { status: databaseStatus } });
       
@@ -352,7 +387,7 @@ export async function changeLeadStatus(
               newStatus: databaseStatus,
               ...(lossReasonInput ? { lossReason: lossReasonInput, lossNote: lossNoteInput } : {}),
             },
-            createdByUserId: session.id as string,
+            createdByUserId: validUserId,
           },
         });
         await markLeadAIInsightNeedsRefresh(leadId, tx);
@@ -363,12 +398,85 @@ export async function changeLeadStatus(
     try {
       revalidatePath("/leads");
       revalidatePath("/pipeline");
+      revalidatePath("/dashboard");
+      revalidatePath(`/leads/${leadId}`);
     } catch {
       // safe in test execution
     }
     return { success: true, data: serializeLead(lead) };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return { success: false, error: "Lead not found." };
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+export async function updateQuickStatus(
+  leadId: string,
+  quickStatus: QuickStatusType
+): Promise<LeadActionResult<Lead>> {
+  try {
+    const session = await requireAuthenticatedUser();
+    const id = readLeadId(leadId);
+    const existing = await db.lead.findUnique({ where: { id } });
+    if (!existing) return { success: false, error: "Lead not found." };
+
+    const validUserId = await resolveValidUserId(session.id);
+
+    let nextStatus: PrismaLeadStatus = existing.status;
+    if (quickStatus === "CONTACTED") {
+      if (existing.status === PrismaLeadStatus.NEW) {
+        nextStatus = PrismaLeadStatus.CONTACTED;
+      }
+    } else if (quickStatus === "INTERESTED") {
+      if (existing.status === PrismaLeadStatus.NEW || existing.status === PrismaLeadStatus.CONTACTED) {
+        nextStatus = PrismaLeadStatus.QUALIFIED;
+      }
+    }
+
+    const updated = await db.$transaction(async (tx) => {
+      const result = await tx.lead.update({
+        where: { id },
+        data: {
+          quickStatus: quickStatus as PrismaQuickStatus,
+          status: nextStatus,
+        },
+        include: {
+          activities: {
+            where: { type: ActivityType.NOTE_ADDED },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { message: true },
+          },
+        },
+      });
+
+      if (nextStatus !== existing.status) {
+        await tx.leadActivity.create({
+          data: {
+            leadId: id,
+            type: ActivityType.STATUS_CHANGED,
+            message: `Status changed from ${statusFromDatabase[existing.status as DatabaseLeadStatus]} to ${statusFromDatabase[nextStatus as DatabaseLeadStatus]} via Quick Status (${quickStatus})`,
+            metadata: { oldStatus: existing.status, newStatus: nextStatus, quickStatus },
+            createdByUserId: validUserId,
+          },
+        });
+      }
+
+      await markLeadAIInsightNeedsRefresh(id, tx);
+      return result;
+    });
+
+    try {
+      revalidatePath("/dashboard");
+      revalidatePath("/leads");
+      revalidatePath("/pipeline");
+      revalidatePath(`/leads/${id}`);
+    } catch {
+      // safe in tests
+    }
+
+    return { success: true, data: serializeLead(updated) };
+  } catch (error) {
     return { success: false, error: cleanError(error) };
   }
 }
@@ -388,7 +496,6 @@ export async function refreshLeadAI(id: string): Promise<LeadActionResult<Lead>>
     return { success: false, error: cleanError(error) };
   }
 }
-
 
 export async function deleteLead(id: string): Promise<LeadActionResult<{ id: string }>> {
   try {
@@ -473,6 +580,7 @@ export async function markLeadWaste(leadId: string): Promise<LeadActionResult<Le
   try {
     const session = await requireAuthenticatedUser();
     const id = readLeadId(leadId);
+    const validUserId = await resolveValidUserId(session.id);
     
     const lead = await db.$transaction(async (tx) => {
       const oldLead = await tx.lead.findUnique({ where: { id } });
@@ -489,7 +597,7 @@ export async function markLeadWaste(leadId: string): Promise<LeadActionResult<Le
           leadId: id,
           type: ActivityType.LEAD_UPDATED,
           message: "Lead was marked as Waste",
-          createdByUserId: session.id as string,
+          createdByUserId: validUserId,
         },
       });
 
@@ -512,6 +620,7 @@ export async function restoreWasteLead(leadId: string): Promise<LeadActionResult
   try {
     const session = await requireAuthenticatedUser();
     const id = readLeadId(leadId);
+    const validUserId = await resolveValidUserId(session.id);
 
     const lead = await db.$transaction(async (tx) => {
       const oldLead = await tx.lead.findUnique({ where: { id } });
@@ -528,7 +637,7 @@ export async function restoreWasteLead(leadId: string): Promise<LeadActionResult
           leadId: id,
           type: ActivityType.LEAD_UPDATED,
           message: "Lead was restored from Waste",
-          createdByUserId: session.id as string,
+          createdByUserId: validUserId,
         },
       });
       

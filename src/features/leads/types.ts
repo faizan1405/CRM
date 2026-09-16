@@ -9,6 +9,8 @@ export const leadStatuses = [
 
 export type LeadStatus = (typeof leadStatuses)[number];
 
+export type QuickStatusType = "NONE" | "CONTACTED" | "INTERESTED" | "CALL_NOT_PICK" | "CALL_AGAIN";
+
 export type Lead = {
   id: string;
   name: string;
@@ -19,6 +21,8 @@ export type Lead = {
   source: string;
   budget: number | null;
   status: LeadStatus;
+  quickStatus?: QuickStatusType;
+  latestNote?: string;
   quotedAmount: number | null;
   lastContactDate: string | null;
   nextFollowUpDate: string | null;

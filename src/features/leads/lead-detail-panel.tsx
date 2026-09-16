@@ -13,11 +13,6 @@ import { LeadActivityTimeline } from "@/features/activity/lead-activity-timeline
 import type { Activity, ActivityFilter } from "@/features/activity/types";
 import { NoteComposer } from "@/features/activity/note-composer";
 import { LeadQuickActions } from "@/features/leads/lead-quick-actions";
-import {
-  LeadDetailAIInsights,
-  deriveAIAttention,
-  type AIAttentionLeadData,
-} from "@/features/ai-attention";
 import { getLeadLossHistory } from "@/app/actions/lost-reasons";
 import { LostLeadDetail } from "@/features/lost-reasons/lost-lead-detail";
 import type { LeadLossRecord } from "@/features/lost-reasons/types";
@@ -56,7 +51,6 @@ type LeadDetailPanelProps = {
   whatsAppMessage?: string;
   onEditNote?: (data: { id: string; noteId: string; noteText: string }) => void;
   onDeleteNote?: (data: { id: string; noteId: string }) => void;
-  aiAttention?: AIAttentionLeadData;
 };
 
 export function LeadDetailPanel({
@@ -76,7 +70,6 @@ export function LeadDetailPanel({
   whatsAppMessage,
   onEditNote,
   onDeleteNote,
-  aiAttention,
 }: LeadDetailPanelProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const statusSelectRef = useRef<HTMLSelectElement>(null);
@@ -110,8 +103,6 @@ export function LeadDetailPanel({
 
   useDialogAccessibility(Boolean(leadId), onClose, saving, closeButtonRef);
 
-
-
   useEffect(() => {
     if (!leadId || !initialAction) return;
     const frame = window.requestAnimationFrame(() => {
@@ -132,20 +123,6 @@ export function LeadDetailPanel({
   if (!lead) return null;
 
   const hasActivity = activities.length > 0;
-  const aiData = aiAttention || lead.aiAttention || deriveAIAttention(lead);
-
-  const handleRecommendedAction = () => {
-    if (aiData.recommendedAction.type === "followup" && onAddFollowUp) {
-      onAddFollowUp();
-    } else if (aiData.recommendedAction.type === "call") {
-      window.location.href = `tel:${lead.phone}`;
-    } else if (aiData.recommendedAction.type === "whatsapp") {
-      const url = `https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`;
-      window.open(url, "_blank");
-    } else if (onAddFollowUp) {
-      onAddFollowUp();
-    }
-  };
 
   return (
     <div className="fixed inset-x-0 top-0 z-50 h-dvh">
@@ -195,9 +172,6 @@ export function LeadDetailPanel({
           aria-label="Lead information"
           className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4"
         >
-          {/* Phase 8: AI Insights Section */}
-          <LeadDetailAIInsights data={aiData} onRecommendedAction={handleRecommendedAction} />
-
           {lead.status === "Lost" && lossHistory.length > 0 && (
             <LostLeadDetail
               reason={lossHistory[0].reasonLabel || lossHistory[0].reason}

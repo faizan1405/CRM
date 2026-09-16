@@ -21,6 +21,14 @@ enum LeadStatus {
   LOST
 }
 
+enum QuickStatus {
+  NONE
+  CONTACTED
+  INTERESTED
+  CALL_NOT_PICK
+  CALL_AGAIN
+}
+
 model User {
   id               String               @id @default(uuid())
   name             String
@@ -46,6 +54,7 @@ model Lead {
   leadSource       String?
   budget           Decimal?            @db.Decimal(12, 2)
   status           LeadStatus          @default(NEW)
+  quickStatus      QuickStatus         @default(NONE)
   isWaste          Boolean             @default(false)
   quotedAmount     Decimal?            @db.Decimal(12, 2)
   lastContactDate  DateTime?           @db.Date
@@ -60,6 +69,7 @@ model Lead {
   updatedAt        DateTime            @updatedAt
 
   @@index([status])
+  @@index([quickStatus])
   @@index([phone])
   @@index([email])
   @@index([leadSource])

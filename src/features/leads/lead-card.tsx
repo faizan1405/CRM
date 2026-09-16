@@ -1,16 +1,13 @@
+"use client";
+
 import { ActionCard } from "@/components/action-card";
-import { ChevronRight, Phone, Trash2 } from "lucide-react";
+import { Phone, MessageCircle, CalendarPlus, Trash2, FileText } from "lucide-react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
-import { getTelephoneHref } from "@/features/leads/contact-links";
-import { LeadQuickActions } from "@/features/leads/lead-quick-actions";
-import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
-import type { Lead } from "@/features/leads/types";
+import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
+import { QuickStatusChip } from "@/features/leads/quick-status-chip";
+import type { Lead, QuickStatusType } from "@/features/leads/types";
 import {
   AIScoreBadge,
-  AttentionPriorityBadge,
-  StaleIndicator,
-  StageAgingBadge,
-  AIRecommendedAction,
   deriveAIAttention,
   type AIAttentionLeadData,
 } from "@/features/ai-attention";
@@ -20,6 +17,7 @@ type LeadCardProps = {
   onSelect: (lead: Lead, action?: "note" | "status") => void;
   onAddFollowUp: (lead: Lead) => void;
   onDelete?: (lead: Lead) => void;
+  onUpdateQuickStatus?: (lead: Lead, statusKey: QuickStatusType | "WON" | "LOST") => void;
   whatsAppMessage?: string;
   aiAttention?: AIAttentionLeadData;
 };
@@ -29,6 +27,7 @@ export function LeadCard({
   onSelect,
   onAddFollowUp,
   onDelete,
+  onUpdateQuickStatus,
   whatsAppMessage,
   aiAttention,
 }: LeadCardProps) {
@@ -36,90 +35,130 @@ export function LeadCard({
   const isTerminal = lead.status === "Won" || lead.status === "Lost";
   const isCritical = !isTerminal && (ai.priority === "critical" || ai.score >= 85);
 
+  const notesText = lead.latestNote || lead.notes || "";
+
   return (
-    <ActionCard onActivate={() => onSelect(lead)} aria-label={`Open lead ${lead.name}`} className={`min-w-0 rounded-xl border bg-white p-4 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-1 hover:shadow-[var(--shadow-elevated)] active:scale-[0.97] ${isCritical ? "border-l-2 border-l-rose-400 hover:border-rose-300" : "border-[var(--border)] hover:border-blue-300"}`}>
-      {/* Top Header: Title & Badges */}
+    <ActionCard
+      onActivate={() => onSelect(lead)}
+      aria-label={`Open lead ${lead.name}`}
+      className={`group relative min-w-0 rounded-2xl border bg-white p-4 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] active:scale-[0.98] ${
+        isCritical ? "border-l-4 border-l-rose-500 hover:border-rose-400" : "border-slate-200/80 hover:border-blue-300"
+      }`}
+    >
+      {/* 1. TOP: Lead Name + Business + Quick Status */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate font-semibold text-slate-950">{lead.name}</h3>
-          <p className="mt-0.5 truncate text-sm text-[var(--muted)]">
-            {lead.business || "No business added"}
-          </p>
+          <div className="flex items-center gap-2">
+            <h3 className="truncate font-semibold text-slate-950 text-base tracking-tight">{lead.name}</h3>
+            {!isTerminal && ai.score >= 80 && (
+              <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
+            )}
+          </div>
+          {lead.business && (
+            <p className="mt-0.5 truncate text-xs font-medium text-slate-500">
+              {lead.business}
+            </p>
+          )}
         </div>
 
-        {onDelete && <button type="button" onClick={() => onDelete(lead)} aria-label={`Delete ${lead.name}`} className="grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700 focus-visible:ring-2 focus-visible:ring-rose-600"><Trash2 size={18} /></button>}
-        {/* Status and Score */}
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <LeadStatusBadge status={lead.status} />
-          {!isTerminal && (
-            <div className="flex items-center gap-1">
-              <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" />
-              <AttentionPriorityBadge priority={ai.priority} size="sm" showIcon={false} />
-            </div>
+        <div className="flex shrink-0 items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <QuickStatusChip
+            quickStatus={lead.quickStatus}
+            leadStatus={lead.status}
+            onSelectStatus={onUpdateQuickStatus ? (statusKey) => onUpdateQuickStatus(lead, statusKey) : undefined}
+            size="sm"
+          />
+          {onDelete && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(lead);
+              }}
+              aria-label={`Delete ${lead.name}`}
+              className="grid size-8 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
+            >
+              <Trash2 size={15} />
+            </button>
           )}
         </div>
       </div>
 
-      {/* AI Attention Meta: Stage Aging & Stale Indicator */}
-      {!isTerminal && (
-        <>
-          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100/80 pt-2 text-xs">
-            <StageAgingBadge stageAging={ai.stageAging} variant="pill" />
-            <StaleIndicator staleStatus={ai.staleStatus} variant="compact" />
-          </div>
+      {/* 2. PHONE: Direct clickable one-tap phone link */}
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-slate-100/80 pt-2.5" onClick={(e) => e.stopPropagation()}>
+        <a
+          href={getTelephoneHref(lead.phone)}
+          className="inline-flex min-h-8 items-center gap-1.5 text-xs font-semibold text-slate-700 hover:text-blue-600 transition-colors"
+          aria-label={`Call ${lead.name} at ${lead.phone}`}
+        >
+          <Phone aria-hidden="true" size={13} className="text-blue-500" />
+          <span>{lead.phone}</span>
+        </a>
 
-          {/* AI Recommended Next Action */}
-          <div className="mt-2.5">
-            <AIRecommendedAction action={ai.recommendedAction} variant="compact" />
-          </div>
-        </>
+        {lead.quotedAmount !== null && (
+          <span className="text-xs font-bold text-slate-900">
+            {formatCurrency(lead.quotedAmount)}
+          </span>
+        )}
+      </div>
+
+      {/* 3. NOTES PREVIEW: Upfront, 2-4 lines clamped context */}
+      <div className="mt-2 rounded-xl bg-slate-50/80 p-2.5 border border-slate-100">
+        <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <FileText size={11} className="text-slate-400" />
+          <span>Notes</span>
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-slate-700 line-clamp-3 break-words">
+          {notesText ? notesText : <span className="italic text-slate-400">No interaction notes yet.</span>}
+        </p>
+      </div>
+
+      {/* Next Follow-up info if present */}
+      {lead.nextFollowUpDate && (
+        <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500 px-0.5">
+          <span>Next follow-up:</span>
+          <span className="font-semibold text-slate-700">{formatDate(lead.nextFollowUpDate)}</span>
+        </div>
       )}
 
-      {/* Phone Link */}
-      <a
-        href={getTelephoneHref(lead.phone)}
-        className="mt-3 flex min-h-10 items-center gap-2 break-all rounded-md text-sm text-slate-700 hover:text-blue-700 focus-visible:outline-offset-2"
-        aria-label={`Call ${lead.name} at ${lead.phone}`}
-      >
-        <Phone aria-hidden="true" size={16} className="text-slate-400" />
-        {lead.phone}
-      </a>
+      {/* 4. BOTTOM ACTIONS: Call | WhatsApp | Add Follow-up */}
+      <div className="mt-3.5 flex items-center gap-2 border-t border-slate-100 pt-3" onClick={(e) => e.stopPropagation()}>
+        {/* Call Button */}
+        <a
+          href={getTelephoneHref(lead.phone)}
+          className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 shadow-sm transition-all duration-150 hover:bg-slate-50 hover:border-slate-300 active:scale-[0.97]"
+          aria-label={`Call ${lead.name}`}
+        >
+          <Phone size={13} className="text-blue-600" />
+          <span>Call</span>
+        </a>
 
-      {/* Quick Info Grid */}
-      <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3">
-        <div>
-          <dt className="text-xs font-medium text-slate-500">Next follow-up</dt>
-          <dd className="mt-0.5 break-all text-sm font-medium text-slate-800">
-            {formatDate(lead.nextFollowUpDate)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs font-medium text-slate-500">Quoted amount</dt>
-          <dd className="mt-0.5 break-all text-sm font-medium text-slate-800">
-            {formatCurrency(lead.quotedAmount)}
-          </dd>
-        </div>
-      </dl>
+        {/* WhatsApp Button */}
+        <a
+          href={getWhatsAppHref(lead.phone, whatsAppMessage || `Hi ${lead.name}, connecting from Scale Flow CRM.`)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-800 shadow-sm transition-all duration-150 hover:bg-emerald-100/80 active:scale-[0.97]"
+          aria-label={`WhatsApp ${lead.name}`}
+        >
+          <MessageCircle size={13} className="text-emerald-600" />
+          <span>WhatsApp</span>
+        </a>
 
-      {/* Existing Quick Actions */}
-      <LeadQuickActions
-        lead={lead}
-        whatsAppMessage={whatsAppMessage}
-        onAddNote={() => onSelect(lead, "note")}
-        onAddFollowUp={() => onAddFollowUp(lead)}
-        onChangeStatus={() => onSelect(lead, "status")}
-        className="mt-3 border-y border-slate-100 py-1 transition-opacity duration-200 opacity-80 group-hover:opacity-100"
-      />
-
-      {/* View Details */}
-      <button
-        type="button"
-        onClick={() => onSelect(lead)}
-        className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-1 rounded-lg text-sm font-semibold text-slate-700 transition-colors hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100 cursor-pointer"
-        aria-label={`View ${lead.name}`}
-      >
-        View details <ChevronRight aria-hidden="true" size={16} />
-      </button>
+        {/* Add Follow-up Button */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onAddFollowUp(lead);
+          }}
+          className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-2.5 text-xs font-semibold text-blue-800 shadow-sm transition-all duration-150 hover:bg-blue-100/80 active:scale-[0.97] cursor-pointer"
+          aria-label={`Add follow-up for ${lead.name}`}
+        >
+          <CalendarPlus size={13} className="text-blue-600" />
+          <span>Follow-up</span>
+        </button>
+      </div>
     </ActionCard>
   );
 }

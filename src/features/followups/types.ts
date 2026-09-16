@@ -7,6 +7,14 @@ export const typeToDatabase: Record<string, "CALL" | "WHATSAPP" | "EMAIL" | "OTH
   WhatsApp: "WHATSAPP",
   Email: "EMAIL",
   Other: "OTHER",
+  CALL: "CALL",
+  WHATSAPP: "WHATSAPP",
+  EMAIL: "EMAIL",
+  OTHER: "OTHER",
+  call: "CALL",
+  whatsapp: "WHATSAPP",
+  email: "EMAIL",
+  other: "OTHER",
 };
 
 export const statusFromDatabase: Record<"PENDING" | "COMPLETED" | "CANCELLED", FollowUpStatus> = {
