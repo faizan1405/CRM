@@ -16,6 +16,7 @@ import type {
   SuggestedFollowUpResult,
   CallNotesActionResult,
 } from "@/features/ai-conversation-notes/types";
+import { requestGroqText } from "@/lib/ai/groq-client";
 
 class UserFacingError extends Error {}
 
@@ -178,6 +179,32 @@ export async function getSuggestedFollowUp(
     await requireAuthenticatedUser();
     const result = await suggestNextFollowUp(leadId);
     return { success: true, data: result };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+/**
+ * Lightly improves note text without adding any new facts or structure.
+ */
+export async function improveNoteText(rawNote: string): Promise<{ success: boolean; data?: string; error?: string }> {
+  try {
+    await requireAuthenticatedUser();
+    if (!rawNote || !rawNote.trim()) return { success: true, data: rawNote };
+
+    const systemPrompt = `You are a light note editor.
+Rewrite only what the user wrote so it is slightly clearer.
+Do not add facts, assumptions, recommendations, categories, questions, follow-ups, sales advice, statuses, requirements, or missing information.
+Preserve the meaning exactly.
+Return only the improved note text.`;
+
+    const { text } = await requestGroqText({
+      systemPrompt,
+      userPrompt: rawNote.trim(),
+      temperature: 0.1,
+    });
+
+    return { success: true, data: text };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }

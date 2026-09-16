@@ -16,13 +16,9 @@ import { LeadQuickActions } from "@/features/leads/lead-quick-actions";
 import { getLeadLossHistory } from "@/app/actions/lost-reasons";
 import { LostLeadDetail } from "@/features/lost-reasons/lost-lead-detail";
 import type { LeadLossRecord } from "@/features/lost-reasons/types";
-const AIConversationNotes = dynamic(() => import("@/features/ai-conversation-notes/ai-conversation-notes").then(m => m.AIConversationNotes));
-import { structureCallNotes, applyCallNotes } from "@/app/actions/conversation-notes";
-import { createFollowUp } from "@/app/actions/follow-ups";
 import { getWhatsAppTemplates } from "@/app/actions/whatsapp-templates";
 const WhatsAppLeadComposer = dynamic(() => import("@/features/whatsapp-templates/components/whatsapp-lead-composer").then(m => m.WhatsAppLeadComposer));
 import type { WhatsAppTemplate } from "@/features/whatsapp-templates/types";
-import { FileText, Sparkles } from "lucide-react";
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
@@ -64,7 +60,6 @@ export function LeadDetailPanel({
   activityFilter = "all",
   onActivityFilterChange,
   onAddNote,
-  onRefreshActivities,
   onAddFollowUp,
   initialAction = null,
   whatsAppMessage,
@@ -75,7 +70,6 @@ export function LeadDetailPanel({
   const statusSelectRef = useRef<HTMLSelectElement>(null);
   const leadId = lead?.id;
   const [lossHistory, setLossHistory] = useState<LeadLossRecord[]>([]);
-  const [noteMode, setNoteMode] = useState<"standard" | "ai">("standard");
   
   const [composerOpen, setComposerOpen] = useState(false);
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
@@ -231,85 +225,12 @@ export function LeadDetailPanel({
                 noteComposer={
                   onAddNote ? (
                     <div className="flex flex-col gap-3">
-                      <div className="flex rounded-lg bg-slate-100 p-1">
-                        <button
-                          type="button"
-                          onClick={() => setNoteMode("standard")}
-                          className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                            noteMode === "standard"
-                              ? "bg-white text-slate-900 shadow-sm"
-                              : "text-slate-600 hover:text-slate-900"
-                          }`}
-                        >
-                          <FileText className="size-3.5" /> Standard Note
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNoteMode("ai")}
-                          className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                            noteMode === "ai"
-                              ? "bg-white text-slate-900 shadow-sm"
-                              : "text-slate-600 hover:text-slate-900"
-                          }`}
-                        >
-                          <Sparkles className="size-3.5 text-blue-600" /> AI Call Notes
-                        </button>
-                      </div>
-
-                      {noteMode === "standard" ? (
-                        <NoteComposer
-                          id={`lead-note-${lead.id}`}
-                          autoFocus={initialAction === "note"}
-                          onAddNote={onAddNote}
-                          disabled={saving}
-                        />
-                      ) : (
-                        <div className="pt-2">
-                          <AIConversationNotes
-                            disabled={saving}
-                            onStructureNotes={async (rawNote) => {
-                              const result = await structureCallNotes(rawNote, leadId);
-                              if (!result.success || !result.data) throw new Error(result.error || "Failed to structure notes");
-                              return result.data;
-                            }}
-                            onApplyStructured={async (result) => {
-                              if (!leadId) return;
-                              await applyCallNotes({
-                                leadId,
-                                rawNote: result.rawNote,
-                                structuredData: result.structuredData,
-                                formattedNote: result.formattedOutput,
-                                appliedType: "structured",
-                              });
-                              
-                              if (result.structuredData?.suggestedFollowUpDate) {
-                                const formData = new FormData();
-                                formData.append("leadId", leadId);
-                                formData.append(
-                                  "scheduledAt",
-                                  `${result.structuredData.suggestedFollowUpDate}T${result.structuredData.suggestedFollowUpTime || "10:00"}:00+05:30`
-                                );
-                                formData.append("type", "CALL");
-                                formData.append("note", "Follow-up suggested by AI Call Notes");
-                                await createFollowUp(formData);
-                              }
-                              
-                              onRefreshActivities?.();
-                            }}
-                            onKeepOriginal={async (result) => {
-                              if (!leadId) return;
-                              await applyCallNotes({
-                                leadId,
-                                rawNote: result.rawNote,
-                                structuredData: null,
-                                formattedNote: result.rawNote,
-                                appliedType: "original",
-                              });
-                              onRefreshActivities?.();
-                            }}
-                          />
-                        </div>
-                      )}
+                      <NoteComposer
+                        id={`lead-note-${lead.id}`}
+                        autoFocus={initialAction === "note"}
+                        onAddNote={onAddNote}
+                        disabled={saving}
+                      />
                     </div>
                   ) : undefined
                 }
@@ -342,7 +263,7 @@ export function LeadDetailPanel({
           </section>
         </div>
 
-        <footer className="shrink-0 border-t border-slate-200 bg-white px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] sm:px-6">
+        <footer className="relative z-20 shrink-0 border-t border-slate-200 bg-white px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] sm:px-6">
           <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
             Current status
             <select
@@ -365,7 +286,6 @@ export function LeadDetailPanel({
             onAddNote={
               onAddNote
                 ? () => {
-                    setNoteMode("standard");
                     window.requestAnimationFrame(() => {
                       const composer = document.getElementById(`lead-note-${lead.id}`);
                       composer?.scrollIntoView({ block: "center" });

@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
 import { ActionCard } from "@/components/action-card";
+import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import { Building2, Phone, FileText } from "lucide-react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import type { Lead } from "@/features/leads/types";
@@ -10,11 +10,11 @@ import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
 export function PipelineCard({
   lead,
   onClick,
-  dragHandle,
+  dragHandleProps,
 }: {
   lead: Lead;
   onClick: () => void;
-  dragHandle?: ReactNode;
+  dragHandleProps?: DraggableProvidedDragHandleProps | null;
 }) {
   const ai = lead.aiAttention || deriveAIAttention(lead);
   const notesText = lead.latestNote || lead.notes || "";
@@ -24,6 +24,7 @@ export function PipelineCard({
     <ActionCard
       onActivate={onClick}
       aria-label={`Open lead ${lead.name}`}
+      {...dragHandleProps}
       className={`group flex flex-col gap-2 rounded-xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-sm transition-[transform,box-shadow,border-color] duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer`}
     >
       <div className="flex justify-between items-start gap-2">
@@ -32,7 +33,6 @@ export function PipelineCard({
         </h4>
         <div className="flex shrink-0 items-center gap-1">
           <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
-          {dragHandle}
         </div>
       </div>
 

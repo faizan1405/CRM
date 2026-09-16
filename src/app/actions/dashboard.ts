@@ -186,26 +186,26 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
     overdueFollowUpsList.forEach(f => addPriority({
       id: f.id,
       leadId: f.leadId,
-      leadName: f.lead.name,
-      business: f.lead.business || "Unknown Business",
+      leadName: f.lead?.name || "Unknown Lead",
+      business: f.lead?.business || "Unknown Business",
       actionNeeded: `Overdue: ${f.type}`,
       time: formatTimeIST(f.scheduledAt),
-      phone: f.lead.phone,
-      status: f.lead.status.replace("_", " "),
-      statusColor: statusColors[f.lead.status] || statusColors.NEW,
+      phone: f.lead?.phone || "",
+      status: f.lead ? f.lead.status.replace("_", " ") : "NEW",
+      statusColor: (f.lead ? statusColors[f.lead.status] : null) || statusColors.NEW,
       type: "OVERDUE"
     }));
 
     todayFollowUpsList.forEach(f => addPriority({
       id: f.id,
       leadId: f.leadId,
-      leadName: f.lead.name,
-      business: f.lead.business || "Unknown Business",
+      leadName: f.lead?.name || "Unknown Lead",
+      business: f.lead?.business || "Unknown Business",
       actionNeeded: `Follow-up: ${f.type}`,
       time: formatTimeIST(f.scheduledAt),
-      phone: f.lead.phone,
-      status: f.lead.status.replace("_", " "),
-      statusColor: statusColors[f.lead.status] || statusColors.NEW,
+      phone: f.lead?.phone || "",
+      status: f.lead ? f.lead.status.replace("_", " ") : "NEW",
+      statusColor: (f.lead ? statusColors[f.lead.status] : null) || statusColors.NEW,
       type: "TODAY"
     }));
 
@@ -337,14 +337,14 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
         todayFollowUps: todayFollowUpsList.map(f => ({
           id: f.id,
           leadId: f.leadId,
-          leadName: f.lead.name,
+          leadName: f.lead?.name || "Unknown Lead",
           type: f.type,
           time: formatTimeIST(f.scheduledAt),
         })),
         recentActivity: recentActivities.map(a => ({
           activityId: a.id,
           message: a.message,
-          leadName: a.lead.name,
+          leadName: a.lead?.name || "Unknown Lead",
           leadId: a.leadId,
           createdAt: formatTimeAgo(a.createdAt),
           type: a.type

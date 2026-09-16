@@ -1,6 +1,6 @@
 "use client";
 
-import { GripVertical } from "lucide-react";
+
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { statusFromDatabase, type DatabaseLeadStatus } from "@/features/leads/types";
@@ -264,7 +264,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
                               >
                                 <PipelineCard
                                   lead={lead}
-                                  dragHandle={<button type="button" {...provided.dragHandleProps} aria-label={`Drag ${lead.name} to another stage`} className="grid size-8 place-items-center rounded-md text-slate-400 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-600"><GripVertical size={16} aria-hidden="true" /></button>}
+                                  dragHandleProps={provided.dragHandleProps}
                                   onClick={() => handleSelectLead(lead)}
                                 />
                               </div>

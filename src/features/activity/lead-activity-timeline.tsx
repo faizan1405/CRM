@@ -115,7 +115,7 @@ export function LeadActivityTimeline({
 
       {/* Note composer at bottom */}
       {noteComposer && (
-        <div className="shrink-0 border-t border-slate-200 bg-white p-3 sm:p-4">
+        <div className="sticky bottom-0 z-10 shrink-0 border-t border-slate-200 bg-white p-3 sm:p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
           {noteComposer}
         </div>
       )}

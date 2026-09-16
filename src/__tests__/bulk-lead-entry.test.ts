@@ -476,7 +476,7 @@ describe("Phase 11: Bulk Lead Entry + Backend Performance Hardening", () => {
   describe("6. Backend Performance & Zero Groq on Page Load", () => {
     it("getDashboardData loads quickly and does NOT invoke Groq LLM", async () => {
       const groqSpy = vi.spyOn(groqClient, "requestGroqJson");
-      const initialCallCount = groqSpy.mock.calls.length;
+      groqSpy.mockClear();
 
       const dashboardRes = await getDashboardData();
 
@@ -485,7 +485,7 @@ describe("Phase 11: Bulk Lead Entry + Backend Performance Hardening", () => {
       expect(dashboardRes.data?.kpis).toBeDefined();
 
       // Ensure no Groq requests were triggered during dashboard data fetch
-      expect(groqSpy.mock.calls.length).toBe(initialCallCount);
+      expect(groqSpy).not.toHaveBeenCalled();
     });
 
     it("getLeads loads quickly without triggering per-lead AI analysis", async () => {
