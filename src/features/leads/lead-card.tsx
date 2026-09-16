@@ -4,6 +4,7 @@ import { ActionCard } from "@/components/action-card";
 import { Phone, MessageCircle, CalendarPlus, Trash2, FileText } from "lucide-react";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
+import { useWhatsApp } from "@/components/whatsapp-context";
 import { QuickStatusChip } from "@/features/leads/quick-status-chip";
 import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
 import type { Lead, QuickStatusType } from "@/features/leads/types";
@@ -32,6 +33,7 @@ export function LeadCard({
   whatsAppMessage,
   aiAttention,
 }: LeadCardProps) {
+  const { openWhatsApp } = useWhatsApp();
   const ai = aiAttention || lead.aiAttention || deriveAIAttention(lead);
   const isTerminal = lead.status === "Won" || lead.status === "Lost";
   const theme = getLeadCardTheme(lead);
@@ -138,16 +140,19 @@ export function LeadCard({
         </a>
 
         {/* WhatsApp Button */}
-        <a
-          href={getWhatsAppHref(lead.phone, whatsAppMessage || `Hi ${lead.name}, connecting from Scale Flow CRM.`)}
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            openWhatsApp(lead);
+          }}
           className="inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-800 shadow-sm transition-all duration-150 hover:bg-emerald-100/80 active:scale-[0.97]"
           aria-label={`WhatsApp ${lead.name}`}
         >
           <MessageCircle size={13} className="text-emerald-600" />
           <span>WhatsApp</span>
-        </a>
+        </button>
 
         {/* Add Follow-up Button */}
         <button

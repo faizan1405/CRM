@@ -4,8 +4,10 @@ import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
 import type { Lead } from "@/features/leads/types";
 import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
+import { useWhatsApp } from "@/components/whatsapp-context";
 
 export function LeadTable({ leads, onSelect, onDelete }: { leads: Lead[]; onSelect: (lead: Lead) => void; onDelete: (lead: Lead) => void }) {
+  const { openWhatsApp } = useWhatsApp();
   return (
     <div className="hidden overflow-x-auto lg:block">
       <table className="w-full min-w-[860px] border-collapse text-left">
@@ -46,7 +48,7 @@ export function LeadTable({ leads, onSelect, onDelete }: { leads: Lead[]; onSele
                   <div className="inline-flex items-center gap-1">
                     <button type="button" onClick={() => onDelete(lead)} aria-label={`Delete ${lead.name}`} className="grid size-10 place-items-center rounded-lg text-slate-500 hover:bg-rose-50 hover:text-rose-700 focus-visible:ring-2 focus-visible:ring-rose-600"><Trash2 size={17} /></button>
                     <a href={getTelephoneHref(lead.phone)} className="grid size-10 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-blue-50 hover:text-blue-700" aria-label={`Call ${lead.name}`}><Phone aria-hidden="true" size={17} /></a>
-                    <a href={getWhatsAppHref(lead.phone, lead.name)} target="_blank" rel="noopener noreferrer" className="grid size-10 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-emerald-50 hover:text-emerald-700" aria-label={`Message ${lead.name} on WhatsApp`}><MessageCircle aria-hidden="true" size={17} /></a>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); openWhatsApp(lead); }} className="grid size-10 place-items-center rounded-lg text-slate-500 transition-colors hover:bg-emerald-50 hover:text-emerald-700" aria-label={`Message ${lead.name} on WhatsApp`}><MessageCircle aria-hidden="true" size={17} /></button>
                     <button type="button" onClick={() => onSelect(lead)} className="inline-flex min-h-10 items-center gap-1 rounded-lg px-3 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-50 cursor-pointer" aria-label={`View ${lead.name}`}>
                       View <ChevronRight aria-hidden="true" size={16} />
                     </button>

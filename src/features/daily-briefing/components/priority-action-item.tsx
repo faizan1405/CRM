@@ -13,6 +13,7 @@ import {
   Clock,
 } from "lucide-react";
 import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
+import { useWhatsApp } from "@/components/whatsapp-context";
 
 type PriorityActionItemProps = {
   item: BriefingActionItem;
@@ -62,9 +63,7 @@ export function PriorityActionItem({
 }: PriorityActionItemProps) {
   const priority = PRIORITY_CONFIG[item.priority];
   const telHref = item.phone ? getTelephoneHref(item.phone) : undefined;
-  const waHref = item.phone
-    ? getWhatsAppHref(item.phone, item.leadName || item.title)
-    : undefined;
+  const { openWhatsApp } = useWhatsApp();
 
   return (
     <ActionCard onActivate={item.leadId ? () => onOpenLead(item) : undefined}
@@ -188,14 +187,15 @@ export function PriorityActionItem({
             </a>}
 
             {/* WhatsApp */}
-            {item.phone && <a
-              href={waHref}
-              target="_blank"
-              rel="noopener noreferrer"
+            {item.phone && <button
+              type="button"
               onClick={(e) => {
+                e.stopPropagation();
                 if (!item.phone) {
                   e.preventDefault();
                   onWhatsApp(item);
+                } else {
+                  openWhatsApp({ id: item.leadId, name: item.leadName || item.title, phone: item.phone });
                 }
               }}
               aria-label={`WhatsApp message ${item.leadName || item.title}`}
@@ -203,7 +203,7 @@ export function PriorityActionItem({
             >
               <MessageCircle size={13} className="text-emerald-600" />
               <span>WhatsApp</span>
-            </a>}
+            </button>}
 
             {/* Add Follow-up */}
             <button

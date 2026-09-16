@@ -6,6 +6,7 @@ import { LogOut, Menu, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { logout } from "@/app/actions/auth";
 import { crmNavigation } from "@/components/crm-navigation";
+import { LiveClock } from "@/components/live-clock";
 
 export function MobileNavigation() {
   const pathname = usePathname();
@@ -34,13 +35,23 @@ export function MobileNavigation() {
   return (
     <>
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[var(--border)] bg-white/95 px-4 backdrop-blur-sm lg:hidden">
-        <Link href="/dashboard" className="flex items-center gap-2.5 rounded-md" aria-label="Scale Flow CRM dashboard">
-          <span className="grid size-8 place-items-center rounded-lg bg-blue-600 text-xs font-bold text-white">SF</span>
-          <span className="text-sm font-semibold tracking-tight text-slate-900">Scale Flow <span className="font-medium text-slate-500">CRM</span></span>
-        </Link>
-        <button ref={menuButtonRef} type="button" onClick={() => setIsOpen(true)} aria-label="Open navigation menu" aria-expanded={isOpen} aria-controls="mobile-navigation-panel" className="grid size-11 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
-          <Menu aria-hidden="true" size={21} />
-        </button>
+        <div className="flex flex-col">
+          <Link href="/dashboard" className="flex items-center gap-2.5 rounded-md" aria-label="Scale Flow CRM dashboard">
+            <span className="grid size-8 place-items-center rounded-lg bg-blue-600 text-xs font-bold text-white">SF</span>
+            <span className="text-sm font-semibold tracking-tight text-slate-900">Scale Flow <span className="font-medium text-slate-500">CRM</span></span>
+          </Link>
+          <div className="pl-10 -mt-1 hidden sm:block">
+            <LiveClock />
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="sm:hidden">
+            <LiveClock />
+          </div>
+          <button ref={menuButtonRef} type="button" onClick={() => setIsOpen(true)} aria-label="Open navigation menu" aria-expanded={isOpen} aria-controls="mobile-navigation-panel" className="grid size-11 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+            <Menu aria-hidden="true" size={21} />
+          </button>
+        </div>
       </header>
 
       {isOpen ? (

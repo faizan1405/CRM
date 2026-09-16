@@ -16,9 +16,6 @@ import { LeadQuickActions } from "@/features/leads/lead-quick-actions";
 import { getLeadLossHistory } from "@/app/actions/lost-reasons";
 import { LostLeadDetail } from "@/features/lost-reasons/lost-lead-detail";
 import type { LeadLossRecord } from "@/features/lost-reasons/types";
-import { getWhatsAppTemplates } from "@/app/actions/whatsapp-templates";
-const WhatsAppLeadComposer = dynamic(() => import("@/features/whatsapp-templates/components/whatsapp-lead-composer").then(m => m.WhatsAppLeadComposer));
-import type { WhatsAppTemplate } from "@/features/whatsapp-templates/types";
 
 function DetailItem({ label, value }: { label: string; value: string }) {
   return (
@@ -70,9 +67,6 @@ export function LeadDetailPanel({
   const statusSelectRef = useRef<HTMLSelectElement>(null);
   const leadId = lead?.id;
   const [lossHistory, setLossHistory] = useState<LeadLossRecord[]>([]);
-  
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
 
   useEffect(() => {
     if (leadId && lead?.status === "Lost") {
@@ -86,14 +80,6 @@ export function LeadDetailPanel({
       setLossHistory([]);
     }
   }, [leadId, lead?.status]);
-
-  useEffect(() => {
-    if (composerOpen && templates.length === 0) {
-      getWhatsAppTemplates({ activeOnly: true }).then(res => {
-        if (res.success) setTemplates(res.data || []);
-      });
-    }
-  }, [composerOpen, templates.length]);
 
   useDialogAccessibility(Boolean(leadId), onClose, saving, closeButtonRef);
 
@@ -296,29 +282,10 @@ export function LeadDetailPanel({
             }
             onAddFollowUp={onAddFollowUp}
             onChangeStatus={() => statusSelectRef.current?.focus()}
-            onOpenWhatsAppComposer={() => setComposerOpen(true)}
             className="mt-2"
           />
         </footer>
       </aside>
-      
-      {/* WhatsApp Composer */}
-      {composerOpen && <WhatsAppLeadComposer
-        isOpen={composerOpen}
-        onClose={() => setComposerOpen(false)}
-        templates={templates}
-        lead={{
-          id: lead.id,
-          name: lead.name,
-          phone: lead.phone,
-          business: lead.business,
-          requirement: lead.notes,
-          budget: lead.budget ? Number(lead.budget) : null,
-          status: lead.status,
-          followUpDate: lead.nextFollowUpDate ? formatDate(lead.nextFollowUpDate) : null,
-          followUpTime: null,
-        }}
-      />}
     </div>
   );
 }

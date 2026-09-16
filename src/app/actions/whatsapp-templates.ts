@@ -153,7 +153,9 @@ export async function createWhatsAppTemplate(input: {
     }
 
     return { success: true, data: serializeTemplate(created) };
+    return { success: true, data: serializeTemplate(created) };
   } catch (error) {
+    console.error("CREATE WHATSAPP TEMPLATE ERROR", error);
     return { success: false, error: cleanError(error) };
   }
 }

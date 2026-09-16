@@ -15,7 +15,7 @@ try {
 
   // Ensure DATABASE_URL is different to pass the db.ts check
   process.env.DATABASE_URL = "postgresql://dummy";
-} catch (e) {}
+} catch (_e) {}
 
 export default defineConfig({
   test: {

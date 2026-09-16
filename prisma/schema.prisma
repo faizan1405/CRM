@@ -115,6 +115,7 @@ enum ActivityType {
   FOLLOWUP_RESCHEDULED
   FOLLOWUP_COMPLETED
   FOLLOWUP_CANCELLED
+  WHATSAPP_OPENED
 }
 
 model LeadActivity {
@@ -186,12 +187,50 @@ model WhatsAppTemplate {
   category        WhatsAppTemplateCategory
   message         String                   @db.Text
   isActive        Boolean                  @default(true)
+  sortOrder       Int                      @default(0)
   createdByUserId String?
   createdByUser   User?                    @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   createdAt       DateTime                 @default(now())
   updatedAt       DateTime                 @updatedAt
 
   @@index([category])
+  @@index([isActive])
+}
+
+enum SampleType {
+  LIVE
+  DEMO
+}
+
+model WebsiteSample {
+  id          String     @id @default(uuid())
+  label       String?
+  url         String
+  category    String
+  type        SampleType @default(LIVE)
+  isActive    Boolean    @default(true)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([category])
+  @@index([type])
+  @@index([isActive])
+}
+
+model WebsitePackage {
+  id              String   @id @default(uuid())
+  name            String
+  price           Decimal  @db.Decimal(12, 2)
+  isStartingPrice Boolean  @default(false)
+  inclusions      String   @db.Text
+  hosting         String?
+  domain          String?
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
   @@index([isActive])
 }
 

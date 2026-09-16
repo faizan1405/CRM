@@ -8,6 +8,7 @@ import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-link
 import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
 import { Phone, MessageCircle } from "lucide-react";
 import { loadPriorityPage } from "../priority-page";
+import { useWhatsApp } from "@/components/whatsapp-context";
 
 export type PriorityLead = { leadId: string; leadName: string; business?: string; phone?: string; reason: string; stage?: string };
 export type PriorityLeadPage = { items: PriorityLead[]; nextCursor: string | null };
@@ -15,6 +16,7 @@ export type LoadPriorityPage = (input: { cursor: string | null; limit: 10 }) => 
 
 /** Agent A supplies bounded pages; never fetch the entire lead collection. */
 export function PriorityLeads({ initialPage, loadPage = loadPriorityPage }: { initialPage: PriorityLeadPage; loadPage?: LoadPriorityPage }) {
+  const { openWhatsApp } = useWhatsApp();
   const [items, setItems] = useState(() => initialPage.items.slice(0, 10));
   const [cursor, setCursor] = useState(initialPage.nextCursor);
   const [loading, setLoading] = useState(false);
@@ -61,7 +63,7 @@ export function PriorityLeads({ initialPage, loadPage = loadPriorityPage }: { in
             <p className="mt-1 break-words text-xs text-slate-500">{[item.business, item.stage].filter(Boolean).join(" · ")}</p>
             <p className="mt-2 break-words text-sm text-slate-700">{item.reason}</p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              {item.phone && <><a href={getTelephoneHref(item.phone)} aria-label={`Call ${item.leadName}`} className="grid size-11 place-items-center rounded-lg border bg-white hover:bg-blue-50"><Phone size={16} /></a><a href={getWhatsAppHref(item.phone, item.leadName)} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp ${item.leadName}`} className="grid size-11 place-items-center rounded-lg border bg-white hover:bg-emerald-50"><MessageCircle size={16} /></a></>}
+              {item.phone && <><a href={getTelephoneHref(item.phone)} aria-label={`Call ${item.leadName}`} className="grid size-11 place-items-center rounded-lg border bg-white hover:bg-blue-50"><Phone size={16} /></a><button type="button" onClick={(e) => { e.stopPropagation(); openWhatsApp({ id: item.leadId, name: item.leadName, phone: item.phone, status: item.stage }); }} aria-label={`WhatsApp ${item.leadName}`} className="grid size-11 place-items-center rounded-lg border bg-white hover:bg-emerald-50"><MessageCircle size={16} /></button></>}
               <ScheduleFollowUpButton leadId={item.leadId} leadName={item.leadName} />
               <LeadRecordLink leadId={item.leadId} label={`Review ${item.leadName}`} className="inline-flex min-h-11 items-center rounded-lg px-3 text-xs font-semibold text-blue-700 hover:bg-blue-50">Review</LeadRecordLink>
             </div>
