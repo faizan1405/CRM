@@ -96,8 +96,8 @@ describe("Lead Detail Follow-up System Integration (7 Required Tests)", () => {
     initialForm.append("type", "Call");
     const initialRes = await scheduleLeadFollowUp(initialForm);
     expect(initialRes.success).toBe(true);
-
-    const followUpId = (initialRes as any).data.id;
+    if (!initialRes.success) throw new Error(initialRes.error);
+    const followUpId = initialRes.data.id;
 
     // Reschedule from Lead Detail to 2026-10-28
     const newScheduledIso = "2026-10-28T14:30:00+05:30";
@@ -302,8 +302,9 @@ describe("Lead Detail Follow-up System Integration (7 Required Tests)", () => {
     // Also verify getLead returns the serialized activeFollowUp with exact time
     const leadResult = await getLead(lead.id);
     expect(leadResult.success).toBe(true);
-    expect((leadResult as any).data.activeFollowUp).toBeDefined();
-    const activeFollowUp = (leadResult as any).data.activeFollowUp;
+    if (!leadResult.success) throw new Error(leadResult.error);
+    expect(leadResult.data.activeFollowUp).toBeDefined();
+    const activeFollowUp = leadResult.data.activeFollowUp!;
     const activeDate = new Date(activeFollowUp.scheduledAt);
     expect(activeDate.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })).toBe("2026-10-25");
     expect(activeDate.toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })).toBe("15:45");

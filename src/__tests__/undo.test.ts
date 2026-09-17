@@ -20,7 +20,7 @@ describe("Phase 12.4 Undo Functionality", () => {
     await db.leadActivity.deleteMany({});
     await db.leadAIInsight.deleteMany({});
     await db.lead.deleteMany({});
-    await db.user.deleteMany({});
+    await db.user.deleteMany({ where: { id: "mock-user-id" } });
 
     // Setup user
     const user = await db.user.create({

@@ -70,3 +70,30 @@ export interface MobileSubscriptionInput {
   platform?: MobilePlatform;
   userAgent?: string;
 }
+
+export interface DispatchedAlertRecord {
+  id: string;
+  dedupeKey: string;
+  userId?: string;
+  leadId?: string;
+  category: string;
+  title: string;
+  body: string;
+  dispatchedAt: string;
+  success: boolean;
+}
+
+export interface MobileActionSuccess<T> {
+  success: true;
+  data: T;
+  error?: undefined;
+}
+
+export interface MobileActionError {
+  success: false;
+  error: string;
+  data?: undefined;
+}
+
+export type MobileActionResult<T> = MobileActionSuccess<T> | MobileActionError;
+

@@ -42,6 +42,7 @@ model User {
   lossEvents       LeadLossEvent[]
   notifications    SalesNotification[]
   personalNotes    PersonalNote[]
+  mobileSubscriptions MobilePushSubscription[]
 }
 
 model Lead {
@@ -60,6 +61,7 @@ model Lead {
   lastContactDate  DateTime?           @db.Date
   nextFollowUpDate DateTime?           @db.Date
   notes            String?             @db.Text
+  deletedAt        DateTime?
   followUps        FollowUp[]
   activities       LeadActivity[]
   aiInsight        LeadAIInsight?
@@ -74,6 +76,7 @@ model Lead {
   @@index([email])
   @@index([leadSource])
   @@index([createdAt])
+  @@index([deletedAt])
 }
 
 enum FollowUpType {
@@ -97,9 +100,10 @@ model FollowUp {
   type        FollowUpType
   status      FollowUpStatus @default(PENDING)
   note        String?        @db.Text
-  completedAt DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  completedAt  DateTime?
+  submissionId String?        @unique
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   @@index([leadId])
   @@index([scheduledAt])
@@ -337,4 +341,37 @@ model PersonalNote {
   @@index([userId])
   @@index([isPinned])
   @@index([createdAt])
+}
+
+model MobilePushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String?
+  auth      String?
+  platform  String   @default("web")
+  userAgent String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+model DispatchedMobileAlert {
+  id           String   @id @default(uuid())
+  dedupeKey    String   @unique
+  userId       String?
+  leadId       String?
+  category     String
+  title        String
+  body         String   @db.Text
+  dispatchedAt DateTime @default(now())
+  success      Boolean  @default(true)
+
+  @@index([dedupeKey])
+  @@index([userId])
+  @@index([dispatchedAt])
 }

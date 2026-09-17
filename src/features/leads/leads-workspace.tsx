@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useLeadNavigation } from "./lead-navigation-provider";
 import { statusFromDatabase, type DatabaseLeadStatus } from "./types";
 import { useEffect, useMemo, useState } from "react";
-import { changeLeadStatus, createLead, deleteLead, getLead, updateLead } from "@/app/actions/leads";
+import { changeLeadStatus, createLead, deleteLead, getLead, updateLead, updateQuickStatus } from "@/app/actions/leads";
 import { scheduleLeadFollowUp } from "@/app/actions/follow-ups";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";

@@ -68,6 +68,7 @@ function serializeFollowUp(
     status: statusFromDatabase[followUp.status as keyof typeof statusFromDatabase] ?? "Pending",
     note: followUp.note ?? "",
     completedAt: followUp.completedAt?.toISOString() ?? null,
+    submissionId: followUp.submissionId,
     createdAt: followUp.createdAt.toISOString(),
     updatedAt: followUp.updatedAt.toISOString(),
     lead: followUp.lead
@@ -89,10 +90,14 @@ async function syncNextFollowUpDate(leadId: string) {
     orderBy: { scheduledAt: "asc" },
   });
 
-  await db.lead.update({
-    where: { id: leadId },
-    data: { nextFollowUpDate: earliest ? earliest.scheduledAt : null },
-  });
+  try {
+    await db.lead.update({
+      where: { id: leadId },
+      data: { nextFollowUpDate: earliest ? earliest.scheduledAt : null },
+    });
+  } catch {
+    // safe if lead was removed concurrently
+  }
 }
 
 function parseScheduledDate(scheduledAtRaw: string): Date {
@@ -124,12 +129,35 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
     const note = String(formData.get("note") ?? "").trim();
     if (note.length > 5000) throw new UserFacingError("Note must be 5000 characters or fewer.");
 
-    const lead = await db.lead.findUnique({ where: { id: leadId } });
+    const submissionId = String(formData.get("submissionId") ?? "").trim() || undefined;
+    if (submissionId && submissionId.length > 120) throw new UserFacingError("Invalid submission ID.");
+
+    const lead = await db.lead.findFirst({ where: { id: leadId, deletedAt: null } });
     if (!lead) throw new UserFacingError("Lead not found.");
+
+    if (submissionId) {
+      const idempExisting = await db.followUp.findFirst({
+        where: { submissionId },
+        include: { lead: true },
+      });
+      if (idempExisting) {
+        return { success: true, data: serializeFollowUp(idempExisting) };
+      }
+    }
 
     const validUserId = await resolveValidUserId(session.id);
 
     const followUp = await db.$transaction(async (tx) => {
+      if (submissionId) {
+        const idempExisting = await tx.followUp.findFirst({
+          where: { submissionId },
+          include: { lead: true },
+        });
+        if (idempExisting) {
+          return idempExisting;
+        }
+      }
+
       const newFollowUp = await tx.followUp.create({
         data: {
           leadId,
@@ -137,29 +165,63 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
           type,
           note: note || null,
           status: "PENDING",
+          submissionId,
         },
         include: { lead: true },
       });
 
-      await tx.leadActivity.create({
-        data: {
-          leadId: newFollowUp.leadId,
-          type: ActivityType.FOLLOWUP_CREATED,
-          message: `Scheduled a ${newFollowUp.type} follow-up for ${newFollowUp.scheduledAt.toLocaleDateString()}`,
-          metadata: { type: newFollowUp.type, scheduledAt: newFollowUp.scheduledAt },
-          createdByUserId: validUserId,
-        },
-      });
-
-      if (note) {
+      try {
         await tx.leadActivity.create({
           data: {
             leadId: newFollowUp.leadId,
-            type: ActivityType.NOTE_ADDED,
-            message: note,
+            type: ActivityType.FOLLOWUP_CREATED,
+            message: `Scheduled a ${newFollowUp.type} follow-up for ${newFollowUp.scheduledAt.toLocaleDateString()}`,
+            metadata: { type: newFollowUp.type, scheduledAt: newFollowUp.scheduledAt },
             createdByUserId: validUserId,
           },
         });
+      } catch (err: unknown) {
+        const isFkError = err instanceof Error && (err.message.includes("Foreign key") || (err as { code?: string }).code === "P2003");
+        if (isFkError) {
+          await tx.leadActivity.create({
+            data: {
+              leadId: newFollowUp.leadId,
+              type: ActivityType.FOLLOWUP_CREATED,
+              message: `Scheduled a ${newFollowUp.type} follow-up for ${newFollowUp.scheduledAt.toLocaleDateString()}`,
+              metadata: { type: newFollowUp.type, scheduledAt: newFollowUp.scheduledAt },
+              createdByUserId: null,
+            },
+          });
+        } else {
+          throw err;
+        }
+      }
+
+      if (note) {
+        try {
+          await tx.leadActivity.create({
+            data: {
+              leadId: newFollowUp.leadId,
+              type: ActivityType.NOTE_ADDED,
+              message: note,
+              createdByUserId: validUserId,
+            },
+          });
+        } catch (err: unknown) {
+          const isFkError = err instanceof Error && (err.message.includes("Foreign key") || (err as { code?: string }).code === "P2003");
+          if (isFkError) {
+            await tx.leadActivity.create({
+              data: {
+                leadId: newFollowUp.leadId,
+                type: ActivityType.NOTE_ADDED,
+                message: note,
+                createdByUserId: null,
+              },
+            });
+          } else {
+            throw err;
+          }
+        }
         
         // Also sync it to Lead.notes for redundancy like Lead Detail does sometimes, 
         // though NOTE_ADDED is the primary chronological source.
@@ -172,6 +234,9 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
       await markLeadAIInsightNeedsRefresh(leadId, tx);
 
       return newFollowUp;
+    }, {
+      timeout: 15000,
+      maxWait: 10000,
     });
 
     await syncNextFollowUpDate(leadId);
@@ -196,6 +261,11 @@ export async function getFollowUps(): Promise<FollowUpActionResult<{
   try {
     await requireAuthenticatedUser();
     const followUps = await db.followUp.findMany({
+      where: {
+        lead: {
+          deletedAt: null,
+        },
+      },
       include: { 
         lead: {
           include: {
@@ -582,7 +652,7 @@ export async function scheduleLeadFollowUp(
     if (note.length > 5000) throw new UserFacingError("Note must be 5000 characters or fewer.");
     if (submissionId && submissionId.length > 120) throw new UserFacingError("Invalid submission ID.");
 
-    const lead = await db.lead.findUnique({ where: { id: leadId } });
+    const lead = await db.lead.findFirst({ where: { id: leadId, deletedAt: null } });
     if (!lead) throw new UserFacingError("Lead not found.");
 
     const validUserId = await resolveValidUserId(session.id);

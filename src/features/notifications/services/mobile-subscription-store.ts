@@ -1,3 +1,4 @@
+import { db } from "@/lib/db";
 import type {
   MobileDeviceSubscription,
   MobileSubscriptionInput,
@@ -5,104 +6,163 @@ import type {
   MobileAlertItem,
 } from "../types/mobile";
 
-// In-memory persistent storage store with deduplication tracking
-const subscriptionStore = new Map<string, MobileDeviceSubscription>();
-const dispatchedAlertsLog: {
-  id: string;
-  dedupeKey: string;
-  userId?: string;
-  leadId?: string;
-  category: string;
-  title: string;
-  body: string;
-  dispatchedAt: string;
-  success: boolean;
-}[] = [];
-
 export class MobileSubscriptionStore {
-  static registerSubscription(
+  /**
+   * Persists / upserts a push subscription to PostgreSQL database
+   */
+  static async registerSubscription(
     userId: string,
     input: MobileSubscriptionInput
-  ): MobileDeviceSubscription {
+  ): Promise<MobileDeviceSubscription> {
     if (!input.endpoint || typeof input.endpoint !== "string") {
       throw new Error("Push endpoint is required for mobile subscription.");
     }
 
     const endpoint = input.endpoint.trim();
-    const existing = subscriptionStore.get(endpoint);
-    const now = new Date().toISOString();
+    const platform = (input.platform as MobilePlatform) || "web";
 
-    if (existing) {
-      existing.userId = userId;
-      existing.p256dh = input.keys?.p256dh ?? existing.p256dh;
-      existing.auth = input.keys?.auth ?? existing.auth;
-      existing.platform = input.platform ?? existing.platform;
-      existing.userAgent = input.userAgent ?? existing.userAgent;
-      existing.isActive = true;
-      existing.updatedAt = now;
-      subscriptionStore.set(endpoint, existing);
-      return existing;
-    }
+    const record = await db.mobilePushSubscription.upsert({
+      where: { endpoint },
+      update: {
+        userId,
+        p256dh: input.keys?.p256dh ?? undefined,
+        auth: input.keys?.auth ?? undefined,
+        platform,
+        userAgent: input.userAgent ?? undefined,
+        isActive: true,
+      },
+      create: {
+        userId,
+        endpoint,
+        p256dh: input.keys?.p256dh ?? null,
+        auth: input.keys?.auth ?? null,
+        platform,
+        userAgent: input.userAgent ?? null,
+        isActive: true,
+      },
+    });
 
-    const newSub: MobileDeviceSubscription = {
-      id: `sub-${Math.random().toString(36).slice(2, 10)}`,
-      userId,
-      endpoint,
-      p256dh: input.keys?.p256dh ?? null,
-      auth: input.keys?.auth ?? null,
-      platform: (input.platform as MobilePlatform) || "web",
-      userAgent: input.userAgent ?? null,
-      isActive: true,
-      createdAt: now,
-      updatedAt: now,
+    return {
+      id: record.id,
+      userId: record.userId,
+      endpoint: record.endpoint,
+      p256dh: record.p256dh,
+      auth: record.auth,
+      platform: (record.platform as MobilePlatform) || "web",
+      userAgent: record.userAgent,
+      isActive: record.isActive,
+      createdAt: record.createdAt.toISOString(),
+      updatedAt: record.updatedAt.toISOString(),
     };
-
-    subscriptionStore.set(endpoint, newSub);
-    return newSub;
   }
 
-  static unregisterSubscription(endpoint: string): boolean {
-    const sub = subscriptionStore.get(endpoint.trim());
-    if (!sub) return false;
-    sub.isActive = false;
-    sub.updatedAt = new Date().toISOString();
-    return true;
+  /**
+   * Deactivates a push subscription in DB
+   */
+  static async unregisterSubscription(endpoint: string): Promise<boolean> {
+    const trimmed = endpoint.trim();
+    const result = await db.mobilePushSubscription.updateMany({
+      where: { endpoint: trimmed },
+      data: { isActive: false },
+    });
+    return result.count > 0;
   }
 
-  static getActiveSubscriptions(userId?: string): MobileDeviceSubscription[] {
-    const all = Array.from(subscriptionStore.values()).filter((s) => s.isActive);
-    if (userId) return all.filter((s) => s.userId === userId);
-    return all;
+  /**
+   * Loads all active subscriptions from DB (for a user or all users)
+   */
+  static async getActiveSubscriptions(userId?: string): Promise<MobileDeviceSubscription[]> {
+    const records = await db.mobilePushSubscription.findMany({
+      where: {
+        isActive: true,
+        ...(userId ? { userId } : {}),
+      },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    return records.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      endpoint: r.endpoint,
+      p256dh: r.p256dh,
+      auth: r.auth,
+      platform: (r.platform as MobilePlatform) || "web",
+      userAgent: r.userAgent,
+      isActive: r.isActive,
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    }));
   }
 
-  static isAlreadyDispatched(dedupeKey: string): boolean {
-    return dispatchedAlertsLog.some((d) => d.dedupeKey === dedupeKey && d.success);
+  /**
+   * Checks if an alert with dedupeKey was already successfully dispatched
+   */
+  static async isAlreadyDispatched(dedupeKey: string): Promise<boolean> {
+    const existing = await db.dispatchedMobileAlert.findUnique({
+      where: { dedupeKey },
+    });
+    return Boolean(existing && existing.success);
   }
 
-  static recordDispatch(
+  /**
+   * Records a dispatched alert in PostgreSQL DB for persistent audit & deduplication
+   */
+  static async recordDispatch(
     alert: MobileAlertItem,
     userId?: string,
     success: boolean = true
   ) {
-    dispatchedAlertsLog.push({
-      id: `dispatch-${Math.random().toString(36).slice(2, 10)}`,
-      dedupeKey: alert.dedupeKey,
-      userId,
-      leadId: alert.leadId,
-      category: alert.category,
-      title: alert.title,
-      body: alert.body,
-      dispatchedAt: new Date().toISOString(),
-      success,
+    await db.dispatchedMobileAlert.upsert({
+      where: { dedupeKey: alert.dedupeKey },
+      update: {
+        userId: userId ?? undefined,
+        leadId: alert.leadId,
+        category: alert.category,
+        title: alert.title,
+        body: alert.body,
+        dispatchedAt: new Date(),
+        success,
+      },
+      create: {
+        dedupeKey: alert.dedupeKey,
+        userId: userId ?? null,
+        leadId: alert.leadId,
+        category: alert.category,
+        title: alert.title,
+        body: alert.body,
+        dispatchedAt: new Date(),
+        success,
+      },
     });
   }
 
-  static getDispatchedAlerts(limit: number = 50) {
-    return [...dispatchedAlertsLog].reverse().slice(0, limit);
+  /**
+   * Retrieves recent dispatched alert history from DB
+   */
+  static async getDispatchedAlerts(limit: number = 50) {
+    const records = await db.dispatchedMobileAlert.findMany({
+      orderBy: { dispatchedAt: "desc" },
+      take: limit,
+    });
+
+    return records.map((r) => ({
+      id: r.id,
+      dedupeKey: r.dedupeKey,
+      userId: r.userId || undefined,
+      leadId: r.leadId || undefined,
+      category: r.category,
+      title: r.title,
+      body: r.body,
+      dispatchedAt: r.dispatchedAt.toISOString(),
+      success: r.success,
+    }));
   }
 
-  static clearForTesting() {
-    subscriptionStore.clear();
-    dispatchedAlertsLog.length = 0;
+  /**
+   * Clean test data
+   */
+  static async clearForTesting() {
+    await db.dispatchedMobileAlert.deleteMany({});
+    await db.mobilePushSubscription.deleteMany({});
   }
 }

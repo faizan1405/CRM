@@ -56,7 +56,7 @@ describe("Agent B — Mobile Notification System Integration", () => {
     await db.user.delete({ where: { id: TEST_USER_ID } }).catch(() => {});
   });
 
-  async function createTestLead(nameSuffix: string, extraData: any = {}) {
+  async function createTestLead(nameSuffix: string, extraData: Partial<import("@prisma/client").Prisma.LeadCreateInput> = {}) {
     const lead = await db.lead.create({
       data: {
         name: `Mobile Test ${nameSuffix}`,
@@ -169,9 +169,9 @@ describe("Agent B — Mobile Notification System Integration", () => {
       });
 
       expect(regResult.success).toBe(true);
-      expect(regResult.data.endpoint).toBe(endpoint);
-      expect(regResult.data.platform).toBe("android");
-      expect(regResult.data.isActive).toBe(true);
+      expect(regResult.data!.endpoint).toBe(endpoint);
+      expect(regResult.data!.platform).toBe("android");
+      expect(regResult.data!.isActive).toBe(true);
 
       // Re-register with updated platform
       const updateResult = await registerMobileSubscription({
@@ -179,16 +179,16 @@ describe("Agent B — Mobile Notification System Integration", () => {
         platform: "ios",
       });
       expect(updateResult.success).toBe(true);
-      expect(updateResult.data.platform).toBe("ios");
+      expect(updateResult.data!.platform).toBe("ios");
 
       // Verify active subscriptions
-      const active = MobileSubscriptionStore.getActiveSubscriptions(TEST_USER_ID);
+      const active = await MobileSubscriptionStore.getActiveSubscriptions(TEST_USER_ID);
       expect(active.length).toBe(1);
 
       // Unregister
       const unregResult = await unregisterMobileSubscription(endpoint);
       expect(unregResult.success).toBe(true);
-      expect(MobileSubscriptionStore.getActiveSubscriptions(TEST_USER_ID).length).toBe(0);
+      expect((await MobileSubscriptionStore.getActiveSubscriptions(TEST_USER_ID)).length).toBe(0);
     });
   });
 
@@ -207,18 +207,18 @@ describe("Agent B — Mobile Notification System Integration", () => {
       // 1st dispatch cycle
       const cycle1 = await dispatchMobileAlerts();
       expect(cycle1.success).toBe(true);
-      expect(cycle1.data.dispatched).toBeGreaterThan(0);
+      expect(cycle1.data!.dispatched).toBeGreaterThan(0);
 
       // 2nd dispatch cycle immediately after
       const cycle2 = await dispatchMobileAlerts();
       expect(cycle2.success).toBe(true);
       // Alerts matching previous dedupe keys should be skipped
-      expect(cycle2.data.skippedDuplicate).toBeGreaterThan(0);
+      expect(cycle2.data!.skippedDuplicate).toBeGreaterThan(0);
 
       // Verify dispatch history
       const history = await getDispatchedMobileAlerts(10);
       expect(history.success).toBe(true);
-      expect(history.data.length).toBeGreaterThan(0);
+      expect(history.data!.length).toBeGreaterThan(0);
     });
   });
 });

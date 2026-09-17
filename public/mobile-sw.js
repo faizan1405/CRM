@@ -1,4 +1,12 @@
 // ScaleFlow Mobile Service Worker for Push Notifications
+self.addEventListener("install", function (event) {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", function (event) {
+  event.waitUntil(self.clients.claim());
+});
+
 self.addEventListener("push", function (event) {
   if (!event.data) return;
 
@@ -30,17 +38,30 @@ self.addEventListener("notificationclick", function (event) {
 
   if (action === "call" && notificationData.phone) {
     targetUrl = `tel:${notificationData.phone.replace(/[^+\d]/g, "")}`;
+    if (clients.openWindow) {
+      event.waitUntil(clients.openWindow(targetUrl));
+    }
+    return;
   } else if (action === "reschedule" && notificationData.leadId) {
     targetUrl = `/leads/${notificationData.leadId}?action=followup`;
+  } else if (action === "view" && notificationData.leadId) {
+    targetUrl = `/leads/${notificationData.leadId}`;
+  } else if (notificationData.leadId) {
+    targetUrl = `/leads/${notificationData.leadId}`;
   }
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (clientList) {
-      // Focus existing window if open
+      // Focus existing window if open and navigate if needed
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
-        if (client.url.includes(targetUrl) && "focus" in client) {
-          return client.focus();
+        if ("focus" in client) {
+          if (client.url.includes(targetUrl)) {
+            return client.focus();
+          } else if ("navigate" in client) {
+            client.navigate(targetUrl);
+            return client.focus();
+          }
         }
       }
       if (clients.openWindow) {

@@ -76,7 +76,7 @@ describe("follow-up idempotency (submissionId)", () => {
   }
 
   it("returns the same follow-up when the same submissionId is submitted twice", async () => {
-    const submissionId = "test-submission-abc123";
+    const submissionId = `test-idemp-submission-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     const r1 = await createFollowUp(buildFormData(testLeadId, submissionId));
     expect(r1.success).toBe(true);
@@ -93,11 +93,12 @@ describe("follow-up idempotency (submissionId)", () => {
   });
 
   it("creates distinct follow-ups for different submissionIds", async () => {
-    const r1 = await createFollowUp(buildFormData(testLeadId, "submission-x-001"));
+    const now = Date.now();
+    const r1 = await createFollowUp(buildFormData(testLeadId, `idemp-sub-x-001-${now}`));
     expect(r1.success).toBe(true);
     const id1 = (r1 as FollowUpActionResult).data!.id;
 
-    const r2 = await createFollowUp(buildFormData(testLeadId, "submission-x-002"));
+    const r2 = await createFollowUp(buildFormData(testLeadId, `idemp-sub-x-002-${now}`));
     expect(r2.success).toBe(true);
     const id2 = (r2 as FollowUpActionResult).data!.id;
 

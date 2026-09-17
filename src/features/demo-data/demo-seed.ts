@@ -271,58 +271,119 @@ export async function seedDemoLeads(userId?: string): Promise<{ createdCount: nu
       phoneToUse = `${item.phone.slice(0, 10)}${createdCount}`;
     }
 
-    await db.lead.create({
-      data: {
-        name: item.name,
-        phone: phoneToUse,
-        email: item.email,
-        business: item.business,
-        industry: item.industry,
-        budget: item.budget,
-        quotedAmount: item.quotedAmount ?? null,
-        status: item.status,
-        lastContactDate: item.lastContactDate ?? null,
-        nextFollowUpDate: item.nextFollowUpDate ?? null,
-        notes: item.notes,
-        activities: {
-          create: {
-            type: ActivityType.LEAD_CREATED,
-            message: `Demo lead created: ${item.name}`,
-            createdByUserId: validUserId,
+    try {
+      await db.lead.create({
+        data: {
+          name: item.name,
+          phone: phoneToUse,
+          email: item.email,
+          business: item.business,
+          industry: item.industry,
+          budget: item.budget,
+          quotedAmount: item.quotedAmount ?? null,
+          status: item.status,
+          lastContactDate: item.lastContactDate ?? null,
+          nextFollowUpDate: item.nextFollowUpDate ?? null,
+          notes: item.notes,
+          activities: {
+            create: {
+              type: ActivityType.LEAD_CREATED,
+              message: `Demo lead created: ${item.name}`,
+              createdByUserId: validUserId,
+            },
           },
-        },
-        aiInsight: {
-          create: {
-            score: item.insight.score,
-            priority: item.insight.priority,
-            scoreReason: item.insight.scoreReason,
-            recommendedAction: item.insight.recommendedAction,
-            recommendedActionType: item.insight.recommendedActionType,
-            needsRefresh: false,
+          aiInsight: {
+            create: {
+              score: item.insight.score,
+              priority: item.insight.priority,
+              scoreReason: item.insight.scoreReason,
+              recommendedAction: item.insight.recommendedAction,
+              recommendedActionType: item.insight.recommendedActionType,
+              needsRefresh: false,
+            },
           },
+          followUps: item.followUp
+            ? {
+                create: {
+                  scheduledAt: item.followUp.scheduledAt,
+                  type: item.followUp.type,
+                  note: item.followUp.note,
+                  status: FollowUpStatus.PENDING,
+                },
+              }
+            : undefined,
+          lossEvents: item.lossEvent
+            ? {
+                create: {
+                  reason: item.lossEvent.reason,
+                  note: item.lossEvent.note,
+                  lostAt: now,
+                  createdByUserId: validUserId,
+                },
+              }
+            : undefined,
         },
-        followUps: item.followUp
-          ? {
+      });
+    } catch (err: unknown) {
+      const isFk = err instanceof Error && (err.message.includes("Foreign key") || (err as { code?: string }).code === "P2003");
+      if (isFk && validUserId) {
+        validUserId = null;
+        await db.lead.create({
+          data: {
+            name: item.name,
+            phone: phoneToUse,
+            email: item.email,
+            business: item.business,
+            industry: item.industry,
+            budget: item.budget,
+            quotedAmount: item.quotedAmount ?? null,
+            status: item.status,
+            lastContactDate: item.lastContactDate ?? null,
+            nextFollowUpDate: item.nextFollowUpDate ?? null,
+            notes: item.notes,
+            activities: {
               create: {
-                scheduledAt: item.followUp.scheduledAt,
-                type: item.followUp.type,
-                note: item.followUp.note,
-                status: FollowUpStatus.PENDING,
+                type: ActivityType.LEAD_CREATED,
+                message: `Demo lead created: ${item.name}`,
+                createdByUserId: null,
               },
-            }
-          : undefined,
-        lossEvents: item.lossEvent
-          ? {
+            },
+            aiInsight: {
               create: {
-                reason: item.lossEvent.reason,
-                note: item.lossEvent.note,
-                lostAt: now,
-                createdByUserId: validUserId,
+                score: item.insight.score,
+                priority: item.insight.priority,
+                scoreReason: item.insight.scoreReason,
+                recommendedAction: item.insight.recommendedAction,
+                recommendedActionType: item.insight.recommendedActionType,
+                needsRefresh: false,
               },
-            }
-          : undefined,
-      },
-    });
+            },
+            followUps: item.followUp
+              ? {
+                  create: {
+                    scheduledAt: item.followUp.scheduledAt,
+                    type: item.followUp.type,
+                    note: item.followUp.note,
+                    status: FollowUpStatus.PENDING,
+                  },
+                }
+              : undefined,
+            lossEvents: item.lossEvent
+              ? {
+                  create: {
+                    reason: item.lossEvent.reason,
+                    note: item.lossEvent.note,
+                    lostAt: now,
+                    createdByUserId: null,
+                  },
+                }
+              : undefined,
+          },
+        });
+      } else {
+        throw err;
+      }
+    }
 
     createdCount++;
   }
