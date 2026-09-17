@@ -37,9 +37,14 @@ const COLUMNS: LeadStatus[] = [
 export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   const searchParams = useSearchParams();
   const requestedStage = statusFromDatabase[searchParams.get("stage") as DatabaseLeadStatus];
+  const [activeMobileStage, setActiveMobileStage] = useState<LeadStatus>(requestedStage || "New");
   const stageRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (requestedStage) stageRef.current?.querySelector(`[data-stage="${requestedStage}"]`)?.scrollIntoView({ block: "nearest", inline: "start" });
+    if (requestedStage) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setActiveMobileStage(requestedStage);
+      stageRef.current?.querySelector(`[data-stage="${requestedStage}"]`)?.scrollIntoView({ block: "nearest", inline: "start" });
+    }
   }, [requestedStage]);
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -261,7 +266,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   };
 
   return (
-    <div className="flex h-[min(75dvh,52rem)] min-h-80 min-w-0 flex-col overflow-hidden pb-4">
+    <div className="flex flex-col min-w-0 pb-4 lg:h-[min(75dvh,52rem)] lg:min-h-80 lg:overflow-hidden">
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm font-medium text-red-800 shadow-sm border border-red-200 flex justify-between">
           {error}
@@ -272,7 +277,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       )}
 
       {/* Summary Stats */}
-      <details className="mb-4 sm:mb-6 shrink-0 group rounded-xl border border-[var(--border)] bg-white overflow-hidden [&_summary::-webkit-details-marker]:hidden" open>
+      <details className="mb-4 sm:mb-6 shrink-0 group rounded-xl border border-[var(--border)] bg-white overflow-hidden [&_summary::-webkit-details-marker]:hidden">
         <summary className="flex cursor-pointer items-center justify-between px-4 py-3 font-semibold text-slate-900 select-none hover:bg-slate-50 active:bg-slate-100 sm:hidden">
           <div className="flex items-center gap-2">
             Pipeline Analytics
@@ -297,21 +302,28 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         {COLUMNS.map((status) => (
           <button
             key={status}
-            onClick={() => {
-              stageRef.current?.querySelector(`[data-stage="${status}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+            onClick={(e) => {
+              setActiveMobileStage(status);
+              e.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
             }}
-            className="shrink-0 snap-center rounded-full bg-white border border-slate-200 px-4 py-2 text-[13px] font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 active:bg-slate-100"
+            className={`shrink-0 snap-center rounded-full border px-4 py-2 text-[13px] font-semibold shadow-sm transition-colors ${
+              activeMobileStage === status 
+                ? "bg-slate-800 text-white border-slate-800" 
+                : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 active:bg-slate-100"
+            }`}
           >
-            {status} <span className="ml-1 text-[11px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">{grouped[status].length}</span>
+            {status} <span className={`ml-1 text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
+              activeMobileStage === status ? "bg-slate-700 text-white" : "text-slate-400 bg-slate-100"
+            }`}>{grouped[status].length}</span>
           </button>
         ))}
       </div>
       {/* Every droppable shares one scroll parent; nested scroll parents disable DnD auto-scroll. */}
-      <div ref={stageRef} aria-label="Pipeline stages" className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain custom-scrollbar snap-x snap-mandatory" style={{ scrollBehavior: "auto" }}>
+      <div ref={stageRef} aria-label="Pipeline stages" className="min-h-0 min-w-0 flex-1 lg:overflow-auto overscroll-contain custom-scrollbar lg:snap-x lg:snap-mandatory" style={{ scrollBehavior: "auto" }}>
         <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex min-h-full min-w-max items-stretch gap-4 pb-4 px-4 sm:px-0">
+          <div className="flex min-h-full w-full lg:w-auto lg:min-w-max items-stretch gap-4 pb-4 px-4 sm:px-0">
             {COLUMNS.map((status) => (
-              <div key={status} data-stage={status} className="flex w-[calc(100vw-2rem)] sm:w-[18rem] lg:w-80 shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-50 snap-center">
+              <div key={status} data-stage={status} className={`w-[calc(100vw-2rem)] sm:w-[18rem] lg:w-80 shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-50 snap-center ${activeMobileStage === status ? "flex" : "hidden sm:flex"}`}>
                 <PipelineColumnHeader status={status} count={grouped[status].length} />
 
                 <Droppable droppableId={status}>

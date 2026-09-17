@@ -1,6 +1,6 @@
 import { ActionCard } from "@/components/action-card";
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
-import { Building2, Phone, MessageCircle, CalendarPlus } from "lucide-react";
+import { Building2, Phone, MessageCircle, CalendarPlus, GripVertical } from "lucide-react";
 import type { Lead } from "@/features/leads/types";
 import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
 import { QuickStatusChip } from "@/features/leads/quick-status-chip";
@@ -25,10 +25,15 @@ export function PipelineCard({
     <ActionCard
       onActivate={onClick}
       aria-label={`Open lead ${lead.name}`}
-      {...dragHandleProps}
       className={`group relative flex flex-col gap-1.5 rounded-xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-sm transition-[transform,box-shadow,border-color] duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer`}
     >
-      <div className="flex justify-between items-start gap-2">
+      <div className="flex justify-between items-start gap-1 sm:gap-2">
+        <div 
+          {...dragHandleProps} 
+          className="shrink-0 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing -ml-1 mt-0.5 p-1 touch-none"
+        >
+          <GripVertical size={16} />
+        </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <h4 className="font-semibold text-slate-900 text-[15px] truncate">{lead.name}</h4>

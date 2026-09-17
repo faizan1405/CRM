@@ -12,7 +12,7 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
       <WhatsAppProvider>
         <CallProvider>
           <LeadNavigationProvider>
-            <div className="min-h-dvh lg:flex pb-16 lg:pb-0">
+            <div className="min-h-dvh lg:flex pb-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] lg:pb-0">
               <AppSidebar />
               <div className="min-w-0 flex-1">
                 <MobileHeader />
