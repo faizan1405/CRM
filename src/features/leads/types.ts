@@ -33,7 +33,6 @@ export type Lead = {
   isWaste?: boolean;
   operationalState?: LeadOperationalState;
   aiAttention?: import("@/features/ai-attention/types").AIAttentionLeadData;
-  activeFollowUp?: import("@/features/followups/types").FollowUp | null;
 };
 
 export type NewLeadInput = Pick<
