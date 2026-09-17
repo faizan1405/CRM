@@ -87,6 +87,16 @@ export function useMobilePush() {
       });
       await navigator.serviceWorker.ready;
 
+      // Clean up any stale or invalid subscription before subscribing with fresh keys
+      try {
+        const existingSub = await registration.pushManager.getSubscription();
+        if (existingSub) {
+          await existingSub.unsubscribe();
+        }
+      } catch {
+        // Safe fallback if unsubscribe fails
+      }
+
       // 3. Get VAPID Public Key from server
       const vapidRes = await getMobileVapidPublicKey();
       if (!vapidRes.success) {
@@ -185,11 +195,36 @@ export function useMobilePush() {
         );
         return true;
       } else {
-        setStatusMessage(res.error || "Failed to trigger test alert.");
+        // If the subscription is expired or missing in DB, update local state
+        const err = res.error || "";
+        if (
+          err.toLowerCase().includes("expired") ||
+          err.toLowerCase().includes("no active device") ||
+          err.toLowerCase().includes("re-enable") ||
+          err.toLowerCase().includes("again") ||
+          err.toLowerCase().includes("revoked")
+        ) {
+          setIsSubscribed(false);
+        }
+        setStatusMessage(err || "Failed to trigger test alert.");
         return false;
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to trigger test alert.";
+      console.error("[useMobilePush] Test push error:", err);
+      let message = "Push notification delivery failed. Please re-enable notifications and try again.";
+      if (err instanceof Error && err.message) {
+        const msg = err.message;
+        if (
+          !msg.includes("unexpected response") &&
+          !msg.includes("prisma") &&
+          !msg.includes("Prisma") &&
+          !msg.includes("invocation") &&
+          !msg.includes("fetch")
+        ) {
+          message = msg;
+        }
+      }
+      setIsSubscribed(false);
       setStatusMessage(message);
       return false;
     } finally {

@@ -31,10 +31,11 @@ export function getPresetDate(daysToAdd: number) {
 }
 
 export const FOLLOW_UP_PRESETS = [
-  { label: 'Tomorrow', days: 1 },
-  { label: '+2 Days', days: 2 },
-  { label: '+3 Days', days: 3 },
-  { label: '+4 Days', days: 4 },
+  { id: 'instant', label: 'Instant', days: 0, isInstant: true },
+  { id: 'tomorrow', label: 'Tomorrow', days: 1, isInstant: false },
+  { id: '+2', label: '+2 Days', days: 2, isInstant: false },
+  { id: '+3', label: '+3 Days', days: 3, isInstant: false },
+  { id: '+4', label: '+4 Days', days: 4, isInstant: false },
 ];
 
 export const DEFAULT_TIME = '10:00';

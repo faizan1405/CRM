@@ -34,6 +34,8 @@ export function FollowUpForm({
   const [scheduledTime, setScheduledTime] = useState("09:00");
   const [note, setNote] = useState("");
   const [leadId, setLeadId] = useState("");
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+  const submissionIdRef = useRef<string>("");
   const firstLeadId = leads[0]?.id || "";
   const formId = useId();
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -41,6 +43,10 @@ export function FollowUpForm({
   useDialogAccessibility(isOpen, onClose, saving, closeButtonRef);
 
   useEffect(() => {
+    if (isOpen) {
+      submissionIdRef.current = `fu-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      setSelectedPreset(null);
+    }
     if (isOpen && followUp) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setType(followUp.type);
@@ -62,14 +68,32 @@ export function FollowUpForm({
 
   if (!isOpen) return null;
 
+  const handlePresetClick = (preset: (typeof FOLLOW_UP_PRESETS)[number]) => {
+    setSelectedPreset(preset.id);
+    if (preset.id === "instant") {
+      const now = new Date();
+      const istDate = now.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+      const istTime = now.toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" });
+      setScheduledDate(istDate);
+      setScheduledTime(istTime);
+    } else {
+      setScheduledDate(getPresetDate(preset.days));
+      if (!scheduledTime || selectedPreset === "instant") {
+        setScheduledTime(DEFAULT_TIME);
+      }
+    }
+  };
+
   const handleSubmit = () => {
     if (!leadId) return;
     const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}:00+05:30`).toISOString();
     onSubmit({
+      ...(followUp?.id ? { id: followUp.id } : {}),
       leadId,
       type,
       scheduledAt,
       note: note.trim(),
+      submissionId: submissionIdRef.current,
     });
   };
 
@@ -120,6 +144,9 @@ export function FollowUpForm({
             {leads.map((l) => (
               <option key={l.id} value={l.id}>{l.name}</option>
             ))}
+            {followUp?.lead && !leads.some((l) => l.id === followUp.leadId) && (
+              <option value={followUp.leadId}>{followUp.lead.name}</option>
+            )}
           </select>
         </div>
 
@@ -129,25 +156,35 @@ export function FollowUpForm({
               Date <span className="text-red-500">*</span>
             </label>
             <div className="flex flex-wrap gap-1.5 mb-2.5">
-              {FOLLOW_UP_PRESETS.map((preset) => (
-                <button
-                  key={preset.label}
-                  type="button"
-                  onClick={() => {
-                    setScheduledDate(getPresetDate(preset.days));
-                    if (!scheduledTime) setScheduledTime(DEFAULT_TIME);
-                  }}
-                  className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors active:bg-slate-200"
-                >
-                  {preset.label}
-                </button>
-              ))}
+              {FOLLOW_UP_PRESETS.map((preset) => {
+                const isSelected = selectedPreset === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    data-preset={preset.id}
+                    aria-pressed={isSelected}
+                    aria-label={preset.id === "instant" ? "Instant follow-up" : preset.label}
+                    onClick={() => handlePresetClick(preset)}
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all shadow-sm ${
+                      isSelected
+                        ? "border-2 border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-500/25"
+                        : "border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200"
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
             </div>
             <input
               id={`${formId}-date`}
               type="date"
               value={scheduledDate}
-              onChange={(e) => setScheduledDate(e.target.value)}
+              onChange={(e) => {
+                setScheduledDate(e.target.value);
+                setSelectedPreset(null);
+              }}
               className={inputClass}
               required
               disabled={saving}
@@ -161,7 +198,10 @@ export function FollowUpForm({
               id={`${formId}-time`}
               type="time"
               value={scheduledTime}
-              onChange={(e) => setScheduledTime(e.target.value)}
+              onChange={(e) => {
+                setScheduledTime(e.target.value);
+                setSelectedPreset(null);
+              }}
               className={inputClass}
               required
               disabled={saving}

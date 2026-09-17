@@ -402,7 +402,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   };
 
   return (
-    <div className="flex flex-col min-w-0 pb-4 lg:h-[min(75dvh,52rem)] lg:min-h-[36rem] lg:overflow-hidden">
+    <div className="flex flex-col min-w-0 w-full pb-4">
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm font-medium text-red-800 shadow-sm border border-red-200 flex justify-between">
           {error}
@@ -504,8 +504,8 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         </div>
 
         {/* Every droppable shares one scroll parent; nested scroll parents disable DnD auto-scroll. */}
-        <div ref={stageRef} aria-label="Pipeline stages" className="min-h-0 min-w-0 flex-1 overflow-x-auto overscroll-contain custom-scrollbar sm:snap-x sm:snap-mandatory" style={{ scrollBehavior: "auto" }}>
-          <div className="flex min-h-full w-full lg:w-auto lg:min-w-max items-stretch gap-4 pb-4 px-4 sm:px-0">
+        <div ref={stageRef} aria-label="Pipeline stages" className="w-full min-h-0 min-w-0 flex-1 overflow-x-auto overscroll-x-contain custom-scrollbar sm:snap-x lg:snap-none" style={{ scrollBehavior: "auto" }}>
+          <div className="flex min-h-full w-max min-w-full items-stretch gap-4 pb-4 px-4 sm:px-0">
             {COLUMNS.map((status) => (
               <div key={status} data-stage={status} className={`w-[calc(100vw-2rem)] sm:w-[18rem] lg:w-80 shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-50 snap-center ${activeMobileStage === status ? "flex" : "hidden sm:flex"}`}>
                 <PipelineColumnHeader status={status} count={grouped[status].length} />

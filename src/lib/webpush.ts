@@ -13,7 +13,8 @@ const DEFAULT_VAPID_PRIVATE_KEY =
   "mk2IRu_Dih3oiDdLhm6PgEUCrhn_uitJm4QUa_FdUNk";
 
 const DEFAULT_VAPID_SUBJECT =
-  process.env.VAPID_SUBJECT || "mailto:admin@scaleflow.local";
+  process.env.VAPID_SUBJECT ||
+  (process.env.ADMIN_EMAIL ? `mailto:${process.env.ADMIN_EMAIL}` : "mailto:faizan@scaleflow.in");
 
 let isVapidConfigured = false;
 
@@ -90,6 +91,7 @@ export async function sendRealPushNotification(
       {
         TTL: 24 * 60 * 60, // 24 hours
         urgency: payload.requireInteraction ? "high" : "normal",
+        timeout: 10000, // 10s network timeout
       }
     );
 
@@ -103,11 +105,17 @@ export async function sendRealPushNotification(
     const statusCode = err?.statusCode || err?.status;
     const errorMessage = err?.message || String(error);
 
-    // 410 Gone or 404 Not Found means the user revoked notification permissions
-    // or the push service invalidated the subscription token
-    if (statusCode === 410 || statusCode === 404) {
+    // 410 Gone / 404 Not Found means the user revoked permissions or the token expired
+    // 400 / 401 / 403 indicates invalid registration token or rejected cryptographic keys
+    if (
+      statusCode === 410 ||
+      statusCode === 404 ||
+      statusCode === 400 ||
+      statusCode === 401 ||
+      statusCode === 403
+    ) {
       console.warn(
-        `[WebPush] Subscription expired or unsubscribed (${statusCode}) for ${recipient.endpoint}. Deactivating.`
+        `[WebPush] Subscription expired or invalid (${statusCode}) for ${recipient.endpoint}. Deactivating.`
       );
       try {
         await db.mobilePushSubscription.updateMany({
@@ -115,7 +123,7 @@ export async function sendRealPushNotification(
           data: { isActive: false },
         });
       } catch (dbErr) {
-        console.error("[WebPush] Failed to deactivate expired subscription:", dbErr);
+        console.error("[WebPush] Failed to deactivate expired/invalid subscription:", dbErr);
       }
     }
 

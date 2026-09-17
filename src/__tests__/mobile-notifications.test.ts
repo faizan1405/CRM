@@ -10,6 +10,7 @@ import {
   unregisterMobileSubscription,
   dispatchMobileAlerts,
   getDispatchedMobileAlerts,
+  triggerTestMobileAlert,
 } from "@/app/actions/mobile-notifications";
 
 const TEST_USER_ID = "test-mobile-notification-user";
@@ -429,6 +430,123 @@ describe("Agent B — Mobile Notification System Integration", () => {
       });
       expect(record).not.toBeNull();
       expect(record!.userId).toBe(TEST_USER_ID);
+    });
+  });
+
+  describe("7. Test Push Delivery Flow", () => {
+    it("1. returns friendly error when no active subscription exists", async () => {
+      vi.mocked(getSession).mockResolvedValueOnce({
+        id: TEST_USER_ID,
+        email: "mobile-tester@example.com",
+        role: "ADMIN",
+      });
+
+      const res = await triggerTestMobileAlert("FOLLOWUP_REMINDER");
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("No active device subscription found. Please enable notifications again.");
+    });
+
+    it("2. dispatches test alert successfully to active subscription with expected shape", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        id: TEST_USER_ID,
+        email: "mobile-tester@example.com",
+        role: "ADMIN",
+      });
+
+      const endpoint = "mock://device-test-push-success";
+      await registerMobileSubscription({
+        endpoint,
+        keys: { p256dh: "key-success", auth: "auth-success" },
+        platform: "android",
+      });
+
+      const res = await triggerTestMobileAlert("FOLLOWUP_REMINDER");
+      expect(res.success).toBe(true);
+      expect(res.data).toBeDefined();
+      expect(res.data!.pushSent).toBe(1);
+      expect(res.data!.activeSubscriptions).toBe(1);
+      expect(res.data!.title).toContain("Test Follow-up Reminder");
+      expect(res.data!.payload).toBeDefined();
+      expect(res.data!.payload.data.category).toBe("FOLLOWUP_REMINDER");
+
+      // Verify audit record in DB
+      const history = await MobileSubscriptionStore.getDispatchedAlerts(5);
+      expect(history.some((h) => h.dedupeKey === res.data!.dedupeKey && h.success)).toBe(true);
+    });
+
+    it("3. handles expired/unsubscribed subscription (410) by deactivating it and returning clean error", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        id: TEST_USER_ID,
+        email: "mobile-tester@example.com",
+        role: "ADMIN",
+      });
+
+      const endpoint = "https://fcm.googleapis.com/fcm/send/expired-device-token";
+      await registerMobileSubscription({
+        endpoint,
+        keys: { p256dh: "key-exp", auth: "auth-exp" },
+        platform: "web",
+      });
+
+      // Spy on sendRealPushNotification to simulate 410 Gone from push provider
+      const webpush = await import("@/lib/webpush");
+      const spy = vi.spyOn(webpush, "sendRealPushNotification").mockImplementationOnce(async (recipient) => {
+        await db.mobilePushSubscription.updateMany({
+          where: { endpoint: recipient.endpoint },
+          data: { isActive: false },
+        });
+        return {
+          endpoint: recipient.endpoint,
+          success: false,
+          statusCode: 410,
+          error: "Received unexpected response code",
+        };
+      });
+
+      const res = await triggerTestMobileAlert("FOLLOWUP_REMINDER");
+      spy.mockRestore();
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("Your push subscription has expired or was revoked. Please enable notifications again.");
+
+      // Verify subscription was safely deactivated in DB
+      const subRecord = await db.mobilePushSubscription.findUnique({
+        where: { endpoint },
+      });
+      expect(subRecord).not.toBeNull();
+      expect(subRecord!.isActive).toBe(false);
+    });
+
+    it("4. handles push provider rejection cleanly without exposing raw server/VAPID errors", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        id: TEST_USER_ID,
+        email: "mobile-tester@example.com",
+        role: "ADMIN",
+      });
+
+      const endpoint = "https://fcm.googleapis.com/fcm/send/rejected-device-token";
+      await registerMobileSubscription({
+        endpoint,
+        keys: { p256dh: "key-rej", auth: "auth-rej" },
+        platform: "ios",
+      });
+
+      const webpush = await import("@/lib/webpush");
+      const spy = vi.spyOn(webpush, "sendRealPushNotification").mockResolvedValueOnce({
+        endpoint,
+        success: false,
+        statusCode: 400,
+        error: "WebPushError: Received unexpected response code",
+      });
+
+      const res = await triggerTestMobileAlert("FOLLOWUP_REMINDER");
+      spy.mockRestore();
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("Push provider was unable to deliver the alert. Please re-enable notifications.");
+      expect(res.error).not.toContain("WebPushError");
+      expect(res.error).not.toContain("unexpected response");
+      expect(res.error).not.toContain("statusCode");
     });
   });
 });

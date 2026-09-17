@@ -273,17 +273,41 @@ export async function triggerTestMobileAlert(
 
     // Find all active subscriptions for the user
     const activeSubs = await MobileSubscriptionStore.getActiveSubscriptions(currentUser.id);
+
+    if (activeSubs.length === 0) {
+      return {
+        success: false,
+        error: "No active device subscription found. Please enable notifications again.",
+      };
+    }
+
     let pushSent = 0;
+    let hasExpiredSubscription = false;
 
     for (const sub of activeSubs) {
       try {
         const res = await sendRealPushNotification(sub, payload);
         if (res.success) {
           pushSent++;
+        } else if (res.statusCode === 410 || res.statusCode === 404) {
+          hasExpiredSubscription = true;
         }
       } catch (err) {
         console.error(`[TestAlert] Error sending to ${sub.endpoint}:`, err);
       }
+    }
+
+    if (pushSent === 0) {
+      if (hasExpiredSubscription) {
+        return {
+          success: false,
+          error: "Your push subscription has expired or was revoked. Please enable notifications again.",
+        };
+      }
+      return {
+        success: false,
+        error: "Push provider was unable to deliver the alert. Please re-enable notifications.",
+      };
     }
 
     await MobileSubscriptionStore.recordDispatch(alert, currentUser.id, true);

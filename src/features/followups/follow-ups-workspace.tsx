@@ -9,10 +9,9 @@ import { statusFromDatabase } from "@/features/leads/types";
 import { FollowUpCard } from "./follow-up-card";
 import { FollowUpForm } from "./follow-up-form";
 import { FollowUpEmptyState } from "./empty-state";
-import { RescheduleDialog } from "./reschedule-dialog";
 import { PageHeader } from "@/components/page-header";
 import type { FollowUp, NewFollowUpInput } from "./types";
-import { createFollowUp, markFollowUpComplete, cancelFollowUp, updateFollowUp } from "@/app/actions/follow-ups";
+import { scheduleLeadFollowUp, markFollowUpComplete, cancelFollowUp } from "@/app/actions/follow-ups";
 import {
   getFollowUpStatusInfo,
   isFollowUpToday,
@@ -58,8 +57,6 @@ export function FollowUpsWorkspace({
   const [formOpen, setFormOpen] = useState(false);
   const [editingFollowUp, setEditingFollowUp] = useState<FollowUp | null>(null);
   const [saving, setSaving] = useState(false);
-  const [rescheduleTarget, setRescheduleTarget] = useState<FollowUp | null>(null);
-  const [rescheduling, setRescheduling] = useState(false);
 
   // Sync with incoming data (e.g., after revalidation)
   useEffect(() => {
@@ -114,27 +111,72 @@ export function FollowUpsWorkspace({
     []
   );
 
-  const handleCreate = async (data: NewFollowUpInput) => {
+  const leadsList = useMemo(() => {
+    if (editingFollowUp?.lead && !leads.some((l) => l.id === editingFollowUp.leadId)) {
+      return [{ id: editingFollowUp.lead.id, name: editingFollowUp.lead.name }, ...leads];
+    }
+    return leads;
+  }, [editingFollowUp, leads]);
+
+  const handleSaveFollowUp = async (data: NewFollowUpInput) => {
     setSaving(true);
     try {
       const formData = new FormData();
+      if (data.id) {
+        formData.append("id", data.id);
+      } else if (editingFollowUp?.id) {
+        formData.append("id", editingFollowUp.id);
+      }
       formData.append("leadId", data.leadId);
       formData.append("scheduledAt", data.scheduledAt);
       formData.append("type", data.type);
       formData.append("note", data.note);
-
-      let result;
-      if (editingFollowUp) {
-        result = await updateFollowUp(editingFollowUp.id, formData);
-      } else {
-        result = await createFollowUp(formData);
+      if (data.submissionId) {
+        formData.append("submissionId", data.submissionId);
       }
-      
+
+      const result = await scheduleLeadFollowUp(formData);
       if (!result.success) {
         alert(result.error || "Failed to save follow-up.");
       } else {
+        const saved = result.data;
+        const isRescheduled = Boolean(editingFollowUp || data.id);
+        const prevFollowUp = editingFollowUp;
+        const prevScheduledAt = prevFollowUp?.scheduledAt ? new Date(prevFollowUp.scheduledAt) : undefined;
+        const prevType = prevFollowUp?.type;
+
+        setFollowUps((prev) => {
+          const exists = prev.some((f) => f.id === saved.id);
+          if (exists) {
+            return prev.map((f) => (f.id === saved.id ? saved : f));
+          }
+          return [saved, ...prev];
+        });
         setFormOpen(false);
         setEditingFollowUp(null);
+
+        showToast(isRescheduled ? "Follow-up rescheduled" : "Follow-up scheduled", "success", {
+          label: "Undo",
+          onClick: async () => {
+            if (isRescheduled && prevScheduledAt && prevType) {
+              const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoRescheduleFollowUp(
+                saved.id,
+                prevScheduledAt,
+                prevType
+              ));
+              if (undoRes.success) {
+                showToast("Follow-up reschedule undone", "info");
+                setFollowUps((prev) => prev.map((f) => (f.id === saved.id ? undoRes.data : f)));
+              }
+            } else {
+              const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoCreateFollowUp(saved.id));
+              if (undoRes.success) {
+                showToast("Follow-up creation undone", "info");
+                setFollowUps((prev) => prev.filter((f) => f.id !== saved.id));
+              }
+            }
+          }
+        });
       }
     } catch {
       alert("Failed to save follow-up. Please retry.");
@@ -159,47 +201,6 @@ export function FollowUpsWorkspace({
       localUpdateFollowUp(followUp.id, { status: "Pending" });
       alert(result.error || "Failed to cancel follow-up.");
     }
-  };
-
-  const handleReschedule = async (id: string, date: string, time: string) => {
-    const scheduledAt = new Date(`${date}T${time}:00+05:30`).toISOString();
-    localUpdateFollowUp(id, { scheduledAt });
-    setRescheduling(true);
-    
-    // We need the other fields for updateFollowUp. Let's find the existing followUp
-    const existing = followUps.find(f => f.id === id);
-    if (existing) {
-      const formData = new FormData();
-      formData.append("leadId", existing.leadId);
-      formData.append("scheduledAt", scheduledAt);
-      formData.append("type", existing.type);
-      formData.append("note", existing.note);
-      
-      const result = await updateFollowUp(id, formData);
-      setRescheduling(false);
-      if (!result.success) {
-        alert(result.error || "Failed to reschedule.");
-        setRescheduleTarget(null);
-      } else {
-        showToast("Follow-up rescheduled", "success", {
-          label: "Undo",
-          onClick: async () => {
-            const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoRescheduleFollowUp(
-              id, 
-              new Date(existing.scheduledAt), 
-              existing.type
-            ));
-            if (undoRes.success) {
-              showToast("Follow-up reschedule undone", "info");
-              // Refresh is handled by the server action's revalidatePath
-            }
-          }
-        });
-      }
-    } else {
-      setRescheduling(false);
-    }
-    setRescheduleTarget(null);
   };
 
   const getEmptyConfig = (): { title: string; description: string } => {
@@ -323,7 +324,10 @@ export function FollowUpsWorkspace({
                   }}
                   onWhatsApp={() => { if (followUp.lead) openWhatsApp(followUp.lead); }}
                   onComplete={() => handleComplete(followUp)}
-                  onReschedule={() => setRescheduleTarget(followUp)}
+                  onReschedule={() => {
+                    setEditingFollowUp(followUp);
+                    setFormOpen(true);
+                  }}
                   onCancel={() => handleCancel(followUp)}
                   onOpenLead={() => navigation?.openLead(followUp.leadId, "followups")}
                 />
@@ -337,19 +341,11 @@ export function FollowUpsWorkspace({
       <FollowUpForm
         isOpen={formOpen}
         followUp={editingFollowUp}
-        defaultLeadId={leadParam || undefined}
-        leads={leads}
+        defaultLeadId={editingFollowUp?.leadId || leadParam || undefined}
+        leads={leadsList}
         saving={saving}
         onClose={() => { if (!saving) { setFormOpen(false); setEditingFollowUp(null); } }}
-        onSubmit={handleCreate}
-      />
-
-      <RescheduleDialog
-        isOpen={!!rescheduleTarget}
-        followUp={rescheduleTarget}
-        saving={rescheduling}
-        onClose={() => setRescheduleTarget(null)}
-        onConfirm={({ date, time }) => handleReschedule(rescheduleTarget!.id, date, time)}
+        onSubmit={handleSaveFollowUp}
       />
     </div>
   );

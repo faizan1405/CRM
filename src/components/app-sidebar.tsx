@@ -24,7 +24,7 @@ export function AppSidebar() {
         <div className="px-3">
           <LiveClock />
         </div>
-        <div className="mt-2 px-3">
+        <div className="mt-1">
           <GlobalSearch trigger="desktop" />
         </div>
       </div>

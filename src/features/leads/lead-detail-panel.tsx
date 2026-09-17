@@ -2,7 +2,7 @@
 
 import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
 
-import { X } from "lucide-react";
+import { RotateCcw, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatCurrency } from "@/features/leads/formatters";
 import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
@@ -145,16 +145,40 @@ export function LeadDetailPanel({
             </div>
             <p className="mt-1 text-sm text-[var(--muted)]">{lead.business || "No business added"}</p>
           </div>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            aria-label="Close lead details"
-            className="grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50 cursor-pointer"
-          >
-            <X aria-hidden="true" size={20} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {onRestoreWaste && (
+              <button
+                type="button"
+                onClick={onRestoreWaste}
+                disabled={saving}
+                className="inline-flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 active:bg-emerald-200 transition-colors"
+                aria-label={`Restore ${lead.name}`}
+              >
+                <RotateCcw size={14} /> Restore
+              </button>
+            )}
+            {onMarkWaste && (
+              <button
+                type="button"
+                onClick={onMarkWaste}
+                disabled={saving}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100 transition-colors"
+                aria-label={`Mark ${lead.name} as waste`}
+              >
+                <Trash2 size={14} /> Waste
+              </button>
+            )}
+            <button
+              ref={closeButtonRef}
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              aria-label="Close lead details"
+              className="grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50 cursor-pointer"
+            >
+              <X aria-hidden="true" size={20} />
+            </button>
+          </div>
         </header>
 
         <div
