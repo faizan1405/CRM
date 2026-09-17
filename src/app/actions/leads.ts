@@ -534,7 +534,9 @@ export async function deleteLead(id: string): Promise<LeadActionResult<{ id: str
 
     const updated = await db.lead.update({ where: { id: leadId }, data: { deletedAt: new Date() }, select: { id: true } });
     try {
+      revalidatePath("/", "layout");
       revalidatePath("/leads");
+      revalidatePath(`/leads/${leadId}`);
       revalidatePath("/pipeline");
       revalidatePath("/dashboard");
       revalidatePath("/analytics");
@@ -559,7 +561,9 @@ export async function restoreLead(id: string): Promise<LeadActionResult<{ id: st
 
     const updated = await db.lead.update({ where: { id: leadId }, data: { deletedAt: null }, select: { id: true } });
     try {
+      revalidatePath("/", "layout");
       revalidatePath("/leads");
+      revalidatePath(`/leads/${leadId}`);
       revalidatePath("/pipeline");
       revalidatePath("/dashboard");
       revalidatePath("/analytics");
@@ -584,7 +588,9 @@ export async function permanentlyDeleteLead(id: string): Promise<LeadActionResul
 
     const deleted = await db.lead.delete({ where: { id: leadId }, select: { id: true } });
     try {
+      revalidatePath("/", "layout");
       revalidatePath("/leads");
+      revalidatePath(`/leads/${leadId}`);
       revalidatePath("/pipeline");
       revalidatePath("/dashboard");
       revalidatePath("/analytics");

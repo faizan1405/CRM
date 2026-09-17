@@ -128,7 +128,7 @@ export function useMobilePush() {
       });
 
       if (!registerRes.success) {
-        throw new Error(registerRes.error);
+        throw new Error(registerRes.error || "Couldn’t enable notifications. Please try again.");
       }
 
       setIsSubscribed(true);
@@ -136,7 +136,16 @@ export function useMobilePush() {
       return true;
     } catch (err: unknown) {
       console.error("[useMobilePush] Subscription error:", err);
-      const message = err instanceof Error ? err.message : "Failed to enable push notifications.";
+      let message = err instanceof Error ? err.message : "Couldn’t enable notifications. Please try again.";
+      if (
+        message.includes("prisma") ||
+        message.includes("Prisma") ||
+        message.includes("constraint") ||
+        message.includes("invocation") ||
+        message.includes("fkey")
+      ) {
+        message = "Couldn’t enable notifications. Please try again.";
+      }
       setStatusMessage(message);
       return false;
     } finally {

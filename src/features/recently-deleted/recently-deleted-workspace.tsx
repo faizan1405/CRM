@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { useToast } from "@/components/toast-provider";
 import { restoreLead, permanentlyDeleteLead } from "@/app/actions/leads";
 import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
+import { useLeadNavigation } from "@/features/leads/lead-navigation-provider";
 import { RotateCcw, Trash2, Phone, AlertTriangle, UserCheck } from "lucide-react";
 
 export type RecentlyDeletedLead = {
@@ -20,6 +22,8 @@ type RecentlyDeletedWorkspaceProps = {
 };
 
 export function RecentlyDeletedWorkspace({ initialLeads }: RecentlyDeletedWorkspaceProps) {
+  const router = useRouter();
+  const navigation = useLeadNavigation();
   const [leads, setLeads] = useState<RecentlyDeletedLead[]>(initialLeads);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [confirmLead, setConfirmLead] = useState<RecentlyDeletedLead | null>(null);
@@ -32,7 +36,13 @@ export function RecentlyDeletedWorkspace({ initialLeads }: RecentlyDeletedWorksp
       const res = await restoreLead(lead.id);
       if (res.success) {
         setLeads((prev) => prev.filter((l) => l.id !== lead.id));
-        showToast(`Restored "${lead.name}" to active pipeline`, "success");
+        showToast("Lead restored successfully", "success", {
+          label: "View restored lead",
+          onClick: () => {
+            navigation?.openLead(lead.id);
+          },
+        });
+        router.refresh();
       } else {
         showToast(res.error || "Failed to restore lead", "error");
       }
@@ -52,6 +62,7 @@ export function RecentlyDeletedWorkspace({ initialLeads }: RecentlyDeletedWorksp
         setLeads((prev) => prev.filter((l) => l.id !== confirmLead.id));
         showToast(`Permanently deleted "${confirmLead.name}"`, "info");
         setConfirmLead(null);
+        router.refresh();
       } else {
         showToast(res.error || "Failed to permanently delete lead", "error");
       }

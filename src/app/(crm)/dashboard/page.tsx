@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
-import { PriorityLeads } from "@/features/dashboard/components/priority-leads";
 import { DashboardHeader } from "@/features/dashboard/components/dashboard-header";
 import { KPICards } from "@/features/dashboard/components/kpi-cards";
 import { PipelineSnapshot } from "@/features/dashboard/components/pipeline-snapshot";
 import { RevenueSnapshot } from "@/features/dashboard/components/revenue-snapshot";
 import { RecentActivity } from "@/features/dashboard/components/recent-activity";
-import { priorityPage } from "@/features/dashboard/priority-page";
 
 import { getDashboardData } from "@/app/actions/dashboard";
 import Link from "next/link";
@@ -14,7 +12,7 @@ import { CalendarClock, ArrowRight, AlertTriangle } from "lucide-react";
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage() {
-  const [result, priorityResult] = await Promise.all([getDashboardData(), priorityPage(1).then(data => ({ data, error: null })).catch(() => ({ data: null, error: "Could not load priority leads. Open Leads to review your records." }))]);
+  const result = await getDashboardData();
   
   if (!result.success || !result.data) {
     return (
@@ -45,8 +43,6 @@ export default async function DashboardPage() {
         </Link>
       </section>
 
-      {priorityResult.data ? <PriorityLeads initialPage={priorityResult.data} /> : <section><h2 className="text-[15px] sm:text-lg font-bold">Priority Leads</h2><p role="alert" className="mt-2 text-sm text-rose-700">{priorityResult.error}</p><Link href="/leads" className="inline-flex min-h-11 items-center text-sm font-semibold text-blue-700">Open Leads</Link></section>}
-      
       <section aria-labelledby="recent-activity-heading">
         <h2 id="recent-activity-heading" className="mb-2 text-[15px] sm:text-lg font-bold tracking-tight text-slate-900">Recent Activity</h2>
         <div className="rounded-xl border bg-white p-3 sm:p-4 shadow-sm"><RecentActivity data={data.recentActivity.slice(0, 5)} /></div>

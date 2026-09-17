@@ -2,13 +2,12 @@
 
 import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
 
-import dynamic from "next/dynamic";
-import { Pencil, Trash2, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { formatCurrency, formatDate } from "@/features/leads/formatters";
+import { formatCurrency } from "@/features/leads/formatters";
 import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
 import { OperationalStateBadge } from "@/features/leads/operational-state-badge";
-import { leadStatuses, type Lead, type LeadStatus } from "@/features/leads/types";
+import type { Lead, LeadStatus } from "@/features/leads/types";
 import { LeadActivityTimeline } from "@/features/activity/lead-activity-timeline";
 import type { Activity, ActivityFilter } from "@/features/activity/types";
 import { NoteComposer } from "@/features/activity/note-composer";
@@ -18,6 +17,7 @@ import { LostLeadDetail } from "@/features/lost-reasons/lost-lead-detail";
 import type { LeadLossRecord } from "@/features/lost-reasons/types";
 import { CopyContactButton } from "@/components/copy-contact-button";
 import { formatLeadAge, formatLastContacted, formatNextFollowUp } from "@/lib/date-utils";
+import { ChangeStatusSheet } from "./change-status-sheet";
 
 function DetailItem({ label, value, action }: { label: string; value: string; action?: React.ReactNode }) {
   return (
@@ -73,7 +73,7 @@ export function LeadDetailPanel({
   onDeleteNote,
 }: LeadDetailPanelProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const statusSelectRef = useRef<HTMLSelectElement>(null);
+  const [statusSheetOpen, setStatusSheetOpen] = useState(initialAction === "status");
   const leadId = lead?.id;
   const [lossHistory, setLossHistory] = useState<LeadLossRecord[]>([]);
 
@@ -95,7 +95,9 @@ export function LeadDetailPanel({
   useEffect(() => {
     if (!leadId || !initialAction) return;
     const frame = window.requestAnimationFrame(() => {
-      if (initialAction === "status") statusSelectRef.current?.focus();
+      if (initialAction === "status") {
+        setStatusSheetOpen(true);
+      }
       if (initialAction === "activity" || initialAction === "followups") {
         onActivityFilterChange?.(initialAction === "followups" ? "followups" : "all");
         document.getElementById("lead-activity-section")?.scrollIntoView({ block: "start" });
@@ -283,11 +285,25 @@ export function LeadDetailPanel({
                   : undefined
               }
               onAddFollowUp={onAddFollowUp}
-              onChangeStatus={() => {}} // Disabled here since we use a sheet later or handle it differently
+              onChangeStatus={() => setStatusSheetOpen(true)}
+              onMarkWaste={onMarkWaste}
+              onRestoreWaste={onRestoreWaste}
               className="flex-1"
             />
           </div>
         </footer>
+
+        <ChangeStatusSheet
+          isOpen={statusSheetOpen}
+          currentStatus={lead.status}
+          leadName={lead.name}
+          saving={saving}
+          onClose={() => setStatusSheetOpen(false)}
+          onSelectStatus={async (newStatus) => {
+            setStatusSheetOpen(false);
+            await onStatusChange(newStatus);
+          }}
+        />
       </aside>
     </div>
   );

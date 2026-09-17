@@ -1,6 +1,8 @@
 "use server";
 
 import { getSession } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { cookies } from "next/headers";
 import {
   evaluateMobileAlerts,
   buildMobilePushPayload,
@@ -19,19 +21,75 @@ import type {
 
 export type { MobileActionResult } from "@/features/notifications/types/mobile";
 
+class UserFacingError extends Error {}
+
 function cleanErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
+  if (error instanceof UserFacingError) return error.message;
+  if (error instanceof Error) {
+    const msg = error.message;
+    // Strictly prevent any raw database or Prisma errors from leaking
+    if (
+      msg.includes("prisma") ||
+      msg.includes("Prisma") ||
+      msg.includes("Foreign key") ||
+      msg.includes("Unique constraint") ||
+      msg.includes("constraint violated") ||
+      msg.includes("invocation") ||
+      msg.includes("fkey")
+    ) {
+      return fallback;
+    }
+  }
   return fallback;
 }
 
-async function requireSession(): Promise<{ id: string; [key: string]: unknown }> {
+export async function requireAuthenticatedUser(): Promise<{ id: string; email?: string; role?: string; [key: string]: unknown }> {
   const session = await getSession();
-  const userId = typeof session?.id === "string" ? session.id : typeof session?.userId === "string" ? session.userId : null;
-  if (!userId) {
-    throw new Error("You must be logged in to manage mobile notifications.");
+  const sessionUserId = typeof session?.id === "string" ? session.id : typeof session?.userId === "string" ? session.userId : null;
+  const sessionEmail = typeof session?.email === "string" ? session.email : null;
+
+  if (!session || (!sessionUserId && !sessionEmail)) {
+    throw new UserFacingError("You must be logged in to manage mobile notifications.");
   }
-  return { ...session, id: userId };
+
+  // 1. Verify if sessionUserId exists in the database
+  let dbUser = null;
+  if (sessionUserId) {
+    dbUser = await db.user.findUnique({
+      where: { id: sessionUserId },
+      select: { id: true, email: true, role: true },
+    });
+  }
+
+  // 2. If ID changed (e.g. database reseed / recreation) but email matches the authenticated token, resolve by email
+  if (!dbUser && sessionEmail) {
+    dbUser = await db.user.findUnique({
+      where: { email: sessionEmail },
+      select: { id: true, email: true, role: true },
+    });
+  }
+
+  // 3. If user does not exist in DB at all, fail safely and require re-authentication
+  if (!dbUser) {
+    try {
+      const cookieStore = await cookies();
+      cookieStore.set("session", "", {
+        httpOnly: true,
+        expires: new Date(0),
+        path: "/",
+      });
+    } catch {
+      // safe fallback if called outside cookie mutation context
+    }
+    throw new UserFacingError("Your session is invalid or your account was not found. Please log in again.");
+  }
+
+  return {
+    ...session,
+    id: dbUser.id,
+    email: dbUser.email,
+    role: dbUser.role,
+  };
 }
 
 /**
@@ -39,9 +97,10 @@ async function requireSession(): Promise<{ id: string; [key: string]: unknown }>
  */
 export async function getMobileVapidPublicKey(): Promise<MobileActionResult<string>> {
   try {
-    await requireSession();
+    await requireAuthenticatedUser();
     return { success: true, data: getVapidPublicKey() };
   } catch (error) {
+    console.error("[MobileVAPID Action Error]:", error);
     return { success: false, error: cleanErrorMessage(error, "Failed to get VAPID key.") };
   }
 }
@@ -53,15 +112,19 @@ export async function registerMobileSubscription(
   input: MobileSubscriptionInput
 ): Promise<MobileActionResult<MobileDeviceSubscription>> {
   try {
-    const session = await requireSession();
-    if (!input.endpoint) {
+    const currentUser = await requireAuthenticatedUser();
+    if (!input.endpoint || typeof input.endpoint !== "string") {
       return { success: false, error: "Missing subscription endpoint." };
     }
 
-    const sub = await MobileSubscriptionStore.registerSubscription(session.id, input);
+    const sub = await MobileSubscriptionStore.registerSubscription(currentUser.id, input);
     return { success: true, data: sub };
   } catch (error) {
-    return { success: false, error: cleanErrorMessage(error, "Failed to register subscription.") };
+    console.error("[MobilePush Registration Error]:", error);
+    return {
+      success: false,
+      error: cleanErrorMessage(error, "Couldn’t enable notifications. Please try again."),
+    };
   }
 }
 
@@ -72,10 +135,11 @@ export async function unregisterMobileSubscription(
   endpoint: string
 ): Promise<MobileActionResult<{ unregistered: boolean }>> {
   try {
-    await requireSession();
+    await requireAuthenticatedUser();
     const unregistered = await MobileSubscriptionStore.unregisterSubscription(endpoint);
     return { success: true, data: { unregistered } };
   } catch (error) {
+    console.error("[MobileUnregister Action Error]:", error);
     return { success: false, error: cleanErrorMessage(error, "Failed to unregister.") };
   }
 }
@@ -95,7 +159,7 @@ export async function dispatchMobileAlerts(
   }>
 > {
   try {
-    const session = await requireSession();
+    const currentUser = await requireAuthenticatedUser();
     const alerts = await evaluateMobileAlerts(options);
 
     let dispatched = 0;
@@ -104,7 +168,7 @@ export async function dispatchMobileAlerts(
     const sentAlerts: MobileAlertItem[] = [];
 
     // Get active subscriptions to push to
-    const activeSubs = await MobileSubscriptionStore.getActiveSubscriptions(session.id);
+    const activeSubs = await MobileSubscriptionStore.getActiveSubscriptions(currentUser.id);
 
     for (const alert of alerts) {
       const alreadyDispatched = await MobileSubscriptionStore.isAlreadyDispatched(alert.dedupeKey);
@@ -128,7 +192,7 @@ export async function dispatchMobileAlerts(
       }
 
       // Record dispatch in DB
-      await MobileSubscriptionStore.recordDispatch(alert, session.id, true);
+      await MobileSubscriptionStore.recordDispatch(alert, currentUser.id, true);
       sentAlerts.push(alert);
       dispatched++;
     }
@@ -144,6 +208,7 @@ export async function dispatchMobileAlerts(
       },
     };
   } catch (error) {
+    console.error("[DispatchMobileAlerts Error]:", error);
     return { success: false, error: cleanErrorMessage(error, "Failed to dispatch mobile alerts.") };
   }
 }
@@ -155,10 +220,11 @@ export async function getDispatchedMobileAlerts(
   limit: number = 20
 ): Promise<MobileActionResult<DispatchedAlertRecord[]>> {
   try {
-    await requireSession();
+    await requireAuthenticatedUser();
     const history = await MobileSubscriptionStore.getDispatchedAlerts(limit);
     return { success: true, data: history };
   } catch (error) {
+    console.error("[GetDispatchedMobileAlerts Error]:", error);
     return { success: false, error: cleanErrorMessage(error, "Failed to load history.") };
   }
 }
@@ -170,7 +236,7 @@ export async function triggerTestMobileAlert(
   category: MobileAlertCategory = "FOLLOWUP_REMINDER"
 ): Promise<MobileActionResult<MobileAlertItem & { pushSent: number; activeSubscriptions: number }>> {
   try {
-    const session = await requireSession();
+    const currentUser = await requireAuthenticatedUser();
     const title =
       category === "OVERDUE_FOLLOWUP"
         ? "⚠️ Test Overdue Follow-up"
@@ -206,7 +272,7 @@ export async function triggerTestMobileAlert(
     };
 
     // Find all active subscriptions for the user
-    const activeSubs = await MobileSubscriptionStore.getActiveSubscriptions(session.id);
+    const activeSubs = await MobileSubscriptionStore.getActiveSubscriptions(currentUser.id);
     let pushSent = 0;
 
     for (const sub of activeSubs) {
@@ -220,7 +286,7 @@ export async function triggerTestMobileAlert(
       }
     }
 
-    await MobileSubscriptionStore.recordDispatch(alert, session.id, true);
+    await MobileSubscriptionStore.recordDispatch(alert, currentUser.id, true);
 
     return {
       success: true,
@@ -231,6 +297,7 @@ export async function triggerTestMobileAlert(
       },
     };
   } catch (error) {
+    console.error("[TriggerTestMobileAlert Error]:", error);
     return { success: false, error: cleanErrorMessage(error, "Failed to send test alert.") };
   }
 }

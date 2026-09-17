@@ -21,6 +21,16 @@ export class MobileSubscriptionStore {
     const endpoint = input.endpoint.trim();
     const platform = (input.platform as MobilePlatform) || "web";
 
+    // Verify the user exists in database to guarantee FK integrity and avoid orphan subscriptions
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      throw new Error(`Cannot register mobile push subscription: user '${userId}' does not exist.`);
+    }
+
     const record = await db.mobilePushSubscription.upsert({
       where: { endpoint },
       update: {

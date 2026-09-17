@@ -3,7 +3,6 @@ import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import {
   evaluateMobileAlerts,
-  buildMobilePushPayload,
 } from "@/features/notifications/services/mobile-alert-engine";
 import { MobileSubscriptionStore } from "@/features/notifications/services/mobile-subscription-store";
 import {
@@ -42,8 +41,8 @@ describe("Agent B — Mobile Notification System Integration", () => {
     });
   });
 
-  beforeEach(() => {
-    MobileSubscriptionStore.clearForTesting();
+  beforeEach(async () => {
+    await MobileSubscriptionStore.clearForTesting();
   });
 
   afterAll(async () => {
@@ -219,6 +218,217 @@ describe("Agent B — Mobile Notification System Integration", () => {
       const history = await getDispatchedMobileAlerts(10);
       expect(history.success).toBe(true);
       expect(history.data!.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("6. Root Cause Investigation & Referential Integrity Protection", () => {
+    const testEndpoint1 = "https://fcm.googleapis.com/fcm/send/device-endpoint-root-cause-1";
+    const testEndpoint2 = "https://fcm.googleapis.com/fcm/send/device-endpoint-root-cause-2";
+
+    it("1. Valid authenticated user → subscription created", async () => {
+      vi.mocked(getSession).mockResolvedValueOnce({
+        id: TEST_USER_ID,
+        email: "mobile-tester@example.com",
+        role: "ADMIN",
+      });
+
+      const res = await registerMobileSubscription({
+        endpoint: testEndpoint1,
+        keys: { p256dh: "key-1", auth: "auth-1" },
+        platform: "android",
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.data).toBeDefined();
+      expect(res.data!.endpoint).toBe(testEndpoint1);
+      expect(res.data!.isActive).toBe(true);
+    });
+
+    it("2. Same device registers again → existing subscription updated, no duplicate", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        id: TEST_USER_ID,
+        email: "mobile-tester@example.com",
+        role: "ADMIN",
+      });
+
+      // Initial registration
+      await registerMobileSubscription({
+        endpoint: testEndpoint2,
+        keys: { p256dh: "key-2a", auth: "auth-2a" },
+        platform: "web",
+      });
+
+      // Re-register same device with updated platform & keys
+      const res = await registerMobileSubscription({
+        endpoint: testEndpoint2,
+        keys: { p256dh: "key-2b", auth: "auth-2b" },
+        platform: "ios",
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.data!.platform).toBe("ios");
+
+      // Verify only 1 record exists for this endpoint
+      const records = await db.mobilePushSubscription.findMany({
+        where: { endpoint: testEndpoint2 },
+      });
+      expect(records.length).toBe(1);
+      expect(records[0].platform).toBe("ios");
+    });
+
+    it("3. userId stored in MobilePushSubscription matches real User.id", async () => {
+      vi.mocked(getSession).mockResolvedValueOnce({
+        id: TEST_USER_ID,
+        email: "mobile-tester@example.com",
+        role: "ADMIN",
+      });
+
+      const res = await registerMobileSubscription({
+        endpoint: testEndpoint1,
+        keys: { p256dh: "key-1", auth: "auth-1" },
+        platform: "android",
+      });
+      expect(res.success).toBe(true);
+
+      const dbSub = await db.mobilePushSubscription.findUnique({
+        where: { endpoint: testEndpoint1 },
+      });
+
+      expect(dbSub).not.toBeNull();
+      expect(dbSub!.userId).toBe(TEST_USER_ID);
+
+      const dbUser = await db.user.findUnique({
+        where: { id: dbSub!.userId },
+      });
+      expect(dbUser).not.toBeNull();
+      expect(dbUser!.id).toBe(TEST_USER_ID);
+    });
+
+    it("4. invalid/stale session user → no DB write", async () => {
+      const staleEndpoint = "https://fcm.googleapis.com/fcm/send/stale-user-device";
+
+      // Mock a stale session whose user ID and email do not exist in DB
+      vi.mocked(getSession).mockResolvedValueOnce({
+        id: "totally-non-existent-user-uuid",
+        email: "deleted-user@example.com",
+        role: "USER",
+      });
+
+      const res = await registerMobileSubscription({
+        endpoint: staleEndpoint,
+        keys: { p256dh: "key-stale", auth: "auth-stale" },
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBeDefined();
+
+      // Verify no DB record was written
+      const record = await db.mobilePushSubscription.findUnique({
+        where: { endpoint: staleEndpoint },
+      });
+      expect(record).toBeNull();
+    });
+
+    it("5. anonymous user → rejected", async () => {
+      const anonEndpoint = "https://fcm.googleapis.com/fcm/send/anon-device";
+
+      vi.mocked(getSession).mockResolvedValueOnce(null);
+
+      const res = await registerMobileSubscription({
+        endpoint: anonEndpoint,
+        keys: { p256dh: "key-anon", auth: "auth-anon" },
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain("logged in");
+
+      const record = await db.mobilePushSubscription.findUnique({
+        where: { endpoint: anonEndpoint },
+      });
+      expect(record).toBeNull();
+    });
+
+    it("6. raw Prisma error never reaches UI or response", async () => {
+      vi.mocked(getSession).mockResolvedValueOnce({
+        id: TEST_USER_ID,
+        email: "mobile-tester@example.com",
+        role: "ADMIN",
+      });
+
+      // Force a raw Prisma constraint error to simulate low-level DB driver failure
+      const spy = vi
+        .spyOn(MobileSubscriptionStore, "registerSubscription")
+        .mockRejectedValueOnce(
+          new Error(
+            "Invalid `prisma.mobilePushSubscription.upsert()` invocation: Foreign key constraint violated: `MobilePushSubscription_userId_fkey (index)`"
+          )
+        );
+
+      const res = await registerMobileSubscription({
+        endpoint: "https://fcm.googleapis.com/fcm/send/error-test-endpoint",
+      });
+
+      spy.mockRestore();
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe("Couldn’t enable notifications. Please try again.");
+      // Must never contain raw Prisma or DB internals
+      expect(res.error).not.toContain("prisma");
+      expect(res.error).not.toContain("Prisma");
+      expect(res.error).not.toContain("Foreign key");
+      expect(res.error).not.toContain("MobilePushSubscription_userId_fkey");
+      expect(res.error).not.toContain("invocation");
+    });
+
+    it("7. notification can be disabled/unregistered", async () => {
+      vi.mocked(getSession).mockResolvedValue({
+        id: TEST_USER_ID,
+        email: "mobile-tester@example.com",
+        role: "ADMIN",
+      });
+
+      await registerMobileSubscription({
+        endpoint: testEndpoint1,
+        keys: { p256dh: "key-1", auth: "auth-1" },
+        platform: "android",
+      });
+
+      const unreg = await unregisterMobileSubscription(testEndpoint1);
+      expect(unreg.success).toBe(true);
+      expect(unreg.data?.unregistered).toBe(true);
+
+      const subRecord = await db.mobilePushSubscription.findUnique({
+        where: { endpoint: testEndpoint1 },
+      });
+      expect(subRecord).not.toBeNull();
+      expect(subRecord!.isActive).toBe(false);
+    });
+
+    it("8. recovers gracefully when session has stale ID but valid authenticated email", async () => {
+      const reseededEndpoint = "https://fcm.googleapis.com/fcm/send/reseeded-db-token";
+
+      // Simulate a DB re-seed where session holds an old ID, but email matches the existing DB user
+      vi.mocked(getSession).mockResolvedValueOnce({
+        id: "old-stale-id-from-prior-seed",
+        email: "mobile-tester@example.com",
+        role: "ADMIN",
+      });
+
+      const res = await registerMobileSubscription({
+        endpoint: reseededEndpoint,
+        keys: { p256dh: "k", auth: "a" },
+        platform: "web",
+      });
+
+      expect(res.success).toBe(true);
+      expect(res.data).toBeDefined();
+      expect(res.data!.userId).toBe(TEST_USER_ID);
+
+      const record = await db.mobilePushSubscription.findUnique({
+        where: { endpoint: reseededEndpoint },
+      });
+      expect(record).not.toBeNull();
+      expect(record!.userId).toBe(TEST_USER_ID);
     });
   });
 });

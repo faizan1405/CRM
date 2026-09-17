@@ -202,6 +202,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     setSaving(false);
     if (!result.success) return setFeedback({ tone: "error", message: result.error });
     replaceLead(result.data);
+    await refreshActivities();
     setFeedback({ tone: "success", message: "Lead status updated." });
   }
 
@@ -220,6 +221,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
       return;
     }
     replaceLead(result.data);
+    await refreshActivities();
     setLostReasonLead(null);
     setFeedback({ tone: "success", message: "Lead marked as lost." });
   }

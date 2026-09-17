@@ -21,6 +21,7 @@ export function LiveClock() {
       timeZone: "Asia/Kolkata",
       hour: "numeric",
       minute: "2-digit",
+      second: "2-digit",
       hour12: true,
     });
 
@@ -31,8 +32,8 @@ export function LiveClock() {
     };
 
     updateTime();
-    // update every minute since we don't show seconds anymore
-    const interval = setInterval(updateTime, 60000);
+    // update every second to show running seconds live
+    const interval = setInterval(updateTime, 1000);
     return () => clearInterval(interval);
   }, []);
 
