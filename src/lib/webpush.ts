@@ -105,17 +105,11 @@ export async function sendRealPushNotification(
     const statusCode = err?.statusCode || err?.status;
     const errorMessage = err?.message || String(error);
 
-    // 410 Gone / 404 Not Found means the user revoked permissions or the token expired
-    // 400 / 401 / 403 indicates invalid registration token or rejected cryptographic keys
-    if (
-      statusCode === 410 ||
-      statusCode === 404 ||
-      statusCode === 400 ||
-      statusCode === 401 ||
-      statusCode === 403
-    ) {
+    // 410 Gone / 404 Not Found means the user revoked permissions or the token expired on push service.
+    // 400/401/403 indicate request or VAPID configuration errors and must not deactivate client subscriptions.
+    if (statusCode === 410 || statusCode === 404) {
       console.warn(
-        `[WebPush] Subscription expired or invalid (${statusCode}) for ${recipient.endpoint}. Deactivating.`
+        `[WebPush] Subscription expired or unsubscribed (${statusCode}) for ${recipient.endpoint}. Deactivating.`
       );
       try {
         await db.mobilePushSubscription.updateMany({

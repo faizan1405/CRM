@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { statusFromDatabase, type DatabaseLeadStatus } from "@/features/leads/types";
 import { useCallback, useMemo, useState } from "react";
-import { DragDropContext, Droppable, Draggable, DropResult, DragStart } from "@hello-pangea/dnd";
+import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { changeLeadStatus, createLead, deleteLead, getLead, updateLead } from "@/app/actions/leads";
 import { scheduleLeadFollowUp } from "@/app/actions/follow-ups";
 import { useToast } from "@/components/toast-provider";
@@ -57,93 +57,15 @@ function PipelineAnalyticsSection({
 export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   const searchParams = useSearchParams();
   const requestedStage = statusFromDatabase[searchParams.get("stage") as DatabaseLeadStatus];
-  const [activeMobileStage, setActiveMobileStage] = useState<LeadStatus>(requestedStage || "New");
   const stageRef = useRef<HTMLDivElement>(null);
-  const stageTabsRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (requestedStage) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActiveMobileStage(requestedStage);
-      stageRef.current?.querySelector(`[data-stage="${requestedStage}"]`)?.scrollIntoView({ block: "nearest", inline: "start" });
-      stageTabsRef.current?.querySelector(`[data-stage="${requestedStage}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      stageRef.current?.querySelector(`[data-stage="${requestedStage}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
     }
   }, [requestedStage]);
+
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
-  const [isDraggingLead, setIsDraggingLead] = useState(false);
-  const [draggedLeadStatus, setDraggedLeadStatus] = useState<LeadStatus | null>(null);
-
-  const onDragStart = useCallback((start: DragStart) => {
-    setIsDraggingLead(true);
-    const lead = leads.find((l) => l.id === start.draggableId);
-    if (lead) {
-      setDraggedLeadStatus(lead.status);
-    }
-  }, [leads]);
-
-  // Smooth edge auto-scroll on mobile stage pill tabs while dragging near edges
-  useEffect(() => {
-    if (!isDraggingLead) return;
-
-    let animationFrameId: number | null = null;
-    let scrollSpeed = 0;
-
-    const handlePointerMove = (e: MouseEvent | TouchEvent) => {
-      if (!stageTabsRef.current) return;
-      const clientX = "touches" in e && e.touches.length > 0 ? e.touches[0].clientX : (e as MouseEvent).clientX;
-      const clientY = "touches" in e && e.touches.length > 0 ? e.touches[0].clientY : (e as MouseEvent).clientY;
-
-      const rect = stageTabsRef.current.getBoundingClientRect();
-      if (clientY >= rect.top - 30 && clientY <= rect.bottom + 60) {
-        const edgeThreshold = 55;
-        if (clientX < rect.left + edgeThreshold) {
-          const intensity = Math.max(0.2, (rect.left + edgeThreshold - clientX) / edgeThreshold);
-          scrollSpeed = -Math.round(intensity * 10);
-        } else if (clientX > rect.right - edgeThreshold) {
-          const intensity = Math.max(0.2, (clientX - (rect.right - edgeThreshold)) / edgeThreshold);
-          scrollSpeed = Math.round(intensity * 10);
-        } else {
-          scrollSpeed = 0;
-        }
-      } else {
-        scrollSpeed = 0;
-      }
-
-      if (scrollSpeed !== 0 && animationFrameId === null) {
-        const step = () => {
-          if (stageTabsRef.current && scrollSpeed !== 0) {
-            stageTabsRef.current.scrollLeft += scrollSpeed;
-            animationFrameId = requestAnimationFrame(step);
-          } else {
-            animationFrameId = null;
-          }
-        };
-        animationFrameId = requestAnimationFrame(step);
-      }
-    };
-
-    const handlePointerUp = () => {
-      scrollSpeed = 0;
-      if (animationFrameId !== null) {
-        cancelAnimationFrame(animationFrameId);
-        animationFrameId = null;
-      }
-    };
-
-    window.addEventListener("pointermove", handlePointerMove, { passive: true });
-    window.addEventListener("touchmove", handlePointerMove, { passive: true });
-    window.addEventListener("pointerup", handlePointerUp, { passive: true });
-    window.addEventListener("touchend", handlePointerUp, { passive: true });
-
-    return () => {
-      if (animationFrameId !== null) {
-        cancelAnimationFrame(animationFrameId);
-      }
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("touchmove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("touchend", handlePointerUp);
-    };
-  }, [isDraggingLead]);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -187,9 +109,6 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   }, []);
 
   const onDragEnd = useCallback(async (result: DropResult) => {
-    setIsDraggingLead(false);
-    setDraggedLeadStatus(null);
-
     if (!result.destination) return;
 
     const sourceStatus = result.source.droppableId as LeadStatus;
@@ -219,16 +138,10 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     setLeads((prev) =>
       prev.map((l) => (l.id === draggedLeadId ? { ...l, status: destStatus } : l))
     );
-    setActiveMobileStage(destStatus);
     setError(null);
 
-    // Smoothly scroll the stage tabs and column to the destination stage
+    // Smoothly scroll the column to the destination stage
     setTimeout(() => {
-      stageTabsRef.current?.querySelector(`[data-stage="${destStatus}"]`)?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-        inline: "center",
-      });
       stageRef.current?.querySelector(`[data-stage="${destStatus}"]`)?.scrollIntoView({
         behavior: "smooth",
         block: "nearest",
@@ -243,7 +156,6 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       setLeads((prev) =>
         prev.map((l) => (l.id === draggedLeadId ? { ...l, status: sourceStatus } : l))
       );
-      setActiveMobileStage(sourceStatus);
       setError(res.error || "Failed to update lead status");
     } else {
       replaceLead(res.data);
@@ -254,7 +166,6 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
             const undoRes = await changeLeadStatus(draggedLeadId, sourceStatus);
             if (undoRes.success) {
               replaceLead(undoRes.data);
-              setActiveMobileStage(sourceStatus);
               showToast("Status restored", "info");
             }
           }
@@ -322,7 +233,11 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     replaceLead(result.data);
     await refreshActivities();
     setLostReasonLead(null);
-    setActiveMobileStage("Lost");
+    stageRef.current?.querySelector('[data-stage="Lost"]')?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "start",
+    });
   };
 
   const handleRemoveLead = async () => {
@@ -402,7 +317,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   };
 
   return (
-    <div className="flex flex-col min-w-0 w-full pb-4">
+    <div className="flex flex-col min-w-0 w-full pb-8 sm:pb-4">
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm font-medium text-red-800 shadow-sm border border-red-200 flex justify-between">
           {error}
@@ -432,82 +347,22 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
 
       <p className="mb-2 text-xs text-slate-500 hidden sm:block">Drag the grip toward either board edge to reach more stages. You can also change Status in lead details.</p>
       
-      {/* DragDropContext wraps both Mobile Stage Tabs and Board Columns */}
-      <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
-        {/* Mobile Stage Tabs Droppable Row */}
-        <div 
-          ref={stageTabsRef}
-          data-testid="mobile-stage-tabs"
-          className="sticky top-14 z-20 flex sm:hidden overflow-x-auto overscroll-x-contain touch-pan-x hide-scrollbar gap-2 py-2 px-4 -mx-4 mb-2 bg-[#f5f7fb]/95 backdrop-blur-sm border-b border-slate-200/80"
-          role="tablist"
+      {/* DragDropContext wraps Board Columns */}
+      <DragDropContext onDragEnd={onDragEnd}>
+        {/* Every droppable shares one horizontal scroll parent */}
+        <div
+          ref={stageRef}
           aria-label="Pipeline stages"
+          className="w-full min-h-0 min-w-0 flex-1 overflow-x-auto overscroll-x-contain touch-pan-x scroll-smooth custom-scrollbar sm:snap-x lg:snap-none"
+          style={{ scrollBehavior: "smooth" }}
         >
-          {COLUMNS.map((status) => (
-            <Droppable droppableId={`stage-pill-${status}`} key={`pill-${status}`}>
-              {(provided, snapshot) => {
-                const isCurrent = activeMobileStage === status;
-                const isOver = snapshot.isDraggingOver;
-                const isSource = isDraggingLead && draggedLeadStatus === status;
-                const isTargetAvailable = isDraggingLead && !isSource;
-
-                return (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    data-stage-pill={status}
-                    className="shrink-0 flex items-center"
-                  >
-                    <button
-                      type="button"
-                      role="tab"
-                      aria-selected={isCurrent}
-                      data-stage={status}
-                      onClick={(e) => {
-                        setActiveMobileStage(status);
-                        e.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-                      }}
-                      className={`shrink-0 rounded-full border px-4 py-2 text-[13px] font-semibold transition-all duration-150 select-none ${
-                        isOver
-                          ? "bg-blue-600 text-white border-blue-600 ring-2 ring-blue-400 ring-offset-2 scale-105 shadow-md"
-                          : isTargetAvailable
-                          ? isCurrent
-                            ? "bg-slate-800 text-white border-slate-800 ring-1 ring-blue-400"
-                            : "bg-blue-50/90 border-blue-400 border-dashed text-blue-800 hover:bg-blue-100"
-                          : isCurrent
-                          ? "bg-slate-800 text-white border-slate-800 shadow-sm"
-                          : "bg-white border-slate-200 text-slate-700 hover:bg-slate-50 active:bg-slate-100"
-                      }`}
-                    >
-                      {status}{" "}
-                      <span
-                        className={`ml-1 text-[11px] font-bold px-1.5 py-0.5 rounded-full transition-colors ${
-                          isOver
-                            ? "bg-white text-blue-700"
-                            : isCurrent
-                            ? "bg-slate-700 text-white"
-                            : isTargetAvailable
-                            ? "bg-blue-100 text-blue-800"
-                            : "text-slate-400 bg-slate-100"
-                        }`}
-                      >
-                        {grouped[status].length}
-                      </span>
-                    </button>
-                    <span className="hidden" aria-hidden="true">
-                      {provided.placeholder}
-                    </span>
-                  </div>
-                );
-              }}
-            </Droppable>
-          ))}
-        </div>
-
-        {/* Every droppable shares one scroll parent; nested scroll parents disable DnD auto-scroll. */}
-        <div ref={stageRef} aria-label="Pipeline stages" className="w-full min-h-0 min-w-0 flex-1 overflow-x-auto overscroll-x-contain custom-scrollbar sm:snap-x lg:snap-none" style={{ scrollBehavior: "auto" }}>
-          <div className="flex min-h-full w-max min-w-full items-stretch gap-4 pb-4 px-4 sm:px-0">
+          <div className="flex min-h-full w-max min-w-full items-stretch gap-4 pb-6 sm:pb-4 px-4 sm:px-0">
             {COLUMNS.map((status) => (
-              <div key={status} data-stage={status} className={`w-[calc(100vw-2rem)] sm:w-[18rem] lg:w-80 shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-50 snap-center ${activeMobileStage === status ? "flex" : "hidden sm:flex"}`}>
+              <div
+                key={status}
+                data-stage={status}
+                className="w-[85vw] sm:w-[18rem] lg:w-80 shrink-0 flex flex-col rounded-xl border border-slate-200 bg-slate-50 snap-center"
+              >
                 <PipelineColumnHeader status={status} count={grouped[status].length} />
 
                 <Droppable droppableId={status}>

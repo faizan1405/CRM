@@ -8,6 +8,7 @@ import { MobileSubscriptionStore } from "@/features/notifications/services/mobil
 import {
   registerMobileSubscription,
   unregisterMobileSubscription,
+  syncDeviceSubscription,
   dispatchMobileAlerts,
   getDispatchedMobileAlerts,
   triggerTestMobileAlert,
@@ -189,6 +190,104 @@ describe("Agent B — Mobile Notification System Integration", () => {
       const unregResult = await unregisterMobileSubscription(endpoint);
       expect(unregResult.success).toBe(true);
       expect((await MobileSubscriptionStore.getActiveSubscriptions(TEST_USER_ID)).length).toBe(0);
+    });
+
+    it("supports multiple active devices (laptop + phone) simultaneously without overwriting or deactivating existing subscriptions", async () => {
+      const laptopEndpoint = "mock://laptop-endpoint-token";
+      const phoneEndpoint = "mock://phone-apple-endpoint-token";
+
+      // 1. Register laptop device
+      const laptopRes = await registerMobileSubscription({
+        endpoint: laptopEndpoint,
+        keys: { p256dh: "laptop-p256dh", auth: "laptop-auth" },
+        platform: "web",
+        userAgent: "Mozilla/5.0 Windows Chrome",
+      });
+      expect(laptopRes.success).toBe(true);
+      expect(laptopRes.data!.isActive).toBe(true);
+      expect(laptopRes.data!.platform).toBe("web");
+
+      // 2. Register mobile phone device for the SAME user
+      const phoneRes = await registerMobileSubscription({
+        endpoint: phoneEndpoint,
+        keys: { p256dh: "phone-p256dh", auth: "phone-auth" },
+        platform: "ios",
+        userAgent: "Mozilla/5.0 iPhone Safari",
+      });
+      expect(phoneRes.success).toBe(true);
+      expect(phoneRes.data!.isActive).toBe(true);
+      expect(phoneRes.data!.platform).toBe("ios");
+
+      // 3. Both devices must be active and have unique endpoints
+      const activeSubs = await MobileSubscriptionStore.getActiveSubscriptions(TEST_USER_ID);
+      expect(activeSubs.length).toBe(2);
+
+      const laptopSub = activeSubs.find((s) => s.endpoint === laptopEndpoint);
+      const phoneSub = activeSubs.find((s) => s.endpoint === phoneEndpoint);
+
+      expect(laptopSub).toBeDefined();
+      expect(laptopSub!.isActive).toBe(true);
+      expect(laptopSub!.platform).toBe("web");
+
+      expect(phoneSub).toBeDefined();
+      expect(phoneSub!.isActive).toBe(true);
+      expect(phoneSub!.platform).toBe("ios");
+
+      // 4. Test push dispatches to BOTH active devices
+      const testPushRes = await triggerTestMobileAlert("FOLLOWUP_REMINDER");
+      expect(testPushRes.success).toBe(true);
+      expect(testPushRes.data!.activeSubscriptions).toBe(2);
+      expect(testPushRes.data!.pushSent).toBe(2);
+
+      // 5. Deactivating one device (e.g. phone) leaves laptop active
+      const unregPhone = await unregisterMobileSubscription(phoneEndpoint);
+      expect(unregPhone.success).toBe(true);
+
+      const remainingSubs = await MobileSubscriptionStore.getActiveSubscriptions(TEST_USER_ID);
+      expect(remainingSubs.length).toBe(1);
+      expect(remainingSubs[0].endpoint).toBe(laptopEndpoint);
+      expect(remainingSubs[0].isActive).toBe(true);
+    });
+
+    it("safely syncs and re-activates an existing phone subscription without affecting laptop", async () => {
+      const laptopEndpoint = "https://fcm.googleapis.com/fcm/send/laptop-sync-test";
+      const phoneEndpoint = "https://web.push.apple.com/phone-sync-test";
+
+      // Register laptop
+      await registerMobileSubscription({
+        endpoint: laptopEndpoint,
+        keys: { p256dh: "lk", auth: "la" },
+        platform: "web",
+      });
+
+      // Register phone then simulate it becoming inactive (e.g. from prior network error)
+      await registerMobileSubscription({
+        endpoint: phoneEndpoint,
+        keys: { p256dh: "pk", auth: "pa" },
+        platform: "ios",
+      });
+      await db.mobilePushSubscription.update({
+        where: { endpoint: phoneEndpoint },
+        data: { isActive: false },
+      });
+
+      // Laptop is active, phone is inactive
+      let active = await MobileSubscriptionStore.getActiveSubscriptions(TEST_USER_ID);
+      expect(active.length).toBe(1);
+      expect(active[0].endpoint).toBe(laptopEndpoint);
+
+      // Sync phone subscription
+      const syncRes = await syncDeviceSubscription({
+        endpoint: phoneEndpoint,
+        keys: { p256dh: "pk", auth: "pa" },
+        platform: "ios",
+      });
+      expect(syncRes.success).toBe(true);
+      expect(syncRes.data!.isActive).toBe(true);
+
+      // Both are now active
+      active = await MobileSubscriptionStore.getActiveSubscriptions(TEST_USER_ID);
+      expect(active.length).toBe(2);
     });
   });
 

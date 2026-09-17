@@ -5,7 +5,8 @@ import { Phone, MessageCircle, CalendarPlus, Trash2, FileText, Check } from "luc
 import { formatCurrency } from "@/features/leads/formatters";
 import { getTelephoneHref } from "@/features/leads/contact-links";
 import { useWhatsApp } from "@/components/whatsapp-context";
-import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
+import { getCanonicalLeadTheme } from "@/features/leads/lead-card-theme";
+import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
 import type { Lead, QuickStatusType } from "@/features/leads/types";
 import {
   AIScoreBadge,
@@ -39,7 +40,7 @@ export function LeadCard({
   const { openCallModal } = useCall();
   const ai = aiAttention || lead.aiAttention || deriveAIAttention(lead);
   const isTerminal = lead.status === "Won" || lead.status === "Lost";
-  const theme = getLeadCardTheme(lead);
+  const theme = getCanonicalLeadTheme(lead.status);
 
   const notesText = lead.latestNote || lead.notes || "";
 
@@ -47,15 +48,13 @@ export function LeadCard({
     <ActionCard
       onActivate={() => onSelect(lead)}
       aria-label={`Open lead ${lead.name}`}
-      className={`group relative min-w-0 rounded-2xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-3 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] active:scale-[0.98] flex flex-col gap-1.5`}
+      className={`group relative min-w-0 rounded-2xl border ${theme.cardBg} ${theme.cardHoverBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-3 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] active:scale-[0.98] flex flex-col gap-1.5`}
     >
       {/* ROW 1: Name + Status */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
           <h3 className="truncate font-bold text-slate-950 text-[16px] tracking-tight leading-none">{lead.name}</h3>
-          <span className={`inline-flex shrink-0 items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700`}>
-            {lead.status}
-          </span>
+          <LeadStatusBadge status={lead.status} />
           {!isTerminal && ai.score >= 80 && (
             <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
           )}

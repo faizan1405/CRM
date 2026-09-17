@@ -269,7 +269,7 @@ export function FollowUpsWorkspace({
                 <span
                   className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold ${
                     tab.key === "overdue" && count > 0
-                      ? "bg-amber-100 text-amber-700"
+                      ? "bg-red-100 text-red-700"
                       : isActive
                         ? count > 0
                           ? "bg-blue-100 text-blue-700"
@@ -293,7 +293,7 @@ export function FollowUpsWorkspace({
         {filteredFollowUps.length === 0 ? (
           <FollowUpEmptyState title={emptyConfig.title} description={emptyConfig.description} />
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
             {filteredFollowUps.map((followUp) => {
               const statusInfo = getFollowUpStatusInfo(followUp);
               return (

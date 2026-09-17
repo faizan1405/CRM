@@ -8,6 +8,11 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: { default: "Scale Flow CRM", template: "%s | Scale Flow CRM" },
   description: "Private sales CRM for Scale Flow.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Scale Flow CRM",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,11 +1,12 @@
 "use client";
 
 import { useMobilePush } from "../hooks/use-mobile-push";
-import { Bell, BellRing, Smartphone, Check, AlertCircle, Loader2 } from "lucide-react";
+import { Bell, BellRing, Smartphone, Check, AlertCircle, Loader2, Share, RotateCw } from "lucide-react";
 
 export function MobileNotificationPrompt() {
   const {
     isSupported,
+    requiresPwaInstall,
     permission,
     isSubscribed,
     isLoading,
@@ -14,6 +15,36 @@ export function MobileNotificationPrompt() {
     unsubscribeFromPush,
     sendTestNotification,
   } = useMobilePush();
+
+  if (requiresPwaInstall) {
+    return (
+      <div className="bg-slate-900/80 border border-indigo-500/30 backdrop-blur rounded-xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start gap-3.5">
+          <div className="p-2.5 rounded-xl border shrink-0 bg-indigo-500/10 border-indigo-500/30 text-indigo-400">
+            <Share className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-slate-100">
+                iPhone / iPad Notifications
+              </h4>
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                Home Screen Required
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-1 max-w-xl">
+              Apple iOS requires adding ScaleFlow CRM to your Home Screen to receive push notifications:
+            </p>
+            <ol className="text-xs text-slate-400 mt-2 space-y-1 list-decimal list-inside">
+              <li>Tap the <strong className="text-slate-200">Share</strong> button in Safari (square with up arrow).</li>
+              <li>Scroll down and tap <strong className="text-slate-200">Add to Home Screen</strong>.</li>
+              <li>Open <strong className="text-slate-200">Scale Flow CRM</strong> from your Home Screen, then tap Enable Mobile Notifications.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!isSupported) {
     return (
@@ -74,6 +105,16 @@ export function MobileNotificationPrompt() {
             >
               {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
               Send Test Push
+            </button>
+            <button
+              type="button"
+              onClick={subscribeToPush}
+              disabled={isLoading}
+              title="Refresh / re-register push token for this device"
+              className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition disabled:opacity-50 flex items-center gap-1"
+            >
+              <RotateCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">Refresh</span>
             </button>
             <button
               type="button"

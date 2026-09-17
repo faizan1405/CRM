@@ -1,3 +1,5 @@
+import type { LeadStatus } from "@/features/leads/types";
+
 export type LeadVisualState =
   | "LOST"
   | "WASTE"
@@ -295,3 +297,107 @@ export function getLeadCardTheme(lead: LeadLike): LeadTheme {
   const visualState = getLeadVisualState(lead);
   return LEAD_THEMES[visualState];
 }
+
+export type CanonicalLeadTheme = {
+  status: LeadStatus;
+  rowBg: string;
+  rowHoverBg: string;
+  cardBg: string;
+  cardHoverBg: string;
+  leftBorder: string;
+  borderBase: string;
+  hoverBorder: string;
+  accentColor: "blue" | "slate" | "purple" | "amber" | "green" | "red";
+};
+
+export const CANONICAL_LEAD_THEMES: Record<LeadStatus, CanonicalLeadTheme> = {
+  New: {
+    status: "New",
+    rowBg: "bg-blue-50/40",
+    rowHoverBg: "hover:bg-blue-50/70",
+    cardBg: "bg-blue-50/40",
+    cardHoverBg: "hover:bg-blue-50/70",
+    leftBorder: "border-l-4 border-l-blue-500",
+    borderBase: "border-blue-200/60",
+    hoverBorder: "hover:border-blue-300",
+    accentColor: "blue",
+  },
+  Contacted: {
+    status: "Contacted",
+    rowBg: "bg-slate-50/60",
+    rowHoverBg: "hover:bg-slate-100/70",
+    cardBg: "bg-slate-50/60",
+    cardHoverBg: "hover:bg-slate-100/70",
+    leftBorder: "border-l-4 border-l-slate-400",
+    borderBase: "border-slate-200/80",
+    hoverBorder: "hover:border-slate-300",
+    accentColor: "slate",
+  },
+  Qualified: {
+    status: "Qualified",
+    rowBg: "bg-purple-50/35",
+    rowHoverBg: "hover:bg-purple-50/70",
+    cardBg: "bg-purple-50/40",
+    cardHoverBg: "hover:bg-purple-50/70",
+    leftBorder: "border-l-4 border-l-purple-500",
+    borderBase: "border-purple-200/60",
+    hoverBorder: "hover:border-purple-300",
+    accentColor: "purple",
+  },
+  "Proposal Sent": {
+    status: "Proposal Sent",
+    rowBg: "bg-amber-50/40",
+    rowHoverBg: "hover:bg-amber-50/70",
+    cardBg: "bg-amber-50/40",
+    cardHoverBg: "hover:bg-amber-50/70",
+    leftBorder: "border-l-4 border-l-amber-500",
+    borderBase: "border-amber-200/60",
+    hoverBorder: "hover:border-amber-300",
+    accentColor: "amber",
+  },
+  Won: {
+    status: "Won",
+    rowBg: "bg-emerald-50/35",
+    rowHoverBg: "hover:bg-emerald-50/70",
+    cardBg: "bg-emerald-50/45",
+    cardHoverBg: "hover:bg-emerald-50/70",
+    leftBorder: "border-l-4 border-l-emerald-600",
+    borderBase: "border-emerald-200/60",
+    hoverBorder: "hover:border-emerald-400",
+    accentColor: "green",
+  },
+  Lost: {
+    status: "Lost",
+    rowBg: "bg-rose-50/35",
+    rowHoverBg: "hover:bg-rose-50/70",
+    cardBg: "bg-rose-50/40",
+    cardHoverBg: "hover:bg-rose-50/70",
+    leftBorder: "border-l-4 border-l-rose-500",
+    borderBase: "border-rose-200/60",
+    hoverBorder: "hover:border-rose-300",
+    accentColor: "red",
+  },
+};
+
+export function normalizeCanonicalStatus(status?: string | null): LeadStatus {
+  if (!status) return "New";
+  const s = status.trim().toUpperCase().replace(/\s+/g, "_");
+  if (s === "CONTACTED") return "Contacted";
+  if (s === "QUALIFIED" || s === "INTERESTED") return "Qualified";
+  if (s === "PROPOSAL_SENT" || s === "PROPOSAL") return "Proposal Sent";
+  if (s === "WON") return "Won";
+  if (s === "LOST") return "Lost";
+  return "New";
+}
+
+export function getCanonicalLeadTheme(
+  statusOrLead?: LeadStatus | LeadLike | string | null
+): CanonicalLeadTheme {
+  const statusStr =
+    typeof statusOrLead === "object" && statusOrLead !== null
+      ? statusOrLead.status
+      : statusOrLead;
+  const canonical = normalizeCanonicalStatus(statusStr);
+  return CANONICAL_LEAD_THEMES[canonical];
+}
+

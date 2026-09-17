@@ -2,6 +2,7 @@ import { ChevronRight, MessageCircle, Phone, Trash2 } from "lucide-react";
 import { getTelephoneHref } from "@/features/leads/contact-links";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
+import { getCanonicalLeadTheme } from "@/features/leads/lead-card-theme";
 import type { Lead } from "@/features/leads/types";
 import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
 import { useWhatsApp } from "@/components/whatsapp-context";
@@ -26,9 +27,10 @@ export function LeadTable({ leads, onSelect, onDelete }: { leads: Lead[]; onSele
           {leads.map((lead) => {
             const ai = lead.aiAttention || deriveAIAttention(lead);
             const isTerminal = lead.status === "Won" || lead.status === "Lost";
+            const theme = getCanonicalLeadTheme(lead.status);
             return (
-              <tr key={lead.id} tabIndex={0} aria-label={`Open lead ${lead.name}`} onClick={event => { if (!(event.target as HTMLElement).closest("a,button")) onSelect(lead); }} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelect(lead); } }} className="cursor-pointer bg-white transition-colors hover:bg-slate-50/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600">
-                <td className="px-5 py-4">
+              <tr key={lead.id} tabIndex={0} aria-label={`Open lead ${lead.name}`} onClick={event => { if (!(event.target as HTMLElement).closest("a,button")) onSelect(lead); }} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelect(lead); } }} className={`cursor-pointer ${theme.rowBg} ${theme.rowHoverBg} transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600`}>
+                <td className={`px-5 py-4 ${theme.leftBorder}`}>
                   <p className="font-semibold text-slate-900">{lead.name}</p>
                   <p className="mt-0.5 text-sm text-[var(--muted)]">{lead.business || "No business added"}</p>
                 </td>

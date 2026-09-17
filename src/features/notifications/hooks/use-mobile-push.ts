@@ -5,6 +5,7 @@ import {
   getMobileVapidPublicKey,
   registerMobileSubscription,
   unregisterMobileSubscription,
+  syncDeviceSubscription,
   triggerTestMobileAlert,
 } from "@/app/actions/mobile-notifications";
 
@@ -23,8 +24,33 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
+function detectPlatform(): { platform: "ios" | "android" | "web"; isIOS: boolean; isStandalone: boolean } {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return { platform: "web", isIOS: false, isStandalone: false };
+  }
+  const ua = navigator.userAgent || "";
+  const isIOS =
+    /iPhone|iPad|iPod/.test(ua) ||
+    (navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1);
+
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    Boolean((navigator as unknown as { standalone?: boolean }).standalone);
+
+  const platform: "ios" | "android" | "web" = isIOS
+    ? "ios"
+    : /Android/.test(ua)
+    ? "android"
+    : "web";
+
+  return { platform, isIOS, isStandalone };
+}
+
 export function useMobilePush() {
   const [isSupported, setIsSupported] = useState<boolean>(false);
+  const [isIOS, setIsIOS] = useState<boolean>(false);
+  const [isStandalone, setIsStandalone] = useState<boolean>(false);
+  const [requiresPwaInstall, setRequiresPwaInstall] = useState<boolean>(false);
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -34,36 +60,70 @@ export function useMobilePush() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const timer = setTimeout(() => {
-      const supported =
-        "serviceWorker" in navigator &&
-        "PushManager" in window &&
-        "Notification" in window;
+    const { platform, isIOS: ios, isStandalone: standalone } = detectPlatform();
+    setIsIOS(ios);
+    setIsStandalone(standalone);
 
-      setIsSupported(supported);
+    const supported =
+      "serviceWorker" in navigator &&
+      "PushManager" in window &&
+      "Notification" in window;
 
-      if (supported) {
-        setPermission(Notification.permission);
+    setIsSupported(supported);
 
-        navigator.serviceWorker.ready
-          .then(async (reg) => {
-            try {
-              const sub = await reg.pushManager.getSubscription();
-              setIsSubscribed(Boolean(sub));
-            } catch {
-              setIsSubscribed(false);
-            }
-          })
-          .catch(() => {});
-      }
-    }, 0);
+    // On iOS Safari tabs (not added to Home Screen), Web Push requires PWA install
+    if (ios && !standalone && !supported) {
+      setRequiresPwaInstall(true);
+      return;
+    }
 
-    return () => clearTimeout(timer);
+    if (supported) {
+      setPermission(Notification.permission);
+
+      // Check existing service worker registration without hanging
+      navigator.serviceWorker.getRegistration().then(async (reg) => {
+        if (!reg) {
+          setIsSubscribed(false);
+          return;
+        }
+
+        try {
+          const sub = await reg.pushManager.getSubscription();
+          if (!sub) {
+            setIsSubscribed(false);
+            return;
+          }
+
+          // Device has a browser subscription: sync and ensure active in DB for this user
+          const jsonSub = sub.toJSON();
+          const p256dh = jsonSub.keys?.p256dh;
+          const auth = jsonSub.keys?.auth;
+
+          if (p256dh && auth) {
+            const syncRes = await syncDeviceSubscription({
+              endpoint: sub.endpoint,
+              keys: { p256dh, auth },
+              platform,
+              userAgent: navigator.userAgent,
+            });
+            setIsSubscribed(syncRes.success ? true : Boolean(sub));
+          } else {
+            setIsSubscribed(true);
+          }
+        } catch {
+          setIsSubscribed(false);
+        }
+      }).catch(() => {});
+    }
   }, []);
 
   const subscribeToPush = useCallback(async () => {
     if (!isSupported) {
-      setStatusMessage("Push notifications are not supported by this browser.");
+      if (isIOS && !isStandalone) {
+        setStatusMessage("On iPhone/iOS, please add this app to your Home Screen first.");
+      } else {
+        setStatusMessage("Push notifications are not supported by this browser.");
+      }
       return false;
     }
 
@@ -87,17 +147,28 @@ export function useMobilePush() {
       });
       await navigator.serviceWorker.ready;
 
-      // Clean up any stale or invalid subscription before subscribing with fresh keys
+      // 3. Clean up any stale or invalid subscription for THIS phone before subscribing
+      let oldEndpoint: string | null = null;
       try {
         const existingSub = await registration.pushManager.getSubscription();
         if (existingSub) {
+          oldEndpoint = existingSub.endpoint;
           await existingSub.unsubscribe();
         }
       } catch {
         // Safe fallback if unsubscribe fails
       }
 
-      // 3. Get VAPID Public Key from server
+      // If there was an old endpoint on this phone, deactivate it in DB so only the new endpoint is used
+      if (oldEndpoint) {
+        try {
+          await unregisterMobileSubscription(oldEndpoint);
+        } catch {
+          // safe ignore
+        }
+      }
+
+      // 4. Get VAPID Public Key from server
       const vapidRes = await getMobileVapidPublicKey();
       if (!vapidRes.success) {
         throw new Error(vapidRes.error || "Failed to retrieve VAPID key");
@@ -106,7 +177,7 @@ export function useMobilePush() {
         throw new Error("Failed to retrieve VAPID key: Empty key returned");
       }
 
-      // 4. Subscribe with PushManager
+      // 5. Subscribe with PushManager
       const convertedKey = urlBase64ToUint8Array(vapidRes.data);
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -122,14 +193,10 @@ export function useMobilePush() {
       }
 
       // Determine platform
+      const { platform } = detectPlatform();
       const ua = navigator.userAgent;
-      const platform = /iPhone|iPad|iPod/.test(ua)
-        ? "ios"
-        : /Android/.test(ua)
-        ? "android"
-        : "web";
 
-      // 5. Persist subscription in PostgreSQL DB via Server Action
+      // 6. Persist subscription in PostgreSQL DB via Server Action
       const registerRes = await registerMobileSubscription({
         endpoint: subscription.endpoint,
         keys: { p256dh, auth },
@@ -161,16 +228,18 @@ export function useMobilePush() {
     } finally {
       setIsLoading(false);
     }
-  }, [isSupported]);
+  }, [isSupported, isIOS, isStandalone]);
 
   const unsubscribeFromPush = useCallback(async () => {
     setIsLoading(true);
     try {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        await sub.unsubscribe();
-        await unregisterMobileSubscription(sub.endpoint);
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          await sub.unsubscribe();
+          await unregisterMobileSubscription(sub.endpoint);
+        }
       }
       setIsSubscribed(false);
       setStatusMessage("Notifications disabled.");
@@ -234,6 +303,9 @@ export function useMobilePush() {
 
   return {
     isSupported,
+    isIOS,
+    isStandalone,
+    requiresPwaInstall,
     permission,
     isSubscribed,
     isLoading,

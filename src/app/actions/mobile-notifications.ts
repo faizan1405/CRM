@@ -145,6 +145,53 @@ export async function unregisterMobileSubscription(
 }
 
 /**
+ * Syncs and reactivates an existing device subscription in the DB for the logged-in user
+ */
+export async function syncDeviceSubscription(
+  input: MobileSubscriptionInput
+): Promise<MobileActionResult<MobileDeviceSubscription>> {
+  try {
+    const currentUser = await requireAuthenticatedUser();
+    if (!input.endpoint || typeof input.endpoint !== "string") {
+      return { success: false, error: "Missing subscription endpoint." };
+    }
+
+    const sub = await MobileSubscriptionStore.registerSubscription(currentUser.id, input);
+    return { success: true, data: sub };
+  } catch (error) {
+    console.error("[MobilePush Sync Error]:", error);
+    return {
+      success: false,
+      error: cleanErrorMessage(error, "Failed to sync device subscription."),
+    };
+  }
+}
+
+/**
+ * Checks if a specific device subscription endpoint exists and is active for the current user
+ */
+export async function getDeviceSubscriptionStatus(
+  endpoint: string
+): Promise<MobileActionResult<{ isActive: boolean; exists: boolean }>> {
+  try {
+    const currentUser = await requireAuthenticatedUser();
+    const record = await db.mobilePushSubscription.findUnique({
+      where: { endpoint: endpoint.trim() },
+      select: { userId: true, isActive: true },
+    });
+
+    if (!record || record.userId !== currentUser.id) {
+      return { success: true, data: { isActive: false, exists: false } };
+    }
+
+    return { success: true, data: { isActive: record.isActive, exists: true } };
+  } catch (error) {
+    console.error("[GetDeviceSubscriptionStatus Error]:", error);
+    return { success: false, error: cleanErrorMessage(error, "Failed to check subscription.") };
+  }
+}
+
+/**
  * Evaluates pending follow-ups and urgent leads, and dispatches real mobile push alerts
  */
 export async function dispatchMobileAlerts(
