@@ -8,6 +8,7 @@ import { useCallback, useMemo, useState } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { changeLeadStatus, createLead, deleteLead, getLead, updateLead } from "@/app/actions/leads";
 import { createFollowUp } from "@/app/actions/follow-ups";
+import { useToast } from "@/components/toast-provider";
 import dynamic from "next/dynamic";
 const LeadDetailPanel = dynamic(() => import("@/features/leads/lead-detail-panel").then(m => m.LeadDetailPanel));
 const LeadForm = dynamic(() => import("@/features/leads/lead-form").then(m => m.LeadForm));
@@ -15,6 +16,8 @@ import type { Lead, LeadStatus } from "@/features/leads/types";
 import { DeleteLeadDialog } from "@/features/leads/delete-lead-dialog";
 import { PipelineCard } from "./pipeline-card";
 import { PipelineSummary } from "./pipeline-summary";
+import { PipelineConversion } from "./pipeline-conversion";
+import { PipelineDonutGraph } from "./pipeline-donut-graph";
 import { PipelineColumnHeader, PipelineEmptyState } from "./pipeline-column";
 import { LostReasonDialog } from "@/features/lost-reasons/lost-reason-dialog";
 import type { LostReasonSubmission } from "@/features/lost-reasons/types";
@@ -47,6 +50,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
   const [lostReasonLead, setLostReasonLead] = useState<Lead | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const {
     activities,
@@ -117,8 +121,22 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       setError(res.error || "Failed to update lead status");
     } else {
       replaceLead(res.data);
+      if (destStatus !== "Won") {
+        showToast(`Status changed to ${destStatus}`, "success", {
+          label: "Undo",
+          onClick: async () => {
+            const undoRes = await changeLeadStatus(draggedLeadId, sourceStatus);
+            if (undoRes.success) {
+              replaceLead(undoRes.data);
+              showToast("Status restored", "info");
+            }
+          }
+        });
+      } else {
+        showToast(`Lead marked as ${destStatus}`, "success");
+      }
     }
-  }, [leads, replaceLead]);
+  }, [leads, replaceLead, showToast]);
 
   const handleSelectLead = async (lead: Lead) => {
     setSelectedLead(lead);
@@ -134,6 +152,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       return;
     }
     setSaving(true);
+    const oldStatus = selectedLead.status;
     const result = await changeLeadStatus(selectedLead.id, nextStatus);
     setSaving(false);
     if (!result.success) {
@@ -141,7 +160,20 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       return;
     }
     replaceLead(result.data);
-    setError(null);
+    if (nextStatus !== "Won") {
+      showToast(`Status changed to ${nextStatus}`, "success", {
+        label: "Undo",
+        onClick: async () => {
+          const undoRes = await changeLeadStatus(selectedLead.id, oldStatus);
+          if (undoRes.success) {
+            replaceLead(undoRes.data);
+            showToast("Status restored", "info");
+          }
+        }
+      });
+    } else {
+      showToast(`Status changed to ${nextStatus}`, "success");
+    }
   };
 
   const handleLostConfirm = async (data: LostReasonSubmission) => {
@@ -230,8 +262,14 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       )}
 
       {/* Summary Stats (Agent B UI) */}
-      <div className="mb-6 shrink-0">
-        <PipelineSummary leads={leads} grouped={grouped} />
+      <div className="mb-6 shrink-0 flex flex-col lg:flex-row items-start lg:items-stretch gap-4 sm:gap-6">
+        <div className="shrink-0 flex items-center">
+          <PipelineDonutGraph leads={leads} grouped={grouped} />
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col gap-4">
+          <PipelineSummary leads={leads} grouped={grouped} />
+          <PipelineConversion leads={leads} grouped={grouped} />
+        </div>
       </div>
 
       <p className="mb-2 text-xs text-slate-500">Drag the grip toward either board edge to reach more stages. You can also change Status in lead details.</p>

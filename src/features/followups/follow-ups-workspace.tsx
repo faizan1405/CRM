@@ -2,8 +2,9 @@
 
 import { useSearchParams } from "next/navigation";
 import { useLeadNavigation } from "@/features/leads/lead-navigation-provider";
-import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
+import { getTelephoneHref } from "@/features/leads/contact-links";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useWhatsApp } from "@/components/whatsapp-context";
 import { FollowUpCard } from "./follow-up-card";
 import { FollowUpForm } from "./follow-up-form";
 import { FollowUpEmptyState } from "./empty-state";
@@ -38,6 +39,7 @@ export function FollowUpsWorkspace({
 }: FollowUpsWorkspaceProps) {
   const searchParams = useSearchParams();
   const navigation = useLeadNavigation();
+  const { openWhatsApp } = useWhatsApp();
   const filterParam = searchParams.get("filter");
   const newParam = searchParams.get("new");
   const leadParam = searchParams.get("leadId");
@@ -280,7 +282,7 @@ export function FollowUpsWorkspace({
                   followUp={followUp}
                   statusInfo={statusInfo}
                   onCall={() => { if (followUp.lead?.phone) window.location.href = getTelephoneHref(followUp.lead.phone); }}
-                  onWhatsApp={() => { if (followUp.lead?.phone) window.open(getWhatsAppHref(followUp.lead.phone, followUp.lead.name), "_blank", "noopener,noreferrer"); }}
+                  onWhatsApp={() => { if (followUp.lead) openWhatsApp(followUp.lead); }}
                   onComplete={() => handleComplete(followUp)}
                   onReschedule={() => setRescheduleTarget(followUp)}
                   onCancel={() => handleCancel(followUp)}

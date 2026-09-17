@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Edit2, Check, X, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Edit2, Check, X, ArrowUp, ArrowDown, MessageCircle } from "lucide-react";
 import { 
   createWebsiteSample, 
   updateWebsiteSample
 } from "@/app/actions/sales-assets";
 import type { WebsiteSample, SampleType } from "@prisma/client";
+import { useWhatsApp } from "@/components/whatsapp-context";
 
 export function SamplesWorkspace({ initialSamples }: { initialSamples: WebsiteSample[] }) {
+  const { openWhatsAppForAsset } = useWhatsApp();
   const [samples, setSamples] = useState<WebsiteSample[]>(initialSamples);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<WebsiteSample>>({});
@@ -142,14 +144,20 @@ export function SamplesWorkspace({ initialSamples }: { initialSamples: WebsiteSa
                             {sample.url}
                           </a>
                         </div>
-                        <div className="w-48 shrink-0">
+                        <div className="w-auto md:w-56 shrink-0 flex flex-col gap-1.5 items-start md:items-end">
                           <span className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-full font-medium border">
                             {sample.category}
                           </span>
+                          <button onClick={() => openWhatsAppForAsset({ templateTitle: "Website Samples", category: sample.category })} className="text-[10px] text-emerald-600 hover:text-emerald-700 font-semibold flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity">
+                            <MessageCircle size={10} /> Send {sample.category}
+                          </button>
                         </div>
                       </div>
                       
                       <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => openWhatsAppForAsset({ templateTitle: "Website Samples", sampleId: sample.id })} className="flex items-center gap-1.5 px-2 py-1 text-emerald-600 hover:bg-emerald-50 rounded-lg text-xs font-semibold border border-emerald-100 transition-colors mr-1 md:mr-2">
+                          <MessageCircle size={14} /> Send
+                        </button>
                         <button onClick={() => handleMove(samples.findIndex(s => s.id === sample.id), "up")} disabled={i === 0} className="p-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowUp size={16} /></button>
                         <button onClick={() => handleMove(samples.findIndex(s => s.id === sample.id), "down")} disabled={i === arr.length - 1} className="p-1.5 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowDown size={16} /></button>
                         <button onClick={() => handleEdit(sample)} className="p-1.5 text-slate-400 hover:text-blue-600"><Edit2 size={16} /></button>

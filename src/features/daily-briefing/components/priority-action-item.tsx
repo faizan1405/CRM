@@ -12,7 +12,7 @@ import {
   RotateCcw,
   Clock,
 } from "lucide-react";
-import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
+import { getTelephoneHref } from "@/features/leads/contact-links";
 import { useWhatsApp } from "@/components/whatsapp-context";
 
 type PriorityActionItemProps = {

@@ -11,6 +11,7 @@ import type { NewFollowUpInput } from "@/features/followups/types";
 import type { LostReasonSubmission } from "@/features/lost-reasons/types";
 import { DeleteLeadDialog } from "./delete-lead-dialog";
 import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
+import { useToast } from "@/components/toast-provider";
 
 const LeadDetailPanel = dynamic(() => import("./lead-detail-panel").then(m => m.LeadDetailPanel));
 const LeadForm = dynamic(() => import("./lead-form").then(m => m.LeadForm));
@@ -39,6 +40,7 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [followUpLead, setFollowUpLead] = useState<{ id: string; name: string } | null>(null);
   const activity = useLeadActivities(lead?.id);
+  const { showToast } = useToast();
 
   const close = () => { requestId.current++; setLoadingId(null); setLead(null); setError(null); setEditing(false); setLost(false); };
   useDialogAccessibility(Boolean(loadingId || (!lead && error && !followUpLead)), close, false, shellCloseRef);
@@ -59,9 +61,25 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
     if (!lead) return;
     if (status === "Lost" && !reason) { setLost(true); return; }
     setSaving(true); setError(null);
+    const oldStatus = lead.status;
     try {
       const result = await changeLeadStatus(lead.id, status, reason?.reason, reason?.notes);
-      if (result.success) { setLead(result.data); setLost(false); await activity.refresh(); router.refresh(); }
+      if (result.success) { 
+        setLead(result.data); setLost(false); await activity.refresh(); router.refresh(); 
+        if (status !== "Lost" && status !== "Won") {
+          showToast(`Status changed to ${status}`, "success", {
+            label: "Undo",
+            onClick: async () => {
+              const undoRes = await changeLeadStatus(lead.id, oldStatus);
+              if (undoRes.success) {
+                setLead(undoRes.data);
+                await activity.refresh();
+                showToast("Status restored", "info");
+              }
+            }
+          });
+        }
+      }
       else setError(result.error);
     } catch { setError("Could not update this lead. Please try again."); }
     finally { setSaving(false); }
@@ -72,7 +90,10 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
     for (const [key, value] of Object.entries(data)) form.set(key, value);
     try {
       const result = await createFollowUp(form);
-      if (result.success) { setFollowUpLead(null); await activity.refresh(); router.refresh(); }
+      if (result.success) { 
+        setFollowUpLead(null); await activity.refresh(); router.refresh(); 
+        showToast("Follow-up added", "success");
+      }
       else setError(result.error);
     } catch { setError("Could not save the follow-up. Your entered details are preserved."); }
     finally { setSaving(false); }

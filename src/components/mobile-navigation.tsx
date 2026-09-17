@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { logout } from "@/app/actions/auth";
 import { crmNavigation } from "@/components/crm-navigation";
 import { LiveClock } from "@/components/live-clock";
+import { GlobalSearch } from "@/components/global-search";
 
 export function MobileNavigation() {
   const pathname = usePathname();
@@ -47,6 +48,9 @@ export function MobileNavigation() {
         <div className="flex items-center gap-3">
           <div className="sm:hidden">
             <LiveClock />
+          </div>
+          <div className="md:hidden">
+            <GlobalSearch trigger="mobile" />
           </div>
           <button ref={menuButtonRef} type="button" onClick={() => setIsOpen(true)} aria-label="Open navigation menu" aria-expanded={isOpen} aria-controls="mobile-navigation-panel" className="grid size-11 place-items-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
             <Menu aria-hidden="true" size={21} />

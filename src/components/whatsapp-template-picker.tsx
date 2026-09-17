@@ -9,6 +9,8 @@ import { logWhatsAppOpened } from "@/app/actions/whatsapp-logger";
 import type { WebsitePackage, WebsiteSample, Lead } from "@prisma/client";
 import type { WhatsAppTemplate } from "@/features/whatsapp-templates/types";
 
+import type { WhatsAppConfig } from "./whatsapp-context";
+
 let cachedPackages: WebsitePackage[] | null = null;
 let cachedSamples: WebsiteSample[] | null = null;
 let cachedTemplates: WhatsAppTemplate[] | null = null;
@@ -16,11 +18,13 @@ let cachedTemplates: WhatsAppTemplate[] | null = null;
 export function WhatsAppTemplatePicker({
   isOpen,
   lead,
+  config,
   onClose,
 }: {
   isOpen: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lead: any; // { id, name, phone, quotedAmount, ... }
+  config?: WhatsAppConfig;
   onClose: () => void;
 }) {
   const [loading, setLoading] = useState(false);
@@ -63,29 +67,50 @@ export function WhatsAppTemplatePicker({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const interpolateMessage = (tpl: any) => {
-    let msg = tpl.message || tpl.body || "";
+    let msg = tpl?.message || tpl?.body || "";
     
-    // Replace standard variables safely (leaving unknown ones alone, or leaving them as is if data is missing, but here we just replace known ones if they have data)
+    // Replace standard variables safely
     msg = msg.replace(/{{leadName}}/g, lead?.name || "{{leadName}}");
     msg = msg.replace(/{{phone}}/g, lead?.phone || "{{phone}}");
     msg = msg.replace(/{{quotedAmount}}/g, lead?.quotedAmount ? `₹${Number(lead.quotedAmount).toLocaleString('en-IN')}` : "{{quotedAmount}}");
     msg = msg.replace(/{{status}}/g, lead?.status || "{{status}}");
     msg = msg.replace(/{{followUpDate}}/g, lead?.followUpDate || "{{followUpDate}}");
 
-    if (tpl.title === "Website Samples") {
+    if (tpl?.title === "Website Samples") {
       const filteredSamples = samples.filter(s => 
         (sampleCategory ? s.category === sampleCategory : true) &&
         (sampleType === "ALL" ? true : s.type === sampleType) &&
         s.isActive
       );
-      const links = filteredSamples.map(s => `• ${s.label ? s.label + " - " : ""}${s.url}`).join("\n");
-      msg = msg.replace(/{{selectedSampleLinks}}/g, links || "(No samples selected)");
+      
+      if (config?.sampleId || config?.category) {
+        // Use exact requested format for direct sample sharing
+        if (config.sampleId) {
+          const s = samples.find(s => s.id === config.sampleId);
+          if (s) {
+            msg = `What's up from you?\n\nSharing an ${s.category} website sample:\n\n${s.label || s.url}\n${s.url}\n\nPlease check it and let me know if you like this style.`;
+          }
+        } else if (config.category) {
+          const links = filteredSamples.map(s => `• ${s.label ? s.label + " - " : ""}${s.url}`).join("\n");
+          msg = `What's up from you?\n\nSharing some ${config.category} website samples:\n\n${links}\n\nPlease check them and let me know if you like this style.`;
+        }
+      } else {
+        const links = filteredSamples.map(s => `• ${s.label ? s.label + " - " : ""}${s.url}`).join("\n");
+        msg = msg.replace(/{{selectedSampleLinks}}/g, links || "(No samples selected)");
+      }
     }
 
-    if (tpl.title === "Packages / Pricing") {
+    if (tpl?.title === "Packages / Pricing") {
       const selectedPkgs = packages.filter(p => selectedPackageIds.has(p.id) && p.isActive);
-      const links = selectedPkgs.map(p => `• ${p.name} — ${p.isStartingPrice ? "starting " : ""}₹${Number(p.price).toLocaleString('en-IN')}\n  ${p.inclusions.replace(/\n/g, "\n  ")}`).join("\n\n");
-      msg = msg.replace(/{{packagePricingLinks}}/g, links || "(No packages selected)");
+      
+      if (config?.packageId && selectedPkgs.length === 1) {
+        // Exact requested format for direct package sharing
+        const p = selectedPkgs[0];
+        msg = `What's up from you?\n\nSharing our ${p.name} Website Package:\n\n${p.name} Package — ₹${Number(p.price).toLocaleString('en-IN')}\n\n${p.inclusions.split('\n').map(l => `• ${l.trim()}`).join('\n')}\n\nLet me know if you'd like to proceed or discuss the requirement.`;
+      } else {
+        const links = selectedPkgs.map(p => `• ${p.name} — ${p.isStartingPrice ? "starting " : ""}₹${Number(p.price).toLocaleString('en-IN')}\n  ${p.inclusions.replace(/\n/g, "\n  ")}`).join("\n\n");
+        msg = msg.replace(/{{packagePricingLinks}}/g, links || "(No packages selected)");
+      }
     }
 
     return msg;
@@ -97,15 +122,36 @@ export function WhatsAppTemplatePicker({
     setCustomMessage(interpolateMessage(tpl));
   };
 
-  // When templates load, set default to Introduction or first available
+  // When templates load or config changes, set default
   useEffect(() => {
-    if (isOpen && templates.length > 0 && !selectedTemplateId) {
-      const defaultTpl = templates.find(t => t.title === "Introduction") || templates[0];
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      handleSelectTemplate(defaultTpl);
+    if (isOpen && templates.length > 0) {
+      if (config?.templateTitle) {
+        const tpl = templates.find(t => t.title === config.templateTitle) || templates[0];
+        if (config.packageId) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setSelectedPackageIds(new Set([config.packageId]));
+        } else if (config.sampleId) {
+          const s = samples.find(x => x.id === config.sampleId);
+          if (s) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setSampleCategory(s.category);
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setSampleType(s.type);
+          }
+        } else if (config.category) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setSampleCategory(config.category);
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setSampleType("ALL");
+        }
+        handleSelectTemplate(tpl);
+      } else if (!selectedTemplateId) {
+        const defaultTpl = templates.find(t => t.title === "Introduction") || templates[0];
+        handleSelectTemplate(defaultTpl);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, templates]);
+  }, [isOpen, templates, config]);
 
   // Re-generate message if sub-selections change
   useEffect(() => {

@@ -5,6 +5,9 @@ export function getTelephoneHref(phone: string) {
   return `tel:${normalized}`;
 }
 
+/**
+ * @deprecated Use WhatsAppButton or useWhatsApp().openWhatsApp instead for the global template picker.
+ */
 export function getWhatsAppHref(phone: string, name?: string, message?: string) {
   const number = phone.replace(/\D/g, "");
   const greeting = name?.trim() ? `Hi ${name.trim()}` : "Hi there";

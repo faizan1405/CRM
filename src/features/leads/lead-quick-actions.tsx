@@ -1,6 +1,7 @@
 import { CalendarPlus, MessageCircle, NotebookPen, Phone, RefreshCcw, Trash2, RotateCcw } from "lucide-react";
-import { getTelephoneHref, getWhatsAppHref } from "./contact-links";
+import { getTelephoneHref } from "./contact-links";
 import { useWhatsApp } from "@/components/whatsapp-context";
+import { useCall } from "@/components/call-context";
 import type { Lead } from "./types";
 
 type LeadQuickActionsProps = {
@@ -20,12 +21,13 @@ const actionClass = "group flex min-h-14 min-w-0 flex-col items-center justify-c
 export function LeadQuickActions({ lead, onAddNote, onAddFollowUp, onChangeStatus, onOpenWhatsAppComposer, whatsAppMessage, className = "", onMarkWaste, onRestoreWaste }: LeadQuickActionsProps) {
   const showWasteActions = Boolean(onMarkWaste || onRestoreWaste);
   const { openWhatsApp } = useWhatsApp();
+  const { openCallModal } = useCall();
   
   return (
     <div aria-label={`Quick actions for ${lead.name}`} className={`grid ${showWasteActions ? "grid-cols-3" : "grid-cols-5"} gap-1 ${className}`}>
-      <a href={getTelephoneHref(lead.phone)} className={actionClass} aria-label={`Call ${lead.name} at ${lead.phone}`}>
+      <button type="button" onClick={() => openCallModal(lead)} className={actionClass} aria-label={`Call ${lead.name} at ${lead.phone}`}>
         <Phone aria-hidden="true" size={18} className="text-blue-600 transition-transform group-active:scale-90" />Call
-      </a>
+      </button>
       {onOpenWhatsAppComposer ? (
         <button type="button" onClick={onOpenWhatsAppComposer} className={actionClass} aria-label={`Message ${lead.name} on WhatsApp`}>
           <MessageCircle aria-hidden="true" size={18} className="text-emerald-600 transition-transform group-active:scale-90" />WhatsApp

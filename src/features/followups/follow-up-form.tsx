@@ -5,6 +5,7 @@ import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
 import { useEffect, useId, useRef, useState } from "react";
 import type { FollowUp, FollowUpType, NewFollowUpInput } from "./types";
 import { followUpTypes } from "./types";
+import { getPresetDate, FOLLOW_UP_PRESETS, DEFAULT_TIME } from "@/lib/date-presets";
 
 type FollowUpFormProps = {
   isOpen: boolean;
@@ -52,7 +53,7 @@ export function FollowUpForm({
     } else if (isOpen && !followUp) {
       setType("Call");
       setScheduledDate(todayStr());
-      setScheduledTime("09:00");
+      setScheduledTime(DEFAULT_TIME);
       setNote("");
       setLeadId(defaultLeadId ?? firstLeadId);
     }
@@ -130,6 +131,21 @@ export function FollowUpForm({
                 <label htmlFor={`${formId}-date`} className="mb-1 block text-sm font-semibold text-slate-700">
                   Date <span className="text-red-500">*</span>
                 </label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {FOLLOW_UP_PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => {
+                        setScheduledDate(getPresetDate(preset.days));
+                        if (!scheduledTime) setScheduledTime(DEFAULT_TIME);
+                      }}
+                      className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
                 <input
                   id={`${formId}-date`}
                   type="date"

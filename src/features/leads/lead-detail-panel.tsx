@@ -16,12 +16,17 @@ import { LeadQuickActions } from "@/features/leads/lead-quick-actions";
 import { getLeadLossHistory } from "@/app/actions/lost-reasons";
 import { LostLeadDetail } from "@/features/lost-reasons/lost-lead-detail";
 import type { LeadLossRecord } from "@/features/lost-reasons/types";
+import { CopyContactButton } from "@/components/copy-contact-button";
+import { formatLeadAge, formatLastContacted, formatNextFollowUp } from "@/lib/date-utils";
 
-function DetailItem({ label, value }: { label: string; value: string }) {
+function DetailItem({ label, value, action }: { label: string; value: string; action?: React.ReactNode }) {
   return (
     <div>
       <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
-      <dd className="mt-1.5 break-words text-sm font-medium text-slate-800">{value || "Not added"}</dd>
+      <dd className="mt-1.5 break-words text-sm font-medium text-slate-800 flex items-center gap-2">
+        {value || "Not added"}
+        {action}
+      </dd>
     </div>
   );
 }
@@ -164,7 +169,7 @@ export function LeadDetailPanel({
           <section className="rounded-xl border border-[var(--border)] bg-white p-5">
             <h3 className="font-semibold text-slate-950">Contact</h3>
             <dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <DetailItem label="Name" value={lead.name} />
+              <DetailItem label="Name" value={lead.name} action={<CopyContactButton name={lead.name} phone={lead.phone} />} />
               <DetailItem label="Phone" value={lead.phone} />
               <DetailItem label="Email" value={lead.email} />
               <DetailItem label="Business" value={lead.business} />
@@ -183,8 +188,9 @@ export function LeadDetailPanel({
           <section className="rounded-xl border border-[var(--border)] bg-white p-5">
             <h3 className="font-semibold text-slate-950">Follow-up</h3>
             <dl className="mt-4 grid grid-cols-2 gap-5">
-              <DetailItem label="Last contact" value={formatDate(lead.lastContactDate)} />
-              <DetailItem label="Next follow-up" value={formatDate(lead.nextFollowUpDate)} />
+              <DetailItem label="Last contact" value={formatLastContacted(lead.lastContactDate)} />
+              <DetailItem label="Next follow-up" value={formatNextFollowUp(lead.nextFollowUpDate)} />
+              <DetailItem label="Age" value={formatLeadAge(lead.createdAt)} />
             </dl>
           </section>
 

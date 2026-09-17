@@ -1,5 +1,5 @@
 import { ChevronRight, MessageCircle, Phone, Trash2 } from "lucide-react";
-import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
+import { getTelephoneHref } from "@/features/leads/contact-links";
 import { formatCurrency, formatDate } from "@/features/leads/formatters";
 import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
 import type { Lead } from "@/features/leads/types";

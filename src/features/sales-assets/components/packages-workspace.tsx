@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Edit2, Check, X, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Edit2, Check, X, ArrowUp, ArrowDown, MessageCircle } from "lucide-react";
 import { 
   createWebsitePackage, 
   updateWebsitePackage
 } from "@/app/actions/sales-assets";
 import type { WebsitePackage } from "@prisma/client";
+import { useWhatsApp } from "@/components/whatsapp-context";
 
 export function PackagesWorkspace({ initialPackages }: { initialPackages: WebsitePackage[] }) {
+  const { openWhatsAppForAsset } = useWhatsApp();
   const [packages, setPackages] = useState<WebsitePackage[]>(initialPackages);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<WebsitePackage>>({});
@@ -146,6 +148,9 @@ export function PackagesWorkspace({ initialPackages }: { initialPackages: Websit
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
+                    <button onClick={() => openWhatsAppForAsset({ templateTitle: "Packages / Pricing", packageId: pkg.id })} className="flex items-center gap-1.5 px-2 py-1 text-emerald-600 hover:bg-emerald-50 rounded-lg text-xs font-semibold border border-emerald-100 transition-colors mr-2">
+                      <MessageCircle size={14} /> WhatsApp
+                    </button>
                     <button onClick={() => handleMove(i, "up")} disabled={i === 0} className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowUp size={16} /></button>
                     <button onClick={() => handleMove(i, "down")} disabled={i === packages.length - 1} className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowDown size={16} /></button>
                     <button onClick={() => handleEdit(pkg)} className="p-1.5 text-slate-400 hover:text-blue-600"><Edit2 size={16} /></button>

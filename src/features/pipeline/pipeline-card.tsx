@@ -1,11 +1,12 @@
 import { ActionCard } from "@/components/action-card";
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
-import { Building2, Phone, FileText } from "lucide-react";
-import { formatCurrency, formatDate } from "@/features/leads/formatters";
+import { Building2, Phone, MessageCircle, CalendarPlus } from "lucide-react";
 import type { Lead } from "@/features/leads/types";
 import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
 import { QuickStatusChip } from "@/features/leads/quick-status-chip";
 import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
+import { formatLeadAge, formatLastContacted, formatNextFollowUp } from "@/lib/date-utils";
+import { CopyContactButton } from "@/components/copy-contact-button";
 
 export function PipelineCard({
   lead,
@@ -25,76 +26,35 @@ export function PipelineCard({
       onActivate={onClick}
       aria-label={`Open lead ${lead.name}`}
       {...dragHandleProps}
-      className={`group flex flex-col gap-2 rounded-xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-sm transition-[transform,box-shadow,border-color] duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer`}
+      className={`group relative flex flex-col gap-1.5 rounded-xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-2.5 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-sm transition-[transform,box-shadow,border-color] duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer`}
     >
       <div className="flex justify-between items-start gap-2">
-        <h4 className="font-semibold text-slate-900 text-sm break-words line-clamp-2">
-          {lead.name}
-        </h4>
-        <div className="flex shrink-0 items-center gap-1">
-          <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <h4 className="font-semibold text-slate-900 text-sm truncate">{lead.name}</h4>
+            <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
+          </div>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-[11px] text-slate-600 truncate">{lead.phone}</span>
+            <CopyContactButton name={lead.name} phone={lead.phone} />
+          </div>
         </div>
-      </div>
-
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {(theme.state === "FOLLOW_UP_NOW" || theme.state === "FUTURE_FOLLOW_UP" || theme.state === "WASTE") && (
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${theme.badgeClass}`}>
-            {theme.badgeLabel}
+        <div className="flex flex-col items-end shrink-0 gap-1">
+          <span className="text-[9px] font-medium text-slate-400 bg-slate-50 px-1 rounded border border-slate-100">
+            Age {formatLeadAge(lead.createdAt)}
           </span>
-        )}
-        {lead.quickStatus && lead.quickStatus !== "NONE" ? (
           <QuickStatusChip quickStatus={lead.quickStatus} leadStatus={lead.status} readOnly size="sm" />
-        ) : (
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${theme.badgeClass}`}>
-            {theme.badgeLabel}
-          </span>
-        )}
+        </div>
       </div>
 
-      {(lead.business || lead.phone) && (
-        <div className="flex flex-col gap-1 text-xs text-slate-600 mt-0.5">
-          {lead.business && (
-            <div className="flex items-start gap-1.5">
-              <Building2 size={12} className="text-slate-400 shrink-0 mt-0.5" />
-              <span className="break-words line-clamp-1">{lead.business}</span>
-            </div>
-          )}
-          {lead.phone && (
-            <div className="flex items-start gap-1.5">
-              <Phone size={12} className="text-slate-400 shrink-0 mt-0.5" />
-              <span className="break-all">{lead.phone}</span>
-            </div>
-          )}
-        </div>
-      )}
+      <div className="text-[10px] leading-tight text-slate-500 line-clamp-1 italic">
+        {notesText || "No notes"}
+      </div>
 
-      {notesText && (
-        <div className="rounded-lg bg-slate-50 p-2 text-xs text-slate-600 line-clamp-2 break-words border border-slate-100 flex items-start gap-1.5">
-          <FileText size={12} className="text-slate-400 shrink-0 mt-0.5" />
-          <span>{notesText}</span>
-        </div>
-      )}
-
-      {(lead.quotedAmount !== null || lead.nextFollowUpDate) && (
-        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1.5 border-t border-slate-100 pt-2 text-[11px]">
-          {lead.quotedAmount !== null && (
-            <div className="flex flex-col">
-              <span className="text-slate-400 leading-tight">Quoted</span>
-              <span className="font-medium text-slate-700 leading-tight">
-                {formatCurrency(lead.quotedAmount)}
-              </span>
-            </div>
-          )}
-          {lead.nextFollowUpDate && (
-            <div className="flex flex-col">
-              <span className="text-slate-400 leading-tight">Follow-up</span>
-              <span className="font-medium text-slate-700 leading-tight">
-                {formatDate(lead.nextFollowUpDate)}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
+      <div className="flex justify-between items-center text-[9px] mt-0.5 border-t border-slate-100 pt-1">
+        <span className="text-slate-500">Last: <span className="font-medium text-slate-700">{formatLastContacted(lead.lastContactDate)}</span></span>
+        <span className="text-slate-500">Next: <span className="font-semibold text-blue-700">{formatNextFollowUp(lead.nextFollowUpDate)}</span></span>
+      </div>
     </ActionCard>
   );
 }

@@ -4,7 +4,8 @@ import { Flame, PhoneCall, MessageCircle, ArrowRight, CheckCircle2 } from "lucid
 import { type AIAttentionSummaryItem, type AttentionPriority } from "../types";
 import { AIScoreBadge } from "./ai-score-badge";
 import { AttentionPriorityBadge } from "./attention-priority-badge";
-import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
+import { getTelephoneHref } from "@/features/leads/contact-links";
+import { WhatsAppButton } from "@/components/whatsapp-button";
 import type { PriorityItem } from "@/app/actions/dashboard";
 
 interface AIAttentionDashboardSectionProps {
@@ -159,16 +160,14 @@ export function AIAttentionDashboardSection({
                     <PhoneCall size={14} aria-hidden="true" />
                   </a>
 
-                  <a
-                    href={getWhatsAppHref(item.phone, item.leadName)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <WhatsAppButton
+                    lead={{ id: item.leadId, name: item.leadName, phone: item.phone }}
                     className="flex size-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-colors"
                     aria-label={`WhatsApp ${item.leadName}`}
                     title="WhatsApp"
                   >
                     <MessageCircle size={14} aria-hidden="true" />
-                  </a>
+                  </WhatsAppButton>
                 </div>
               )}
 

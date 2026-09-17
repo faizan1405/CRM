@@ -4,14 +4,20 @@ import { createContext, useContext, useCallback, useRef, useState, type ReactNod
 
 type ToastVariant = "success" | "error" | "info" | "warning";
 
+type ToastAction = {
+  label: string;
+  onClick: () => void;
+};
+
 type Toast = {
   id: string;
   message: string;
   variant: ToastVariant;
+  action?: ToastAction;
 };
 
 type ToastContextValue = {
-  showToast: (message: string, variant?: ToastVariant) => void;
+  showToast: (message: string, variant?: ToastVariant, action?: ToastAction) => void;
 };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -75,11 +81,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const showToast = useCallback(
-    (message: string, variant: ToastVariant = "success") => {
+    (message: string, variant: ToastVariant = "success", action?: ToastAction) => {
       const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      setToasts((prev) => [...prev, { id, message, variant }]);
+      setToasts((prev) => [...prev, { id, message, variant, action }]);
 
-      const timer = setTimeout(() => dismiss(id), 3200);
+      // Increase time if there's an action (5-8 seconds window for undo)
+      const duration = action ? 6000 : 3200;
+      const timer = setTimeout(() => dismiss(id), duration);
       timers.current.set(id, timer);
 
       return id;
@@ -105,6 +113,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           >
             <span className="shrink-0">{variantStyles[toast.variant].icon}</span>
             <span className="flex-1 min-w-0">{toast.message}</span>
+            {toast.action && (
+              <button
+                onClick={() => {
+                  toast.action!.onClick();
+                  dismiss(toast.id);
+                }}
+                className="shrink-0 rounded bg-white/20 px-2.5 py-1 text-xs font-semibold hover:bg-white/30 transition-colors"
+              >
+                {toast.action.label}
+              </button>
+            )}
             <button
               onClick={() => dismiss(toast.id)}
               className="shrink-0 rounded p-0.5 opacity-60 hover:opacity-100 transition-opacity"

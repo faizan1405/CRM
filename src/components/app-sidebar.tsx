@@ -6,6 +6,7 @@ import { LogOut } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { crmNavigation } from "@/components/crm-navigation";
 import { LiveClock } from "@/components/live-clock";
+import { GlobalSearch } from "@/components/global-search";
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -22,6 +23,9 @@ export function AppSidebar() {
         </Link>
         <div className="px-3">
           <LiveClock />
+        </div>
+        <div className="mt-2 px-3">
+          <GlobalSearch trigger="desktop" />
         </div>
       </div>
 

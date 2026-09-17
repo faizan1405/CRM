@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { ActionCard } from "@/components/action-card";
 import { LeadRecordLink, ScheduleFollowUpButton } from "@/features/leads/lead-record-link";
-import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
+import { getTelephoneHref } from "@/features/leads/contact-links";
 import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
 import { Phone, MessageCircle } from "lucide-react";
 import { loadPriorityPage } from "../priority-page";

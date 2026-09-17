@@ -12,7 +12,8 @@ import {
 import { ActionCard } from "@/components/action-card";
 import type { SmartNotification } from "../types";
 import { NotificationPriorityBadge } from "./notification-priority-badge";
-import { getTelephoneHref, getWhatsAppHref } from "@/features/leads/contact-links";
+import { getTelephoneHref } from "@/features/leads/contact-links";
+import { WhatsAppButton } from "@/components/whatsapp-button";
 
 interface NotificationCardProps {
   notification: SmartNotification;
@@ -161,17 +162,15 @@ export function NotificationCard({
                 <span className="hidden sm:inline">Call</span>
               </a>
 
-              <a
-                href={getWhatsAppHref(notification.phone, notification.leadName)}
-                target="_blank"
-                rel="noopener noreferrer"
+              <WhatsAppButton
+                lead={{ id: notification.leadId, name: notification.leadName, phone: notification.phone }}
                 className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
                 aria-label={`WhatsApp ${notification.leadName}`}
                 title="WhatsApp"
               >
                 <MessageCircle size={13} className="text-emerald-600" aria-hidden="true" />
                 <span className="hidden sm:inline">WhatsApp</span>
-              </a>
+              </WhatsAppButton>
             </>
           )}
 

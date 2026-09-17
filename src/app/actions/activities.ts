@@ -161,3 +161,41 @@ export async function deleteLeadNote(activityId: string): Promise<ActivityAction
     return { success: false, error: cleanError(error) };
   }
 }
+
+export async function logActivity(leadId: string, type: ActivityType, message: string): Promise<ActivityActionResult<LeadActivity>> {
+  try {
+    const session = await requireAuthenticatedUser();
+    
+    // Check if it's a meaningful contact to update lastContactDate
+    const isContact = message.toLowerCase().includes("call picked") || message.toLowerCase().includes("whatsapp");
+
+    const validUserId = await resolveValidUserId(session.id);
+
+    const activity = await db.leadActivity.create({
+      data: {
+        leadId,
+        type,
+        message,
+        createdByUserId: validUserId,
+      },
+    });
+
+    if (isContact) {
+      await db.lead.update({
+        where: { id: leadId },
+        data: { lastContactDate: new Date() },
+      });
+    }
+
+    await markLeadAIInsightNeedsRefresh(leadId);
+    safeRevalidatePath("/dashboard");
+    safeRevalidatePath("/pipeline");
+    safeRevalidatePath("/leads");
+    safeRevalidatePath(`/leads/${leadId}`);
+
+    // @ts-expect-error Type mismatch with Drizzle vs Prisma schema types in this component
+    return { success: true, data: activity };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
