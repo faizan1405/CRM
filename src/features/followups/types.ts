@@ -47,6 +47,7 @@ export type FollowUp = {
     phone: string | null;
     status: string;
   };
+  leadNote?: string;
 };
 
 export type NewFollowUpInput = {

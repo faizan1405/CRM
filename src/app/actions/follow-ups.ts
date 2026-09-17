@@ -53,8 +53,13 @@ function cleanError(error: unknown) {
 }
 
 function serializeFollowUp(
-  followUp: import("@prisma/client").FollowUp & { lead?: import("@prisma/client").Lead | null }
+  followUp: import("@prisma/client").FollowUp & { 
+    lead?: (import("@prisma/client").Lead & {
+      activities?: { message: string }[]
+    }) | null 
+  }
 ): FollowUp {
+  const canonicalNote = followUp.lead?.activities?.[0]?.message || followUp.lead?.notes || "";
   return {
     id: followUp.id,
     leadId: followUp.leadId,
@@ -74,6 +79,7 @@ function serializeFollowUp(
           status: followUp.lead.status,
         }
       : undefined,
+    leadNote: canonicalNote,
   };
 }
 
@@ -145,6 +151,24 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
         },
       });
 
+      if (note) {
+        await tx.leadActivity.create({
+          data: {
+            leadId: newFollowUp.leadId,
+            type: ActivityType.NOTE_ADDED,
+            message: note,
+            createdByUserId: validUserId,
+          },
+        });
+        
+        // Also sync it to Lead.notes for redundancy like Lead Detail does sometimes, 
+        // though NOTE_ADDED is the primary chronological source.
+        await tx.lead.update({
+          where: { id: newFollowUp.leadId },
+          data: { notes: note },
+        });
+      }
+
       await markLeadAIInsightNeedsRefresh(leadId, tx);
 
       return newFollowUp;
@@ -172,7 +196,18 @@ export async function getFollowUps(): Promise<FollowUpActionResult<{
   try {
     await requireAuthenticatedUser();
     const followUps = await db.followUp.findMany({
-      include: { lead: true },
+      include: { 
+        lead: {
+          include: {
+            activities: {
+              where: { type: "NOTE_ADDED" },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { message: true },
+            },
+          },
+        },
+      },
       orderBy: { scheduledAt: "asc" },
     });
 
@@ -231,7 +266,21 @@ export async function updateFollowUp(
 
     if (!id) throw new UserFacingError("Follow-up ID is required.");
 
-    const existing = await db.followUp.findUnique({ where: { id } });
+    const existing = await db.followUp.findUnique({ 
+      where: { id },
+      include: {
+        lead: {
+          include: {
+            activities: {
+              where: { type: "NOTE_ADDED" },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { message: true },
+            },
+          },
+        },
+      },
+    });
     if (!existing) throw new UserFacingError("Follow-up not found.");
 
     const scheduledAtRaw = String(formData.get("scheduledAt") ?? "").trim();
@@ -256,6 +305,24 @@ export async function updateFollowUp(
         },
         include: { lead: true },
       });
+
+      // If a meaningful new note was typed, add it to canonical history
+      const existingCanonicalNote = existing.lead?.activities?.[0]?.message || existing.lead?.notes || "";
+      if (note && note !== existingCanonicalNote && note !== existing.note && note !== "Imported from latest lead sheet • date supplied without exact time; defaulted to 10:00 AM IST.") {
+        await tx.leadActivity.create({
+          data: {
+            leadId: updatedFollowUp.leadId,
+            type: ActivityType.NOTE_ADDED,
+            message: note,
+            createdByUserId: validUserId,
+          },
+        });
+        
+        await tx.lead.update({
+          where: { id: updatedFollowUp.leadId },
+          data: { notes: note },
+        });
+      }
 
       if (existing.scheduledAt.getTime() !== updatedFollowUp.scheduledAt.getTime()) {
         await tx.leadActivity.create({

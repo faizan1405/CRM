@@ -44,7 +44,7 @@ export function FollowUpForm({
     if (isOpen && followUp) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setType(followUp.type);
-      setNote(followUp.note);
+      setNote(followUp.leadNote || followUp.note);
       setLeadId(followUp.leadId);
       if (followUp.scheduledAt) {
         const d = new Date(followUp.scheduledAt);

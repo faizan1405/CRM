@@ -70,6 +70,12 @@ export function FollowUpCard({
   const status = statusConfig[statusInfo] ?? statusConfig.Upcoming;
   const isPast = statusInfo === "Overdue" || statusInfo === "Completed" || statusInfo === "Cancelled";
 
+  const isSystemNote = (n?: string) => {
+    if (!n) return false;
+    return n.includes("Imported from latest lead sheet") || n.includes("date supplied without exact time");
+  };
+  const displayNote = followUp.leadNote || (isSystemNote(followUp.note) ? "" : followUp.note);
+
   return (
     <ActionCard onActivate={onOpenLead} aria-label={`Open follow-up context for ${followUp.lead?.name || "lead"}`}
       className={`rounded-xl border ${status.cardBg} ${status.leftBorder} ${status.hoverBorder} border-slate-200/80 p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all ${isPast ? "opacity-80" : ""}`}
@@ -130,9 +136,9 @@ export function FollowUpCard({
         </div>
 
         {/* Note */}
-        {followUp.note && (
+        {displayNote && (
           <p className="mt-2 text-xs leading-relaxed text-slate-600 line-clamp-2">
-            {followUp.note}
+            {displayNote}
           </p>
         )}
       </div>
