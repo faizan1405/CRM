@@ -51,6 +51,7 @@ export type FollowUp = {
 };
 
 export type NewFollowUpInput = {
+  id?: string;
   leadId: string;
   scheduledAt: string;
   type: string;

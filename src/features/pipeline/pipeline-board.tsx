@@ -7,7 +7,7 @@ import { statusFromDatabase, type DatabaseLeadStatus } from "@/features/leads/ty
 import { useCallback, useMemo, useState } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { changeLeadStatus, createLead, deleteLead, getLead, updateLead } from "@/app/actions/leads";
-import { createFollowUp } from "@/app/actions/follow-ups";
+import { scheduleLeadFollowUp } from "@/app/actions/follow-ups";
 import { useToast } from "@/components/toast-provider";
 import dynamic from "next/dynamic";
 const LeadDetailPanel = dynamic(() => import("@/features/leads/lead-detail-panel").then(m => m.LeadDetailPanel));
@@ -238,27 +238,37 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     setSaving(true);
     setError(null);
     const formData = new FormData();
+    if (data.id) {
+      formData.append("id", data.id);
+    } else if (followUpLead?.activeFollowUp?.id) {
+      formData.append("id", followUpLead.activeFollowUp.id);
+    }
     formData.append("leadId", data.leadId);
     formData.append("scheduledAt", data.scheduledAt);
     formData.append("type", data.type);
     formData.append("note", data.note);
-    const result = await createFollowUp(formData);
+    if (data.submissionId) {
+      formData.append("submissionId", data.submissionId);
+    }
+    const result = await scheduleLeadFollowUp(formData);
     setSaving(false);
     if (!result.success) {
       setError(result.error);
       return;
     }
+    const isRescheduled = Boolean(followUpLead?.activeFollowUp || data.id);
+    const updatedLead = result.data.leadRecord;
     const nextDate = new Date(result.data.scheduledAt).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-    setLeads((current) => current.map((lead) => lead.id === data.leadId && (!lead.nextFollowUpDate || nextDate < lead.nextFollowUpDate) ? { ...lead, nextFollowUpDate: nextDate } : lead));
-    setSelectedLead((current) => current?.id === data.leadId && (!current.nextFollowUpDate || nextDate < current.nextFollowUpDate) ? { ...current, nextFollowUpDate: nextDate } : current);
+    setLeads((current) => current.map((lead) => lead.id === data.leadId ? (updatedLead || { ...lead, nextFollowUpDate: nextDate, activeFollowUp: result.data }) : lead));
+    setSelectedLead((current) => current?.id === data.leadId ? (updatedLead || { ...current, nextFollowUpDate: nextDate, activeFollowUp: result.data }) : current);
     if (selectedLead?.id === data.leadId) await refreshActivities();
     setFollowUpLead(null);
-    showToast("Follow-up scheduled", "success", {
+    showToast(isRescheduled ? "Follow-up rescheduled" : "Follow-up scheduled", "success", {
       label: "Undo",
       onClick: async () => {
         const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoCreateFollowUp(result.data.id));
         if (undoRes.success) {
-          showToast("Follow-up creation undone", "info");
+          showToast("Follow-up action undone", "info");
           await refreshActivities();
         }
       }
@@ -390,7 +400,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         onDeleteNote={handleDeleteNote}
       />}
 
-      <FollowUpForm isOpen={Boolean(followUpLead)} defaultLeadId={followUpLead?.id} leads={followUpLead ? [{ id: followUpLead.id, name: followUpLead.name }] : []} saving={saving} onClose={() => { if (!saving) setFollowUpLead(null); }} onSubmit={handleAddFollowUp} />
+      <FollowUpForm isOpen={Boolean(followUpLead)} followUp={followUpLead?.activeFollowUp} defaultLeadId={followUpLead?.id} leads={followUpLead ? [{ id: followUpLead.id, name: followUpLead.name }] : []} saving={saving} onClose={() => { if (!saving) setFollowUpLead(null); }} onSubmit={handleAddFollowUp} />
       
       {formOpen && <LeadForm 
         open={formOpen} 

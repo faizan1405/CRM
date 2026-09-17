@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { changeLeadStatus, deleteLead, getLead, updateLead } from "@/app/actions/leads";
-import { createFollowUp } from "@/app/actions/follow-ups";
+import { scheduleLeadFollowUp } from "@/app/actions/follow-ups";
 import { useLeadActivities } from "@/features/activity/use-activities";
 import type { Lead, LeadStatus } from "./types";
 import type { NewFollowUpInput } from "@/features/followups/types";
@@ -38,7 +38,7 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
   const [lost, setLost] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [followUpLead, setFollowUpLead] = useState<{ id: string; name: string } | null>(null);
+  const [followUpLead, setFollowUpLead] = useState<Lead | { id: string; name: string } | null>(null);
   const activity = useLeadActivities(lead?.id);
   const { showToast } = useToast();
 
@@ -87,19 +87,47 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
   const saveFollowUp = async (data: NewFollowUpInput) => {
     setSaving(true); setError(null);
     const form = new FormData();
-    for (const [key, value] of Object.entries(data)) form.set(key, value);
+    if (data.id) form.set("id", data.id);
+    else if (followUpLead && "activeFollowUp" in followUpLead && followUpLead.activeFollowUp?.id) {
+      form.set("id", followUpLead.activeFollowUp.id);
+    }
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) form.set(key, value);
+    }
     try {
-      const result = await createFollowUp(form);
+      const result = await scheduleLeadFollowUp(form);
       if (result.success) { 
-        setFollowUpLead(null); await activity.refresh(); router.refresh(); 
-        showToast("Follow-up scheduled", "success", {
+        const isRescheduled = Boolean((followUpLead && "activeFollowUp" in followUpLead && followUpLead.activeFollowUp) || data.id);
+        const prevFollowUp = followUpLead && "activeFollowUp" in followUpLead ? followUpLead.activeFollowUp : undefined;
+        const prevScheduledAt = prevFollowUp?.scheduledAt ? new Date(prevFollowUp.scheduledAt) : undefined;
+        const prevType = prevFollowUp?.type;
+
+        setFollowUpLead(null);
+        if (result.data.leadRecord) {
+          setLead(result.data.leadRecord);
+        } else if (lead && lead.id === data.leadId) {
+          const nextDate = new Date(result.data.scheduledAt).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+          setLead({ ...lead, nextFollowUpDate: nextDate, activeFollowUp: result.data });
+        }
+        await activity.refresh();
+        router.refresh(); 
+        showToast(isRescheduled ? "Follow-up rescheduled" : "Follow-up scheduled", "success", {
           label: "Undo",
           onClick: async () => {
-            const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoCreateFollowUp(result.data.id));
-            if (undoRes.success) {
-              showToast("Follow-up creation undone", "info");
-              await activity.refresh();
-              router.refresh();
+            if (isRescheduled && prevScheduledAt && prevType) {
+              const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoRescheduleFollowUp(result.data.id, prevScheduledAt, prevType));
+              if (undoRes.success) {
+                showToast("Follow-up reschedule undone", "info");
+                await activity.refresh();
+                router.refresh();
+              }
+            } else {
+              const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoCreateFollowUp(result.data.id));
+              if (undoRes.success) {
+                showToast("Follow-up creation undone", "info");
+                await activity.refresh();
+                router.refresh();
+              }
             }
           }
         });
@@ -151,7 +179,7 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
       onStatusChange={statusChange} onDelete={async () => setDeleteTarget(lead)}
       activities={activity.activities} activityFilter={activity.filter} onActivityFilterChange={activity.setFilter}
       onAddNote={activity.handleAddNote} onRefreshActivities={activity.refresh} onEditNote={activity.handleEditNote} onDeleteNote={activity.handleDeleteNote}
-      onAddFollowUp={() => setFollowUpLead({ id: lead.id, name: lead.name })} initialAction={action} 
+      onAddFollowUp={() => setFollowUpLead(lead)} initialAction={action} 
       onMarkWaste={!lead.isWaste ? () => toggleWaste(true) : undefined}
       onRestoreWaste={lead.isWaste ? () => toggleWaste(false) : undefined}
       />}
@@ -166,7 +194,7 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
       try { const result = await updateLead(lead.id, form); if (result.success) { setLead(result.data); setEditing(false); router.refresh(); } else setError(result.error); }
       catch { setError("Could not save this lead."); } finally { setSaving(false); }
     }} />}
-    {followUpLead && <FollowUpForm isOpen defaultLeadId={followUpLead.id} leads={[followUpLead]} saving={saving} onClose={() => { if (!saving) setFollowUpLead(null); }} onSubmit={saveFollowUp} />}
+    {followUpLead && <FollowUpForm isOpen followUp={"activeFollowUp" in followUpLead ? (followUpLead.activeFollowUp ?? undefined) : undefined} defaultLeadId={followUpLead.id} leads={[{ id: followUpLead.id, name: followUpLead.name }]} saving={saving} onClose={() => { if (!saving) setFollowUpLead(null); }} onSubmit={saveFollowUp} />}
     {lost && lead && <LostReasonDialog isOpen leadId={lead.id} leadName={lead.name} isSubmitting={saving} onCancel={() => { if (!saving) setLost(false); }} onConfirm={reason => statusChange("Lost", reason)} />}
     {error && (lead || followUpLead) && <div role="alert" className="fixed left-3 right-3 top-3 z-[70] mx-auto flex max-w-lg items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div>}
   </NavigationContext.Provider>;

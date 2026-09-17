@@ -13,6 +13,7 @@ import {
   type LeadStatus,
   type QuickStatusType,
 } from "@/features/leads/types";
+import { typeToDatabase, typeFromDatabase } from "@/features/followups/types";
 import { deriveAIAttention } from "@/features/ai-attention/helpers";
 import {
   markLeadAIInsightNeedsRefresh,
@@ -119,7 +120,7 @@ function serializeLead(lead: {
   createdAt: Date;
   updatedAt: Date;
   isWaste: boolean;
-  followUps?: { scheduledAt: Date; status: string }[];
+  followUps?: { id?: string; scheduledAt: Date; type?: string; status: string; note?: string | null; completedAt?: Date | null; createdAt?: Date; updatedAt?: Date }[];
   aiInsight?: import("@prisma/client").LeadAIInsight | null;
   activities?: { message: string }[];
 }): Lead {
@@ -153,6 +154,20 @@ function serializeLead(lead: {
     })),
   });
 
+  const pendingFollowUp = lead.followUps?.find((f) => f.status === "PENDING" || f.status === "Pending");
+  const activeFollowUp = pendingFollowUp ? {
+    id: pendingFollowUp.id || "",
+    leadId: lead.id,
+    scheduledAt: pendingFollowUp.scheduledAt.toISOString(),
+    type: (pendingFollowUp.type ? (typeToDatabase as any)[pendingFollowUp.type] ? (typeFromDatabase as any)[(typeToDatabase as any)[pendingFollowUp.type]] : pendingFollowUp.type : "Call") as any,
+    status: (pendingFollowUp.status === "PENDING" ? "Pending" : pendingFollowUp.status) as any,
+    note: pendingFollowUp.note || "",
+    completedAt: pendingFollowUp.completedAt ? pendingFollowUp.completedAt.toISOString() : null,
+    createdAt: pendingFollowUp.createdAt ? pendingFollowUp.createdAt.toISOString() : new Date().toISOString(),
+    updatedAt: pendingFollowUp.updatedAt ? pendingFollowUp.updatedAt.toISOString() : new Date().toISOString(),
+    leadNote: lead.activities?.[0]?.message || "",
+  } : null;
+
   return {
     ...baseLead,
     isWaste: lead.isWaste,
@@ -161,6 +176,7 @@ function serializeLead(lead: {
       ...baseLead,
       aiInsight: lead.aiInsight,
     }),
+    activeFollowUp,
   };
 }
 
@@ -218,6 +234,10 @@ export async function getLead(id: string): Promise<LeadActionResult<Lead>> {
     const lead = await db.lead.findUnique({
       where: { id: readLeadId(id) },
       include: {
+        followUps: {
+          where: { status: "PENDING" },
+          orderBy: { scheduledAt: "asc" },
+        },
         activities: {
           where: { type: ActivityType.NOTE_ADDED },
           orderBy: { createdAt: "desc" },

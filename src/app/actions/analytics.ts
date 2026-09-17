@@ -226,11 +226,12 @@ export async function getAnalyticsData(
         select: { createdAt: true },
       }),
 
-      // 12 — Pipeline health: current snapshot by status + value
+      // 12 — Pipeline health: current snapshot by status + value (active leads only)
       db.lead.groupBy({
         by: ["status"],
         _count: true,
         _sum: { quotedAmount: true },
+        where: { isWaste: false },
       }),
     ]);
 

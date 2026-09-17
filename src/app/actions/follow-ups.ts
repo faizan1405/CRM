@@ -535,3 +535,196 @@ export async function undoRescheduleFollowUp(
     return { success: false, error: cleanError(error) };
   }
 }
+
+export type ScheduleFollowUpResult = FollowUp & {
+  leadRecord?: import("@/features/leads/types").Lead;
+};
+
+export async function scheduleLeadFollowUp(
+  formDataOrInput: FormData | {
+    leadId: string;
+    scheduledAt: string | Date;
+    type: string;
+    note?: string;
+    id?: string;
+    followUpId?: string;
+    submissionId?: string;
+  }
+): Promise<FollowUpActionResult<ScheduleFollowUpResult>> {
+  try {
+    const session = await requireAuthenticatedUser();
+    let leadId: string;
+    let scheduledAtRaw: string;
+    let typeRaw: string;
+    let note: string;
+    let explicitId: string | undefined;
+    let submissionId: string | undefined;
+
+    if (formDataOrInput instanceof FormData) {
+      leadId = String(formDataOrInput.get("leadId") ?? "").trim();
+      scheduledAtRaw = String(formDataOrInput.get("scheduledAt") ?? "").trim();
+      typeRaw = String(formDataOrInput.get("type") ?? "").trim();
+      note = String(formDataOrInput.get("note") ?? "").trim();
+      explicitId = String(formDataOrInput.get("id") ?? formDataOrInput.get("followUpId") ?? "").trim() || undefined;
+      submissionId = String(formDataOrInput.get("submissionId") ?? "").trim() || undefined;
+    } else {
+      leadId = String(formDataOrInput.leadId ?? "").trim();
+      scheduledAtRaw = formDataOrInput.scheduledAt instanceof Date ? formDataOrInput.scheduledAt.toISOString() : String(formDataOrInput.scheduledAt ?? "").trim();
+      typeRaw = String(formDataOrInput.type ?? "").trim();
+      note = String(formDataOrInput.note ?? "").trim();
+      explicitId = String(formDataOrInput.id ?? formDataOrInput.followUpId ?? "").trim() || undefined;
+      submissionId = String(formDataOrInput.submissionId ?? "").trim() || undefined;
+    }
+
+    if (!leadId) throw new UserFacingError("Lead ID is required.");
+    const scheduledAt = parseScheduledDate(scheduledAtRaw);
+    const type = parseFollowUpType(typeRaw);
+    if (note.length > 5000) throw new UserFacingError("Note must be 5000 characters or fewer.");
+    if (submissionId && submissionId.length > 120) throw new UserFacingError("Invalid submission ID.");
+
+    const lead = await db.lead.findUnique({ where: { id: leadId } });
+    if (!lead) throw new UserFacingError("Lead not found.");
+
+    const validUserId = await resolveValidUserId(session.id);
+
+    const followUp = await db.$transaction(async (tx) => {
+      // Find existing pending follow-up to reschedule if available
+      let existing = null;
+      if (explicitId) {
+        existing = await tx.followUp.findUnique({
+          where: { id: explicitId },
+          include: { lead: true },
+        });
+      }
+      if (!existing) {
+        existing = await tx.followUp.findFirst({
+          where: { leadId, status: "PENDING" },
+          orderBy: { scheduledAt: "asc" },
+          include: { lead: true },
+        });
+      }
+
+      let targetFollowUp;
+      if (existing) {
+        // Reschedule existing follow-up without creating duplicates
+        targetFollowUp = await tx.followUp.update({
+          where: { id: existing.id },
+          data: {
+            scheduledAt,
+            type,
+            note: note || existing.note,
+          },
+          include: { lead: true },
+        });
+
+        if (existing.scheduledAt.getTime() !== targetFollowUp.scheduledAt.getTime()) {
+          await tx.leadActivity.create({
+            data: {
+              leadId: targetFollowUp.leadId,
+              type: ActivityType.FOLLOWUP_RESCHEDULED,
+              message: `Follow-up rescheduled from ${existing.scheduledAt.toLocaleDateString()} to ${targetFollowUp.scheduledAt.toLocaleDateString()}`,
+              metadata: {
+                scheduledAtBefore: existing.scheduledAt,
+                scheduledAtAfter: targetFollowUp.scheduledAt,
+                type: targetFollowUp.type,
+              },
+              createdByUserId: validUserId,
+            },
+          });
+        }
+
+        if (note && note !== existing.note) {
+          await tx.leadActivity.create({
+            data: {
+              leadId: targetFollowUp.leadId,
+              type: ActivityType.NOTE_ADDED,
+              message: note,
+              createdByUserId: validUserId,
+            },
+          });
+
+          await tx.lead.update({
+            where: { id: targetFollowUp.leadId },
+            data: { notes: note },
+          });
+        }
+      } else {
+        // Idempotency: if submissionId provided, return existing follow-up
+        if (submissionId) {
+          const idempExisting = await tx.followUp.findFirst({
+            where: { submissionId },
+            include: { lead: true },
+          });
+          if (idempExisting) {
+            return idempExisting;
+          }
+        }
+
+        targetFollowUp = await tx.followUp.create({
+          data: {
+            leadId,
+            scheduledAt,
+            type,
+            note: note || null,
+            status: "PENDING",
+            submissionId,
+          },
+          include: { lead: true },
+        });
+
+        await tx.leadActivity.create({
+          data: {
+            leadId: targetFollowUp.leadId,
+            type: ActivityType.FOLLOWUP_CREATED,
+            message: `Scheduled a ${targetFollowUp.type} follow-up for ${targetFollowUp.scheduledAt.toLocaleDateString()}`,
+            metadata: { type: targetFollowUp.type, scheduledAt: targetFollowUp.scheduledAt },
+            createdByUserId: validUserId,
+          },
+        });
+
+        if (note) {
+          await tx.leadActivity.create({
+            data: {
+              leadId: targetFollowUp.leadId,
+              type: ActivityType.NOTE_ADDED,
+              message: note,
+              createdByUserId: validUserId,
+            },
+          });
+
+          await tx.lead.update({
+            where: { id: targetFollowUp.leadId },
+            data: { notes: note },
+          });
+        }
+      }
+
+      await markLeadAIInsightNeedsRefresh(leadId, tx);
+      return targetFollowUp;
+    });
+
+    await syncNextFollowUpDate(leadId);
+
+    safeRevalidatePath("/dashboard");
+    safeRevalidatePath("/leads");
+    safeRevalidatePath("/follow-ups");
+    safeRevalidatePath("/pipeline");
+    safeRevalidatePath(`/leads/${leadId}`);
+
+    // Fetch updated lead record for caller state updates
+    const { getLead } = await import("@/app/actions/leads");
+    const leadResult = await getLead(leadId);
+
+    const serialized = serializeFollowUp(followUp);
+    return {
+      success: true,
+      data: {
+        ...serialized,
+        leadRecord: leadResult.success ? leadResult.data : undefined,
+      },
+    };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+

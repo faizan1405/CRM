@@ -26,12 +26,14 @@ export type Lead = {
   quotedAmount: number | null;
   lastContactDate: string | null;
   nextFollowUpDate: string | null;
+  activeFollowUp?: import("@/features/followups/types").FollowUp | null;
   notes: string;
   createdAt: string;
   updatedAt: string;
   isWaste?: boolean;
   operationalState?: LeadOperationalState;
   aiAttention?: import("@/features/ai-attention/types").AIAttentionLeadData;
+  activeFollowUp?: import("@/features/followups/types").FollowUp | null;
 };
 
 export type NewLeadInput = Pick<
