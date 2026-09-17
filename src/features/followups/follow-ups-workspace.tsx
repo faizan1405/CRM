@@ -18,6 +18,7 @@ import {
   isFollowUpUpcoming,
   isFollowUpOverdue,
 } from "./formatters";
+import { useToast } from "@/components/toast-provider";
 
 type TabKey = "today" | "overdue" | "upcoming" | "completed";
 
@@ -40,6 +41,7 @@ export function FollowUpsWorkspace({
   const searchParams = useSearchParams();
   const navigation = useLeadNavigation();
   const { openWhatsApp } = useWhatsApp();
+  const { showToast } = useToast();
   const filterParam = searchParams.get("filter");
   const newParam = searchParams.get("new");
   const leadParam = searchParams.get("leadId");
@@ -176,6 +178,21 @@ export function FollowUpsWorkspace({
       if (!result.success) {
         alert(result.error || "Failed to reschedule.");
         setRescheduleTarget(null);
+      } else {
+        showToast("Follow-up rescheduled", "success", {
+          label: "Undo",
+          onClick: async () => {
+            const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoRescheduleFollowUp(
+              id, 
+              new Date(existing.scheduledAt), 
+              existing.type
+            ));
+            if (undoRes.success) {
+              showToast("Follow-up reschedule undone", "info");
+              // Refresh is handled by the server action's revalidatePath
+            }
+          }
+        });
       }
     } else {
       setRescheduling(false);

@@ -386,3 +386,85 @@ export async function cancelFollowUp(id: string): Promise<FollowUpActionResult<F
     return { success: false, error: cleanError(error) };
   }
 }
+
+export async function undoCreateFollowUp(id: string): Promise<FollowUpActionResult<null>> {
+  try {
+    const session = await requireAuthenticatedUser();
+    const existing = await db.followUp.findUnique({ where: { id } });
+    if (!existing) throw new UserFacingError("Follow-up not found.");
+
+    const validUserId = await resolveValidUserId(session.id);
+
+    await db.$transaction(async (tx) => {
+      await tx.followUp.delete({ where: { id } });
+      
+      await tx.leadActivity.create({
+        data: {
+          leadId: existing.leadId,
+          type: ActivityType.FOLLOWUP_CANCELLED,
+          message: `Undid creation of ${existing.type} follow-up`,
+          metadata: { type: existing.type },
+          createdByUserId: validUserId,
+        }
+      });
+      await markLeadAIInsightNeedsRefresh(existing.leadId, tx);
+    });
+
+    await syncNextFollowUpDate(existing.leadId);
+
+    safeRevalidatePath("/dashboard");
+    safeRevalidatePath("/leads");
+    safeRevalidatePath("/follow-ups");
+    safeRevalidatePath("/pipeline");
+    safeRevalidatePath(`/leads/${existing.leadId}`);
+    return { success: true, data: null };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+export async function undoRescheduleFollowUp(
+  id: string,
+  previousScheduledAt: Date,
+  previousType: string
+): Promise<FollowUpActionResult<FollowUp>> {
+  try {
+    const session = await requireAuthenticatedUser();
+    const existing = await db.followUp.findUnique({ where: { id } });
+    if (!existing) throw new UserFacingError("Follow-up not found.");
+
+    const validUserId = await resolveValidUserId(session.id);
+    const type = parseFollowUpType(previousType);
+
+    const followUp = await db.$transaction(async (tx) => {
+      const updated = await tx.followUp.update({
+        where: { id },
+        data: { scheduledAt: previousScheduledAt, type },
+        include: { lead: true }
+      });
+      
+      await tx.leadActivity.create({
+        data: {
+          leadId: updated.leadId,
+          type: ActivityType.FOLLOWUP_RESCHEDULED,
+          message: `Undid reschedule, reverted to ${updated.scheduledAt.toLocaleDateString()}`,
+          metadata: { type: updated.type, scheduledAtBefore: existing.scheduledAt, scheduledAtAfter: updated.scheduledAt },
+          createdByUserId: validUserId,
+        }
+      });
+      await markLeadAIInsightNeedsRefresh(updated.leadId, tx);
+      return updated;
+    });
+
+    await syncNextFollowUpDate(followUp.leadId);
+
+    safeRevalidatePath("/dashboard");
+    safeRevalidatePath("/leads");
+    safeRevalidatePath("/follow-ups");
+    safeRevalidatePath("/pipeline");
+    safeRevalidatePath(`/leads/${followUp.leadId}`);
+    return { success: true, data: serializeFollowUp(followUp) };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}

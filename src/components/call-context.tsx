@@ -45,7 +45,15 @@ export function CallProvider({ children, onFollowUpNeeded }: { children: ReactNo
             
             const res = await createFollowUp(formData);
             if (res.success) {
-              showToast("Follow-up created successfully", "success");
+              showToast("Follow-up scheduled", "success", {
+                label: "Undo",
+                onClick: async () => {
+                  const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoCreateFollowUp(res.data.id));
+                  if (undoRes.success) {
+                    showToast("Follow-up creation undone", "info");
+                  }
+                }
+              });
             } else {
               showToast(res.error || "Failed", "error");
             }

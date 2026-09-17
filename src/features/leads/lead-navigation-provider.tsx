@@ -92,14 +92,54 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
       const result = await createFollowUp(form);
       if (result.success) { 
         setFollowUpLead(null); await activity.refresh(); router.refresh(); 
-        showToast("Follow-up added", "success");
+        showToast("Follow-up scheduled", "success", {
+          label: "Undo",
+          onClick: async () => {
+            const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoCreateFollowUp(result.data.id));
+            if (undoRes.success) {
+              showToast("Follow-up creation undone", "info");
+              await activity.refresh();
+              router.refresh();
+            }
+          }
+        });
       }
       else setError(result.error);
     } catch { setError("Could not save the follow-up. Your entered details are preserved."); }
     finally { setSaving(false); }
   };
 
-  return <NavigationContext.Provider value={navigation}>
+    const toggleWaste = async (markAsWaste: boolean) => {
+      if (!lead) return;
+      setSaving(true);
+      try {
+        const action = markAsWaste ? import("@/app/actions/leads").then(m => m.markLeadWaste(lead.id)) : import("@/app/actions/leads").then(m => m.restoreWasteLead(lead.id));
+        const result = await action;
+        if (result.success) {
+          setLead(result.data);
+          router.refresh();
+          showToast(markAsWaste ? "Lead marked as Waste" : "Lead restored", "success", {
+            label: "Undo",
+            onClick: async () => {
+              const undoRes = await import("@/app/actions/leads").then(m => m.undoWasteToggle(lead.id, !markAsWaste));
+              if (undoRes.success) {
+                showToast("Action undone", "info");
+                setLead(undoRes.data);
+                router.refresh();
+              }
+            }
+          });
+        } else {
+          setError(result.error);
+        }
+      } catch {
+        setError("Could not update lead.");
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    return <NavigationContext.Provider value={navigation}>
     {children}
     {(loadingId || (!lead && error && !followUpLead)) && <div className="fixed inset-0 z-50 bg-slate-950/45" onClick={close}>
       <aside role="dialog" aria-modal="true" aria-label="Lead details" className="absolute right-0 top-0 flex h-dvh w-full max-w-xl flex-col bg-white p-5" onClick={e => e.stopPropagation()}>
@@ -111,7 +151,10 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
       onStatusChange={statusChange} onDelete={async () => setDeleteTarget(lead)}
       activities={activity.activities} activityFilter={activity.filter} onActivityFilterChange={activity.setFilter}
       onAddNote={activity.handleAddNote} onRefreshActivities={activity.refresh} onEditNote={activity.handleEditNote} onDeleteNote={activity.handleDeleteNote}
-      onAddFollowUp={() => setFollowUpLead({ id: lead.id, name: lead.name })} initialAction={action} />}
+      onAddFollowUp={() => setFollowUpLead({ id: lead.id, name: lead.name })} initialAction={action} 
+      onMarkWaste={!lead.isWaste ? () => toggleWaste(true) : undefined}
+      onRestoreWaste={lead.isWaste ? () => toggleWaste(false) : undefined}
+      />}
     <DeleteLeadDialog lead={deleteTarget} saving={saving} onCancel={() => { if (!saving) setDeleteTarget(null); }} onDelete={async () => {
         if (!deleteTarget || saving) return;
         setSaving(true);

@@ -248,6 +248,16 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     setSelectedLead((current) => current?.id === data.leadId && (!current.nextFollowUpDate || nextDate < current.nextFollowUpDate) ? { ...current, nextFollowUpDate: nextDate } : current);
     if (selectedLead?.id === data.leadId) await refreshActivities();
     setFollowUpLead(null);
+    showToast("Follow-up scheduled", "success", {
+      label: "Undo",
+      onClick: async () => {
+        const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoCreateFollowUp(result.data.id));
+        if (undoRes.success) {
+          showToast("Follow-up creation undone", "info");
+          await refreshActivities();
+        }
+      }
+    });
   };
 
   return (

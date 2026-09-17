@@ -655,3 +655,43 @@ export async function restoreWasteLead(leadId: string): Promise<LeadActionResult
     return { success: false, error: cleanError(error) };
   }
 }
+
+export async function undoWasteToggle(leadId: string, previousIsWaste: boolean): Promise<LeadActionResult<Lead>> {
+  try {
+    const session = await requireAuthenticatedUser();
+    const id = readLeadId(leadId);
+    const validUserId = await resolveValidUserId(session.id);
+
+    const lead = await db.$transaction(async (tx) => {
+      const oldLead = await tx.lead.findUnique({ where: { id } });
+      if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
+      
+      const updatedLead = await tx.lead.update({
+        where: { id },
+        data: { isWaste: previousIsWaste },
+        include: { aiInsight: true },
+      });
+      
+      await tx.leadActivity.create({
+        data: {
+          leadId: id,
+          type: ActivityType.LEAD_UPDATED,
+          message: previousIsWaste ? "Undid restoration, lead returned to Waste" : "Undid marking as Waste, lead restored",
+          createdByUserId: validUserId,
+        },
+      });
+      
+      return updatedLead;
+    });
+
+    try {
+      revalidatePath("/leads");
+      revalidatePath("/pipeline");
+      revalidatePath("/dashboard");
+    } catch {}
+
+    return { success: true, data: serializeLead(lead) };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}

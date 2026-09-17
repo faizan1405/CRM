@@ -45,6 +45,8 @@ type LeadDetailPanelProps = {
   onAddNote?: (text: string) => Promise<{ success: boolean; error?: string }>;
   onRefreshActivities?: () => void;
   onAddFollowUp?: () => void;
+  onMarkWaste?: () => void;
+  onRestoreWaste?: () => void;
   initialAction?: "note" | "status" | "activity" | "followups" | null;
   whatsAppMessage?: string;
   onEditNote?: (data: { id: string; noteId: string; noteText: string }) => void;
@@ -63,6 +65,8 @@ export function LeadDetailPanel({
   onActivityFilterChange,
   onAddNote,
   onAddFollowUp,
+  onMarkWaste,
+  onRestoreWaste,
   initialAction = null,
   whatsAppMessage,
   onEditNote,
