@@ -125,3 +125,25 @@ button, a { -webkit-tap-highlight-color: transparent; }
   background-size: 200% 100%;
   border-radius: 6px;
 }
+
+/* ── Utilities ─────────────────────────────────────────── */
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+.mb-safe {
+  margin-bottom: env(safe-area-inset-bottom);
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

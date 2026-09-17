@@ -407,6 +407,12 @@ describe("Analytics Data Layer", () => {
 
   describe("data coverage", () => {
     it("returns coverage metadata with all fields", async () => {
+      // Seed a lead and activity so that activityHistoryCoverageStart is not null
+      const lead = await createLead({ createdAt: new Date() });
+      const activity = await createActivity(lead.id);
+      ids.leads.push(lead.id);
+      ids.activities.push(activity.id);
+
       const result = await getAnalyticsData("30d");
       expect(result.success).toBe(true);
       if (!result.success) return;

@@ -101,35 +101,35 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
       {/* Toast container */}
       <div
-        className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom)+80px)] md:bottom-6 right-4 left-4 md:left-auto md:w-96 z-50 flex flex-col gap-2 pointer-events-none"
         aria-live="polite"
         aria-atomic="false"
       >
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`pointer-events-auto motion-safe:animate-toast-in flex items-center gap-2.5 rounded-lg border px-4 py-2.5 text-sm font-medium shadow-sm ${variantStyles[toast.variant].bg} ${variantStyles[toast.variant].text}`}
+            className={`pointer-events-auto motion-safe:animate-toast-in flex items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium shadow-elevated ${variantStyles[toast.variant].bg} ${variantStyles[toast.variant].text}`}
             role="alert"
           >
             <span className="shrink-0">{variantStyles[toast.variant].icon}</span>
-            <span className="flex-1 min-w-0">{toast.message}</span>
+            <span className="flex-1 min-w-0 font-semibold">{toast.message}</span>
             {toast.action && (
               <button
                 onClick={() => {
                   toast.action!.onClick();
                   dismiss(toast.id);
                 }}
-                className="shrink-0 rounded bg-white/20 px-2.5 py-1 text-xs font-semibold hover:bg-white/30 transition-colors"
+                className="shrink-0 rounded-lg bg-white/50 px-3 min-h-[44px] flex items-center justify-center text-sm font-bold shadow-sm hover:bg-white/80 transition-colors active:scale-95"
               >
                 {toast.action.label}
               </button>
             )}
             <button
               onClick={() => dismiss(toast.id)}
-              className="shrink-0 rounded p-0.5 opacity-60 hover:opacity-100 transition-opacity"
+              className="shrink-0 rounded-lg min-h-[44px] w-[44px] flex items-center justify-center -mr-2 opacity-60 hover:opacity-100 hover:bg-black/5 transition-all active:scale-95"
               aria-label="Dismiss"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>

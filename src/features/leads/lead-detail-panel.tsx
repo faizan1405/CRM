@@ -159,141 +159,134 @@ export function LeadDetailPanel({
           role="region"
           tabIndex={0}
           aria-label="Lead information"
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4"
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain bg-slate-50/50 pb-[120px]"
         >
-          {lead.status === "Lost" && lossHistory.length > 0 && (
-            <LostLeadDetail
-              reason={lossHistory[0].reasonLabel || lossHistory[0].reason}
-              lostAt={lossHistory[0].lostAt}
-              notes={lossHistory[0].note}
-              leadName={lead.name}
-            />
-          )}
-
-          <section className="rounded-xl border border-[var(--border)] bg-white p-5">
-            <h3 className="font-semibold text-slate-950">Contact</h3>
-            <dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <DetailItem label="Name" value={lead.name} action={<CopyContactButton name={lead.name} phone={lead.phone} />} />
-              <DetailItem label="Phone" value={lead.phone} />
-              <DetailItem label="Email" value={lead.email} />
-              <DetailItem label="Business" value={lead.business} />
-            </dl>
-          </section>
-
-          <section className="rounded-xl border border-[var(--border)] bg-white p-5">
-            <h3 className="font-semibold text-slate-950">Sales</h3>
-            <dl className="mt-4 grid grid-cols-2 gap-5">
-              <DetailItem label="Status" value={lead.status} />
-              <DetailItem label="Quoted amount" value={formatCurrency(lead.quotedAmount)} />
-              <DetailItem label="Industry" value={lead.industry} />
-            </dl>
-          </section>
-
-          <section className="rounded-xl border border-[var(--border)] bg-white p-5">
-            <h3 className="font-semibold text-slate-950">Follow-up</h3>
-            <dl className="mt-4 grid grid-cols-2 gap-5">
-              <DetailItem label="Last contact" value={formatLastContacted(lead.lastContactDate)} />
-              <DetailItem label="Next follow-up" value={formatNextFollowUp(lead.nextFollowUpDate)} />
-              <DetailItem label="Age" value={formatLeadAge(lead.createdAt)} />
-            </dl>
-          </section>
-
-          <section
-            id="lead-activity-section"
-            className="min-w-0 rounded-xl border border-[var(--border)] bg-white"
-          >
-            <div className="border-b border-slate-100 px-5 py-3">
-              <h3 className="font-semibold text-slate-950">Notes & Activity</h3>
-              <p className="mt-0.5 text-xs text-[var(--muted)]">
-                {hasActivity
-                  ? `${activities.length} event${activities.length !== 1 ? "s" : ""}`
-                  : "No activity yet."}
-              </p>
+          {/* Top Section: Name, Status, Phone, Age */}
+          <div className="bg-white px-5 py-4 border-b border-slate-200">
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-between items-start gap-4">
+                <div>
+                  <h2 className="text-xl font-bold tracking-tight text-slate-900 leading-tight">
+                    {lead.name}
+                  </h2>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-sm font-medium text-slate-600">{lead.phone}</span>
+                    <CopyContactButton name={lead.name} phone={lead.phone} />
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <LeadStatusBadge status={lead.status} />
+                  <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                    Age {formatLeadAge(lead.createdAt)}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Last Contact</span>
+                  <span className="text-xs font-semibold text-slate-700">{formatLastContacted(lead.lastContactDate)}</span>
+                </div>
+                <div className="w-px h-6 bg-slate-200"></div>
+                <div className="flex flex-col text-right">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Next Follow-up</span>
+                  <span className="text-xs font-bold text-blue-700">{formatNextFollowUp(lead.nextFollowUpDate)}</span>
+                </div>
+              </div>
+              
+              {lead.latestNote && (
+                <div className="text-sm text-slate-600 italic bg-amber-50/50 p-3 rounded-xl border border-amber-100 mt-1">
+                  &quot;{lead.latestNote}&quot;
+                </div>
+              )}
             </div>
+          </div>
 
-            <div className="min-w-0">
-              <LeadActivityTimeline
-                activities={activities}
-                filter={activityFilter}
-                onFilterChange={onActivityFilterChange ?? (() => {})}
-                onEditNote={onEditNote}
-                onDeleteNote={onDeleteNote}
-                noteComposer={
-                  onAddNote ? (
-                    <div className="flex flex-col gap-3">
-                      <NoteComposer
-                        id={`lead-note-${lead.id}`}
-                        autoFocus={initialAction === "note"}
-                        onAddNote={onAddNote}
-                        disabled={saving}
-                      />
-                    </div>
-                  ) : undefined
-                }
+          <div className="p-4 sm:p-6 space-y-3">
+            {lead.status === "Lost" && lossHistory.length > 0 && (
+              <LostLeadDetail
+                reason={lossHistory[0].reasonLabel || lossHistory[0].reason}
+                lostAt={lossHistory[0].lostAt}
+                notes={lossHistory[0].note}
+                leadName={lead.name}
               />
-            </div>
-          </section>
+            )}
 
-          <section
-            aria-label="Lead record actions"
-            className="flex gap-2 rounded-xl border border-[var(--border)] bg-white p-3"
-          >
-            <button
-              type="button"
-              onClick={onEdit}
-              disabled={saving}
-              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 active:bg-slate-200 disabled:opacity-50 cursor-pointer"
-            >
-              <Pencil aria-hidden="true" size={17} />
-              Edit lead
-            </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              disabled={saving}
-              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-50 active:bg-rose-100 disabled:opacity-50 cursor-pointer"
-            >
-              <Trash2 aria-hidden="true" size={17} />
-              Delete
-            </button>
-          </section>
+            {/* Expandable Details */}
+            <details className="group rounded-xl border border-[var(--border)] bg-white overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer items-center justify-between px-5 py-4 font-semibold text-slate-900 select-none hover:bg-slate-50 active:bg-slate-100">
+                Contact & Sales Details
+                <svg className="h-5 w-5 text-slate-400 transition-transform group-open:-rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </summary>
+              <div className="border-t border-slate-100 px-5 py-4">
+                <dl className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-2">
+                  <DetailItem label="Email" value={lead.email} />
+                  <DetailItem label="Business" value={lead.business} />
+                  <DetailItem label="Industry" value={lead.industry} />
+                  <DetailItem label="Quoted amount" value={formatCurrency(lead.quotedAmount)} />
+                </dl>
+              </div>
+            </details>
+
+            {/* Expandable Activity & Notes */}
+            <details open className="group rounded-xl border border-[var(--border)] bg-white overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer items-center justify-between px-5 py-4 font-semibold text-slate-900 select-none hover:bg-slate-50 active:bg-slate-100">
+                <div className="flex items-center gap-2">
+                  Activity & Notes
+                  <span className="bg-slate-100 text-slate-500 text-xs py-0.5 px-2 rounded-full font-medium">{activities.length}</span>
+                </div>
+                <svg className="h-5 w-5 text-slate-400 transition-transform group-open:-rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </summary>
+              <div className="border-t border-slate-100" id="lead-activity-section">
+                <LeadActivityTimeline
+                  activities={activities}
+                  filter={activityFilter}
+                  onFilterChange={onActivityFilterChange ?? (() => {})}
+                  onEditNote={onEditNote}
+                  onDeleteNote={onDeleteNote}
+                  noteComposer={
+                    onAddNote ? (
+                      <div className="flex flex-col gap-3 px-5 py-3 bg-slate-50/50 border-t border-slate-100">
+                        <NoteComposer
+                          id={`lead-note-${lead.id}`}
+                          autoFocus={initialAction === "note"}
+                          onAddNote={onAddNote}
+                          disabled={saving}
+                        />
+                      </div>
+                    ) : undefined
+                  }
+                />
+              </div>
+            </details>
+          </div>
         </div>
 
-        <footer className="relative z-20 shrink-0 border-t border-slate-200 bg-white px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] sm:px-6">
-          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Current status
-            <select
-              ref={statusSelectRef}
-              value={lead.status}
-              onChange={(event) => onStatusChange(event.target.value as LeadStatus)}
-              disabled={saving}
-              className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
-            >
-              {leadStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </label>
-          <LeadQuickActions
-            lead={lead}
-            whatsAppMessage={whatsAppMessage}
-            onAddNote={
-              onAddNote
-                ? () => {
-                    window.requestAnimationFrame(() => {
-                      const composer = document.getElementById(`lead-note-${lead.id}`);
-                      composer?.scrollIntoView({ block: "center" });
-                      composer?.focus({ preventScroll: true });
-                    });
-                  }
-                : undefined
-            }
-            onAddFollowUp={onAddFollowUp}
-            onChangeStatus={() => statusSelectRef.current?.focus()}
-            className="mt-2"
-          />
+        {/* Sticky Action Bar */}
+        <footer className="absolute bottom-0 inset-x-0 z-20 border-t border-slate-200 bg-white/95 backdrop-blur-md px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(15,23,42,0.06)] sm:px-6">
+          <div className="flex items-center gap-3 w-full">
+            <LeadQuickActions
+              lead={lead}
+              whatsAppMessage={whatsAppMessage}
+              onAddNote={
+                onAddNote
+                  ? () => {
+                      window.requestAnimationFrame(() => {
+                        const composer = document.getElementById(`lead-note-${lead.id}`);
+                        // Open details if closed
+                        const details = composer?.closest('details');
+                        if (details && !details.open) details.open = true;
+                        composer?.scrollIntoView({ block: "center" });
+                        composer?.focus({ preventScroll: true });
+                      });
+                    }
+                  : undefined
+              }
+              onAddFollowUp={onAddFollowUp}
+              onChangeStatus={() => {}} // Disabled here since we use a sheet later or handle it differently
+              className="flex-1"
+            />
+          </div>
         </footer>
       </aside>
     </div>

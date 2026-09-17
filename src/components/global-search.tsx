@@ -87,63 +87,60 @@ export function GlobalSearch({ trigger = "hidden" }: { trigger?: "mobile" | "des
   return (
     <>
       <div className="fixed inset-0 z-[100] bg-slate-950/45" onClick={() => setIsOpen(false)} />
-      <div className="fixed inset-x-4 top-16 z-[101] mx-auto max-w-xl sm:top-24">
-        <div className="flex flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-          <div className="flex items-center border-b border-slate-100 px-4 py-3">
-            <Search size={18} className="text-slate-400" />
+      <div className="fixed inset-0 sm:inset-x-4 sm:bottom-auto sm:top-24 z-[101] mx-auto sm:max-w-xl">
+        <div className="flex h-[100dvh] sm:h-auto flex-col overflow-hidden sm:rounded-xl bg-white shadow-2xl animate-in fade-in zoom-in-95 sm:zoom-in-100 duration-150">
+          <div className="flex items-center border-b border-slate-100 px-4 py-3 bg-white pt-safe sm:pt-3">
+            <Search size={20} className="text-slate-400" />
             <input
               ref={inputRef}
               type="text"
               placeholder="Search leads by name or phone..."
-              className="flex-1 border-none bg-transparent px-3 py-1 text-sm outline-none placeholder:text-slate-400"
+              className="flex-1 border-none bg-transparent px-3 py-1.5 text-[16px] sm:text-sm outline-none placeholder:text-slate-400"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
             {loading && <Loader2 size={16} className="animate-spin text-slate-400" />}
             <button
               onClick={() => setIsOpen(false)}
-              className="ml-2 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              className="ml-2 rounded-lg p-2 bg-slate-50 text-slate-500 hover:bg-slate-100 active:scale-95 transition-all"
             >
-              <X size={16} />
+              <X size={18} />
             </button>
           </div>
 
-          {results.length > 0 && (
-            <div className="max-h-[60vh] overflow-y-auto p-2">
-              {results.map((lead) => (
-                <button
-                  key={lead.id}
-                  onClick={() => {
-                    setIsOpen(false);
-                    openLead?.(lead.id);
-                  }}
-                  className="flex w-full flex-col gap-1 rounded-lg px-3 py-2 text-left hover:bg-slate-50 active:bg-slate-100 transition-colors"
-                >
-                  <div className="flex justify-between items-center gap-2">
-                    <span className="font-semibold text-slate-900 text-sm truncate">{lead.name}</span>
-                    <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                      {lead.status}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-4 text-xs text-slate-500">
-                    <span className="truncate">{lead.phone}</span>
-                    <span className="shrink-0 text-blue-600 font-medium">{formatNextFollowUp(lead.nextFollowUpDate)}</span>
-                  </div>
-                  {lead.notes && (
-                    <div className="text-[11px] text-slate-400 line-clamp-1 italic mt-1">
-                      {lead.notes}
+          <div className="flex-1 overflow-y-auto bg-slate-50/30 pb-safe">
+            {results.length > 0 && (
+              <div className="p-2 sm:p-3 sm:max-h-[60vh]">
+                {results.map((lead) => (
+                  <button
+                    key={lead.id}
+                    onClick={() => {
+                      setIsOpen(false);
+                      openLead?.(lead.id);
+                    }}
+                    className="mb-2 flex w-full flex-col gap-1 rounded-xl bg-white px-4 py-3 shadow-sm border border-slate-100 text-left hover:border-blue-200 active:bg-slate-50 transition-all"
+                  >
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="font-semibold text-slate-900 text-[15px] truncate">{lead.name}</span>
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                        {lead.status}
+                      </span>
                     </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
+                    <div className="flex justify-between gap-4 text-[13px] text-slate-500 mt-0.5">
+                      <span className="truncate">{lead.phone}</span>
+                      <span className="shrink-0 text-blue-600 font-medium">{formatNextFollowUp(lead.nextFollowUpDate)}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
-          {query.length >= 2 && results.length === 0 && !loading && (
-            <div className="p-6 text-center text-sm text-slate-500">
-              No results found for &quot;{query}&quot;
-            </div>
-          )}
+            {query.length >= 2 && results.length === 0 && !loading && (
+              <div className="p-10 text-center text-[15px] text-slate-500">
+                No results found for &quot;{query}&quot;
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>

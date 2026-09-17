@@ -29,27 +29,32 @@ export default async function DashboardPage() {
   const { data } = result;
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 sm:space-y-6 pb-12">
       <DashboardHeader />
-      <section aria-labelledby="recent-activity-heading">
-        <h2 id="recent-activity-heading" className="mb-3 text-lg font-bold tracking-tight text-slate-900">Recent Activity</h2>
-        <div className="rounded-2xl border bg-white p-3 sm:p-4"><RecentActivity data={data.recentActivity.slice(0, 6)} /></div>
-      </section>
-
+      
       <KPICards data={data.kpis} />
       
-      {priorityResult.data ? <PriorityLeads initialPage={priorityResult.data} /> : <section><h2 className="text-lg font-bold">Priority Leads</h2><p role="alert" className="mt-3 text-sm text-rose-700">{priorityResult.error}</p><Link href="/leads" className="inline-flex min-h-11 items-center text-sm font-semibold text-blue-700">Open Leads</Link></section>}
       <section aria-labelledby="today-followups-heading">
-        <h2 id="today-followups-heading" className="mb-3 text-lg font-bold text-slate-900">Today&apos;s Follow-ups</h2>
-        <Link href="/follow-ups?filter=today" className="flex min-w-0 items-center gap-3 rounded-xl border bg-white p-4 transition-colors duration-150 hover:border-blue-300 focus-visible:ring-2 focus-visible:ring-blue-600">
-          <CalendarClock className="size-6 shrink-0 text-blue-600" aria-hidden="true" />
-          <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{data.kpis.followUpsToday} scheduled today</p><p className="mt-1 text-xs text-slate-500">View your schedule, mark done, or reschedule.</p></div>
-          <ArrowRight className="size-5 shrink-0 text-slate-400" aria-hidden="true" />
+        <h2 id="today-followups-heading" className="mb-2 text-[15px] sm:text-lg font-bold text-slate-900">Today&apos;s Follow-ups</h2>
+        <Link href="/follow-ups?filter=today" className="flex min-w-0 items-center gap-3 rounded-xl border bg-white p-3 sm:p-4 shadow-sm hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-150 hover:border-blue-300 focus-visible:ring-2 focus-visible:ring-blue-600">
+          <div className="bg-blue-50 p-2 rounded-lg">
+            <CalendarClock className="size-5 sm:size-6 shrink-0 text-blue-600" aria-hidden="true" />
+          </div>
+          <div className="min-w-0 flex-1"><p className="text-[14px] sm:text-sm font-bold text-slate-900">{data.kpis.followUpsToday} scheduled today</p><p className="mt-0.5 text-[11px] sm:text-xs text-slate-500">View your schedule, mark done, or reschedule.</p></div>
+          <ArrowRight className="size-4 sm:size-5 shrink-0 text-slate-400" aria-hidden="true" />
         </Link>
       </section>
-      <div className="grid min-w-0 gap-6 xl:grid-cols-2">
-        <section><h2 className="mb-3 text-lg font-bold text-slate-900">Pipeline Summary</h2><div className="rounded-2xl border bg-white p-4"><PipelineSnapshot data={data.pipeline} /></div></section>
-        <section><h2 className="mb-3 text-lg font-bold text-slate-900">Revenue Summary</h2><RevenueSnapshot data={data.revenue} /></section>
+
+      {priorityResult.data ? <PriorityLeads initialPage={priorityResult.data} /> : <section><h2 className="text-[15px] sm:text-lg font-bold">Priority Leads</h2><p role="alert" className="mt-2 text-sm text-rose-700">{priorityResult.error}</p><Link href="/leads" className="inline-flex min-h-11 items-center text-sm font-semibold text-blue-700">Open Leads</Link></section>}
+      
+      <section aria-labelledby="recent-activity-heading">
+        <h2 id="recent-activity-heading" className="mb-2 text-[15px] sm:text-lg font-bold tracking-tight text-slate-900">Recent Activity</h2>
+        <div className="rounded-xl border bg-white p-3 sm:p-4 shadow-sm"><RecentActivity data={data.recentActivity.slice(0, 5)} /></div>
+      </section>
+
+      <div className="grid min-w-0 gap-4 sm:gap-6 xl:grid-cols-2">
+        <section><h2 className="mb-2 text-[15px] sm:text-lg font-bold text-slate-900">Pipeline Summary</h2><div className="rounded-xl border bg-white p-3 sm:p-4 shadow-sm"><PipelineSnapshot data={data.pipeline} /></div></section>
+        <section><h2 className="mb-2 text-[15px] sm:text-lg font-bold text-slate-900">Revenue Summary</h2><div className="rounded-xl border bg-white shadow-sm"><RevenueSnapshot data={data.revenue} /></div></section>
       </div>
     </div>
   );

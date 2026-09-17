@@ -47,81 +47,80 @@ export function LeadCard({
     <ActionCard
       onActivate={() => onSelect(lead)}
       aria-label={`Open lead ${lead.name}`}
-      className={`group relative min-w-0 rounded-2xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-3 sm:p-4 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] active:scale-[0.98] flex flex-col gap-2`}
+      className={`group relative min-w-0 rounded-2xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-3 shadow-[var(--shadow-card)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)] active:scale-[0.98] flex flex-col gap-1.5`}
     >
-      {/* 1. TOP: Name + Status & Age */}
+      {/* ROW 1: Name + Status */}
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 flex flex-col">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <h3 className="truncate font-bold text-slate-950 text-[15px] sm:text-base tracking-tight leading-none">{lead.name}</h3>
-            <span className={`inline-flex shrink-0 items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600`}>
-              {lead.status}
-            </span>
-            {!isTerminal && ai.score >= 80 && (
-              <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 mt-1">
-            <span className="text-xs font-medium text-slate-600">{lead.phone}</span>
-            <CopyContactButton name={lead.name} phone={lead.phone} />
-          </div>
-        </div>
-
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <span className="text-[10px] font-medium text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
-            Age {formatLeadAge(lead.createdAt)}
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+          <h3 className="truncate font-bold text-slate-950 text-[16px] tracking-tight leading-none">{lead.name}</h3>
+          <span className={`inline-flex shrink-0 items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700`}>
+            {lead.status}
           </span>
-          {onDelete && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(lead);
-              }}
-              aria-label={`Delete ${lead.name}`}
-              className="text-slate-300 hover:text-rose-600 transition-colors cursor-pointer mt-1"
-            >
-              <Trash2 size={13} />
-            </button>
+          {!isTerminal && ai.score >= 80 && (
+            <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
           )}
         </div>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(lead);
+            }}
+            aria-label={`Delete ${lead.name}`}
+            className="text-slate-300 hover:text-rose-600 transition-colors shrink-0 -mt-1 -mr-1 p-1 rounded active:bg-slate-100"
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
       </div>
 
-      {/* 2. NOTES PREVIEW: Upfront, 1-2 lines clamped context */}
-      <div className="text-[11px] sm:text-xs leading-snug text-slate-600 line-clamp-2">
+      {/* ROW 2: Phone + Age */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[13px] font-medium text-slate-600">{lead.phone}</span>
+          <CopyContactButton name={lead.name} phone={lead.phone} />
+        </div>
+        <span className="text-[10px] font-bold text-slate-400 bg-slate-100/80 px-1.5 py-0.5 rounded-md">
+          Age {formatLeadAge(lead.createdAt)}
+        </span>
+      </div>
+
+      {/* ROW 3: Notes Preview */}
+      <div className="text-[12px] leading-snug text-slate-600 line-clamp-1 bg-white/50 rounded p-1 -mx-1 mt-0.5">
         {notesText ? notesText : <span className="italic text-slate-400">No notes.</span>}
       </div>
 
-      {/* 3. Last Contacted & Next Follow-up */}
-      <div className="flex flex-col gap-0.5 text-[10px] sm:text-[11px]">
-        <div className="flex justify-between items-center text-slate-500">
-          <span>Last: <span className="font-medium text-slate-700">{formatLastContacted(lead.lastContactDate)}</span></span>
-          <span>Next: <span className="font-semibold text-blue-700">{formatNextFollowUp(lead.nextFollowUpDate)}</span></span>
+      {/* ROW 4: Last Contacted & Next Follow-up */}
+      <div className="flex flex-col gap-0.5 text-[11px] mt-0.5">
+        <div className="flex justify-between items-center text-slate-500 font-medium">
+          <span>Last: <span className="text-slate-700">{formatLastContacted(lead.lastContactDate)}</span></span>
+          <span>Next: <span className="text-blue-700 font-bold">{formatNextFollowUp(lead.nextFollowUpDate)}</span></span>
         </div>
       </div>
 
-      {/* 4. BOTTOM ACTIONS */}
-      <div className="mt-1 flex items-center justify-between gap-1 sm:gap-2 pt-2 border-t border-slate-100/80" onClick={(e) => e.stopPropagation()}>
+      {/* ROW 5: BOTTOM ACTIONS */}
+      <div className="mt-1.5 flex items-center justify-between gap-1.5 pt-2 border-t border-slate-200/60" onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           onClick={() => openCallModal(lead)}
-          className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-semibold hover:bg-blue-100 transition-colors"
+          className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-50 text-blue-700 text-[13px] font-bold hover:bg-blue-100 active:bg-blue-200 transition-colors"
         >
-          <Phone size={12} /> Call
+          <Phone size={14} /> Call
         </button>
         <button
           type="button"
           onClick={(e) => { e.preventDefault(); openWhatsApp(lead); }}
-          className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg bg-emerald-50 text-emerald-700 text-[11px] font-semibold hover:bg-emerald-100 transition-colors"
+          className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#25d366]/10 text-[#20bd5a] text-[13px] font-bold hover:bg-[#25d366]/20 active:bg-[#25d366]/30 transition-colors"
         >
-          <MessageCircle size={12} /> WhatsApp
+          <MessageCircle size={14} /> WhatsApp
         </button>
         <button
           type="button"
           onClick={() => onAddFollowUp(lead)}
-          className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-slate-700 text-[11px] font-semibold hover:bg-slate-50 transition-colors"
+          className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-slate-700 text-[13px] font-bold hover:bg-slate-50 active:bg-slate-100 transition-colors shadow-sm"
         >
-          <CalendarPlus size={12} /> Follow-up
+          <CalendarPlus size={14} /> <span className="hidden sm:inline">Follow-up</span><span className="sm:hidden">Date</span>
         </button>
       </div>
     </ActionCard>

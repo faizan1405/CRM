@@ -319,7 +319,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
         ) : (
           <>
             <LeadTable leads={filteredLeads} onSelect={selectLead} onDelete={setDeleteTarget} />
-            <div className="grid gap-3 p-3 sm:grid-cols-2 sm:p-4 lg:hidden">
+            <div className="flex flex-col gap-2 p-2 sm:grid sm:grid-cols-2 sm:gap-3 sm:p-4 lg:hidden">
               {filteredLeads.map((lead) => (
                 <LeadCard
                   key={lead.id}

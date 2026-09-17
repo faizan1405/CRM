@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { FollowUp, FollowUpType, NewFollowUpInput } from "./types";
 import { followUpTypes } from "./types";
 import { getPresetDate, FOLLOW_UP_PRESETS, DEFAULT_TIME } from "@/lib/date-presets";
+import { BottomSheet } from "@/components/ui/bottom-sheet";
 
 type FollowUpFormProps = {
   isOpen: boolean;
@@ -76,164 +77,137 @@ export function FollowUpForm({
     "mt-1.5 h-11 min-w-0 w-full rounded-lg border border-slate-200 bg-white px-3 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm";
 
   return (
-    <div className="fixed inset-x-0 top-0 z-[60] h-dvh" role="dialog" aria-modal="true" aria-labelledby="followup-form-title">
-      <button
-        type="button"
-        tabIndex={-1}
-        aria-label="Close dialog"
-        onClick={onClose}
-        disabled={saving}
-        className="absolute inset-0 bg-slate-950/45"
-      />
-      <aside className="absolute inset-y-0 right-0 flex h-full min-h-0 w-full max-w-lg flex-col bg-[var(--background)] shadow-2xl sm:max-w-md">
-        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-5 sm:px-6">
-          <h2 id="followup-form-title" className="text-lg font-semibold tracking-tight text-slate-950">
-            {followUp ? "Edit Follow-up" : "New Follow-up"}
-          </h2>
+    <BottomSheet
+      isOpen={isOpen}
+      onClose={onClose}
+      title={followUp ? "Edit Follow-up" : "New Follow-up"}
+      saving={saving}
+      footer={
+        <>
           <button
-            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             disabled={saving}
-            aria-label="Close dialog"
-            className="grid size-10 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50"
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-50 transition-colors shadow-sm"
           >
-            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            Cancel
           </button>
-        </header>
+          <button
+            type="submit"
+            form={formId}
+            disabled={saving || !leadId || !scheduledDate || !scheduledTime}
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-blue-600 px-4 text-[15px] font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 transition-colors"
+          >
+            {saving ? "Saving..." : followUp ? "Update" : "Create"}
+          </button>
+        </>
+      }
+    >
+      <form id={formId} onSubmit={event => { event.preventDefault(); handleSubmit(); }} className="space-y-5">
+        <div>
+          <label htmlFor={`${formId}-lead`} className="mb-1.5 block text-[13px] font-semibold text-slate-700">
+            Lead <span className="text-red-500">*</span>
+          </label>
+          <select
+            id={`${formId}-lead`}
+            value={leadId}
+            onChange={(e) => setLeadId(e.target.value)}
+            className={inputClass}
+            required
+            disabled={saving || !!followUp}
+          >
+            <option value="" disabled>Select a lead</option>
+            {leads.map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </select>
+        </div>
 
-        <form id={formId} onSubmit={event => { event.preventDefault(); handleSubmit(); }} className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
-          <div className="space-y-5">
-            <div>
-              <label htmlFor={`${formId}-lead`} className="mb-1 block text-sm font-semibold text-slate-700">
-                Lead <span className="text-red-500">*</span>
-              </label>
-              <select
-                id={`${formId}-lead`}
-                value={leadId}
-                onChange={(e) => setLeadId(e.target.value)}
-                className={inputClass}
-                required
-                disabled={saving || !!followUp}
-              >
-                <option value="" disabled>Select a lead</option>
-                {leads.map((l) => (
-                  <option key={l.id} value={l.id}>{l.name}</option>
-                ))}
-              </select>
+        <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2">
+          <div>
+            <label htmlFor={`${formId}-date`} className="mb-1.5 block text-[13px] font-semibold text-slate-700">
+              Date <span className="text-red-500">*</span>
+            </label>
+            <div className="flex flex-wrap gap-1.5 mb-2.5">
+              {FOLLOW_UP_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => {
+                    setScheduledDate(getPresetDate(preset.days));
+                    if (!scheduledTime) setScheduledTime(DEFAULT_TIME);
+                  }}
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors active:bg-slate-200"
+                >
+                  {preset.label}
+                </button>
+              ))}
             </div>
-
-            <div className="grid grid-cols-1 gap-4 min-[360px]:grid-cols-2">
-              <div>
-                <label htmlFor={`${formId}-date`} className="mb-1 block text-sm font-semibold text-slate-700">
-                  Date <span className="text-red-500">*</span>
-                </label>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {FOLLOW_UP_PRESETS.map((preset) => (
-                    <button
-                      key={preset.label}
-                      type="button"
-                      onClick={() => {
-                        setScheduledDate(getPresetDate(preset.days));
-                        if (!scheduledTime) setScheduledTime(DEFAULT_TIME);
-                      }}
-                      className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  id={`${formId}-date`}
-                  type="date"
-                  value={scheduledDate}
-                  onChange={(e) => setScheduledDate(e.target.value)}
-                  className={inputClass}
-                  required
-                  disabled={saving}
-                />
-              </div>
-              <div>
-                <label htmlFor={`${formId}-time`} className="mb-1 block text-sm font-semibold text-slate-700">
-                  Time <span className="text-red-500">*</span>
-                </label>
-                <input
-                  id={`${formId}-time`}
-                  type="time"
-                  value={scheduledTime}
-                  onChange={(e) => setScheduledTime(e.target.value)}
-                  className={inputClass}
-                  required
-                  disabled={saving}
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">
-                Type
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {followUpTypes.map((t) => (
-                  <button
-                    key={t}
-                    aria-pressed={type === t}
-                    type="button"
-                    onClick={() => setType(t)}
-                    disabled={saving}
-                    className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                      type === t
-                        ? "border-blue-500 bg-blue-50 text-blue-700"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                    } disabled:cursor-not-allowed disabled:opacity-50`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor={`${formId}-note`} className="mb-1 block text-sm font-semibold text-slate-700">
-                Note
-              </label>
-              <textarea
-                id={`${formId}-note`}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows={3}
-                className={`${inputClass} h-auto resize-none py-3`}
-                placeholder="Add a note about this follow-up..."
-                disabled={saving}
-              />
-            </div>
-          </div>
-        </form>
-
-        <footer className="shrink-0 border-t border-slate-200 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6">
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
+            <input
+              id={`${formId}-date`}
+              type="date"
+              value={scheduledDate}
+              onChange={(e) => setScheduledDate(e.target.value)}
+              className={inputClass}
+              required
               disabled={saving}
-              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form={formId}
-              disabled={saving || !leadId || !scheduledDate || !scheduledTime}
-              className="inline-flex min-h-11 flex-1 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {saving ? "Saving..." : followUp ? "Update" : "Create"}
-            </button>
+            />
           </div>
-        </footer>
-      </aside>
-    </div>
+          <div>
+            <label htmlFor={`${formId}-time`} className="mb-1.5 block text-[13px] font-semibold text-slate-700">
+              Time <span className="text-red-500">*</span>
+            </label>
+            <input
+              id={`${formId}-time`}
+              type="time"
+              value={scheduledTime}
+              onChange={(e) => setScheduledTime(e.target.value)}
+              className={inputClass}
+              required
+              disabled={saving}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-[13px] font-semibold text-slate-700">
+            Type
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {followUpTypes.map((t) => (
+              <button
+                key={t}
+                aria-pressed={type === t}
+                type="button"
+                onClick={() => setType(t)}
+                disabled={saving}
+                className={`rounded-xl border px-3 py-2 text-[13px] font-semibold transition-colors ${
+                  type === t
+                    ? "border-blue-500 bg-blue-50 text-blue-700 ring-1 ring-blue-500"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 active:bg-slate-100"
+                } disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label htmlFor={`${formId}-note`} className="mb-1.5 block text-[13px] font-semibold text-slate-700">
+            Note
+          </label>
+          <textarea
+            id={`${formId}-note`}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            className={`${inputClass} h-auto resize-none py-3`}
+            placeholder="Add a note about this follow-up..."
+            disabled={saving}
+          />
+        </div>
+      </form>
+    </BottomSheet>
   );
 }

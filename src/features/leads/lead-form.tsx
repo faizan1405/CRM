@@ -148,19 +148,19 @@ function ManualLeadEntry({
             />
           </label>
         </div>
-        <footer className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
+        <footer className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:px-6 sm:pb-4">
           <button
             type="button"
             onClick={onClose}
             disabled={saving}
-            className="min-h-11 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:opacity-50"
+            className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-700 transition-colors hover:bg-slate-100 active:bg-slate-200 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="min-h-11 rounded-lg bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
+            className="min-h-11 rounded-xl bg-blue-600 px-5 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 active:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
           >
             {saving ? "Saving…" : lead ? "Save changes" : "Add lead"}
           </button>

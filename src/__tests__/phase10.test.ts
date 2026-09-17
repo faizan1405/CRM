@@ -299,11 +299,23 @@ describe("Phase 10: Personal Notes & Demo System Hardening", () => {
       expect(await db.lead.count({ where: { id: { in: createdLeadIds } } })).toBe(2);
     });
     it("seeds realistic demo leads with insights, followups, and loss events", async () => {
+      // 1. Snapshot existing demo leads to exclude them from assertions
+      const preDemoLeads = await db.lead.findMany({
+        where: { name: { startsWith: DEMO_TAG } },
+        select: { id: true },
+      });
+      const preDemoLeadIds = preDemoLeads.map((l) => l.id);
+
+      // 2. Seed exactly 10 demo leads
       const res = await populateDemoDataAction();
       expect(res.success).toBe(true);
 
+      // 3. Find only the newly seeded demo leads
       const demoLeads = await db.lead.findMany({
-        where: { name: { startsWith: DEMO_TAG } },
+        where: { 
+          name: { startsWith: DEMO_TAG },
+          id: { notIn: preDemoLeadIds } 
+        },
         include: { aiInsight: true, followUps: true, lossEvents: true },
       });
 
@@ -311,6 +323,13 @@ describe("Phase 10: Personal Notes & Demo System Hardening", () => {
       expect(demoLeads.some((l) => l.aiInsight !== null)).toBe(true);
       expect(demoLeads.some((l) => l.followUps.length > 0)).toBe(true);
       expect(demoLeads.some((l) => l.lossEvents.length > 0)).toBe(true);
+
+      // 4. Track ONLY these fixtures for cleanup
+      for (const lead of demoLeads) {
+        if (!createdLeadIds.includes(lead.id)) {
+          createdLeadIds.push(lead.id);
+        }
+      }
     });
 
     it("clears demo leads without deleting real production records", async () => {
