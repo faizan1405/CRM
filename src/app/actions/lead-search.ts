@@ -1,7 +1,6 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { Prisma } from "@prisma/client";
 import { statusFromDatabase } from "@/features/leads/types";
 
 export async function searchLeadsForWhatsApp(query: string) {
@@ -14,6 +13,7 @@ export async function searchLeadsForWhatsApp(query: string) {
     // Search by name or phone
     const leads = await db.lead.findMany({
       where: {
+        deletedAt: null,
         OR: [
           { name: { contains: safeQuery, mode: "insensitive" } },
           { phone: { contains: safeQuery } }
@@ -48,6 +48,7 @@ export async function globalQuickSearch(query: string) {
     // Search by name, phone, or notes
     const leads = await db.lead.findMany({
       where: {
+        deletedAt: null,
         OR: [
           { name: { contains: safeQuery, mode: "insensitive" } },
           { phone: { contains: safeQuery } }

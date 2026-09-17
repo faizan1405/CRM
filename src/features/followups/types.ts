@@ -40,6 +40,7 @@ export type FollowUp = {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  submissionId?: string | null;
   lead?: {
     id: string;
     name: string;
@@ -51,15 +52,29 @@ export type FollowUp = {
 };
 
 export type NewFollowUpInput = {
+  id?: string;
   leadId: string;
   scheduledAt: string;
   type: string;
   note: string;
+  submissionId?: string;
 };
 
-export type FollowUpActionResult<T = undefined> =
-  | { success: true; data: T }
-  | { success: false; error: string };
+export interface FollowUpActionSuccess<T> {
+  success: true;
+  data: T;
+  error?: undefined;
+}
+
+export interface FollowUpActionError {
+  success: false;
+  error: string;
+  data?: undefined;
+}
+
+export type FollowUpActionResult<T = FollowUp> =
+  | FollowUpActionSuccess<T>
+  | FollowUpActionError;
 
 export const followUpTypes: FollowUpType[] = ["Call", "WhatsApp", "Email", "Other"];
 

@@ -98,6 +98,8 @@ export async function addLeadNote(leadId: string, message: string): Promise<Acti
 
     safeRevalidatePath("/dashboard");
     safeRevalidatePath("/leads");
+    safeRevalidatePath("/pipeline");
+    safeRevalidatePath("/follow-ups");
     safeRevalidatePath(`/leads/${leadId}`);
 
     return { success: true, data: serializeActivity(activity) };
@@ -130,6 +132,8 @@ export async function updateLeadNote(activityId: string, message: string): Promi
 
     safeRevalidatePath("/dashboard");
     safeRevalidatePath("/leads");
+    safeRevalidatePath("/pipeline");
+    safeRevalidatePath("/follow-ups");
     safeRevalidatePath(`/leads/${activity.leadId}`);
 
     return { success: true, data: serializeActivity(updated) };
@@ -154,6 +158,8 @@ export async function deleteLeadNote(activityId: string): Promise<ActivityAction
 
     safeRevalidatePath("/dashboard");
     safeRevalidatePath("/leads");
+    safeRevalidatePath("/pipeline");
+    safeRevalidatePath("/follow-ups");
     safeRevalidatePath(`/leads/${activity.leadId}`);
 
     return { success: true, data: { id: activityId } };

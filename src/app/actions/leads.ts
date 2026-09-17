@@ -13,6 +13,7 @@ import {
   type LeadStatus,
   type QuickStatusType,
 } from "@/features/leads/types";
+import { typeToDatabase, typeFromDatabase, type FollowUpType, type FollowUpStatus } from "@/features/followups/types";
 import { deriveAIAttention } from "@/features/ai-attention/helpers";
 import {
   markLeadAIInsightNeedsRefresh,
@@ -119,7 +120,7 @@ function serializeLead(lead: {
   createdAt: Date;
   updatedAt: Date;
   isWaste: boolean;
-  followUps?: { scheduledAt: Date; status: string }[];
+  followUps?: { id?: string; scheduledAt: Date; type?: string; status: string; note?: string | null; completedAt?: Date | null; createdAt?: Date; updatedAt?: Date }[];
   aiInsight?: import("@prisma/client").LeadAIInsight | null;
   activities?: { message: string }[];
 }): Lead {
@@ -153,6 +154,27 @@ function serializeLead(lead: {
     })),
   });
 
+  const pendingFollowUp = lead.followUps?.find((f) => f.status === "PENDING" || f.status === "Pending");
+  let activeFollowUp: import("@/features/followups/types").FollowUp | null = null;
+  if (pendingFollowUp) {
+    const rawType = pendingFollowUp.type ? typeToDatabase[pendingFollowUp.type] : undefined;
+    const mappedType: FollowUpType = rawType ? typeFromDatabase[rawType] : "Call";
+    const mappedStatus: FollowUpStatus = pendingFollowUp.status === "PENDING" ? "Pending" : "Pending";
+
+    activeFollowUp = {
+      id: pendingFollowUp.id || "",
+      leadId: lead.id,
+      scheduledAt: pendingFollowUp.scheduledAt.toISOString(),
+      type: mappedType,
+      status: mappedStatus,
+      note: pendingFollowUp.note || "",
+      completedAt: pendingFollowUp.completedAt ? pendingFollowUp.completedAt.toISOString() : null,
+      createdAt: pendingFollowUp.createdAt ? pendingFollowUp.createdAt.toISOString() : new Date().toISOString(),
+      updatedAt: pendingFollowUp.updatedAt ? pendingFollowUp.updatedAt.toISOString() : new Date().toISOString(),
+      leadNote: lead.activities?.[0]?.message || "",
+    };
+  }
+
   return {
     ...baseLead,
     isWaste: lead.isWaste,
@@ -161,6 +183,7 @@ function serializeLead(lead: {
       ...baseLead,
       aiInsight: lead.aiInsight,
     }),
+    activeFollowUp,
   };
 }
 
@@ -189,7 +212,7 @@ export async function getLeads(filter?: import('@/features/leads/types').LeadOpe
       where.isWaste = false;
     }
     const leads = await db.lead.findMany({
-      where,
+      where: { ...where, deletedAt: null },
       include: {
         aiInsight: true,
         followUps: { where: { status: "PENDING" } },
@@ -215,9 +238,13 @@ export async function getLeads(filter?: import('@/features/leads/types').LeadOpe
 export async function getLead(id: string): Promise<LeadActionResult<Lead>> {
   try {
     await requireAuthenticatedUser();
-    const lead = await db.lead.findUnique({
-      where: { id: readLeadId(id) },
+    const lead = await db.lead.findFirst({
+      where: { id: readLeadId(id), deletedAt: null },
       include: {
+        followUps: {
+          where: { status: "PENDING" },
+          orderBy: { scheduledAt: "asc" },
+        },
         activities: {
           where: { type: ActivityType.NOTE_ADDED },
           orderBy: { createdAt: "desc" },
@@ -500,16 +527,93 @@ export async function refreshLeadAI(id: string): Promise<LeadActionResult<Lead>>
 export async function deleteLead(id: string): Promise<LeadActionResult<{ id: string }>> {
   try {
     await requireAuthenticatedUser();
-    const deleted = await db.lead.delete({ where: { id: readLeadId(id) }, select: { id: true } });
+    const leadId = readLeadId(id);
+    const lead = await db.lead.findUnique({ where: { id: leadId }, select: { id: true, deletedAt: true } });
+    if (!lead) return { success: false, error: "Lead not found." };
+    if (lead.deletedAt) return { success: false, error: "Lead is already deleted." };
+
+    const updated = await db.lead.update({ where: { id: leadId }, data: { deletedAt: new Date() }, select: { id: true } });
     try {
       revalidatePath("/leads");
       revalidatePath("/pipeline");
+      revalidatePath("/dashboard");
+      revalidatePath("/analytics");
+      revalidatePath("/follow-ups");
+      revalidatePath("/recently-deleted");
+    } catch {
+      // safe in test execution
+    }
+    return { success: true, data: updated };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+export async function restoreLead(id: string): Promise<LeadActionResult<{ id: string }>> {
+  try {
+    await requireAuthenticatedUser();
+    const leadId = readLeadId(id);
+    const lead = await db.lead.findUnique({ where: { id: leadId }, select: { id: true, deletedAt: true } });
+    if (!lead) return { success: false, error: "Lead not found." };
+    if (!lead.deletedAt) return { success: false, error: "Lead is not deleted." };
+
+    const updated = await db.lead.update({ where: { id: leadId }, data: { deletedAt: null }, select: { id: true } });
+    try {
+      revalidatePath("/leads");
+      revalidatePath("/pipeline");
+      revalidatePath("/dashboard");
+      revalidatePath("/analytics");
+      revalidatePath("/follow-ups");
+      revalidatePath("/recently-deleted");
+    } catch {
+      // safe in test execution
+    }
+    return { success: true, data: updated };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+export async function permanentlyDeleteLead(id: string): Promise<LeadActionResult<{ id: string }>> {
+  try {
+    await requireAuthenticatedUser();
+    const leadId = readLeadId(id);
+    const lead = await db.lead.findUnique({ where: { id: leadId }, select: { id: true, deletedAt: true } });
+    if (!lead) return { success: false, error: "Lead not found." };
+    if (!lead.deletedAt) return { success: false, error: "Lead is not in Recently Deleted. Delete it first." };
+
+    const deleted = await db.lead.delete({ where: { id: leadId }, select: { id: true } });
+    try {
+      revalidatePath("/leads");
+      revalidatePath("/pipeline");
+      revalidatePath("/dashboard");
+      revalidatePath("/analytics");
+      revalidatePath("/follow-ups");
+      revalidatePath("/recently-deleted");
     } catch {
       // safe in test execution
     }
     return { success: true, data: deleted };
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return { success: false, error: "Lead not found." };
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+export async function getRecentlyDeletedLeads(): Promise<LeadActionResult<{ id: string; name: string; phone: string; status: string; deletedAt: string }[]>> {
+  try {
+    await requireAuthenticatedUser();
+    const leads = await db.lead.findMany({
+      where: { deletedAt: { not: null } },
+      select: { id: true, name: true, phone: true, status: true, deletedAt: true },
+      orderBy: { deletedAt: "desc" },
+    });
+    const serialized = leads.map(l => ({
+      ...l,
+      status: statusFromDatabase[l.status] ?? l.status,
+      deletedAt: l.deletedAt ? l.deletedAt.toISOString() : "",
+    }));
+    return { success: true, data: serialized };
+  } catch (error) {
     return { success: false, error: cleanError(error) };
   }
 }

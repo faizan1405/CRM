@@ -148,7 +148,7 @@ export async function getAnalyticsData(
         by: ["status"],
         _count: true,
         _sum: { quotedAmount: true },
-        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        where: { ...(dateFilter ? { createdAt: dateFilter } : {}), deletedAt: null },
       }),
 
       // 2 — Count WON leads that have a quotedAmount (for avg won deal)
@@ -156,6 +156,7 @@ export async function getAnalyticsData(
         where: { isWaste: false, 
           status: LeadStatus.WON,
           quotedAmount: { not: null },
+          deletedAt: null,
           ...(dateFilter ? { createdAt: dateFilter } : {}),
         },
       }),
@@ -163,19 +164,21 @@ export async function getAnalyticsData(
       // 3 — Open pipeline: current active leads, any creation date
       db.lead.aggregate({
         _sum: { quotedAmount: true },
-        where: { status: { in: [...ACTIVE_STATUSES] } },
+        where: { status: { in: [...ACTIVE_STATUSES] }, deletedAt: null },
       }),
 
       // 4 — Follow-up status counts (for completion metrics)
       db.followUp.groupBy({
         by: ["status"],
         _count: true,
+        where: { lead: { deletedAt: null } },
       }),
 
       // 5 — Follow-up type × status (for byType breakdown)
       db.followUp.groupBy({
         by: ["type", "status"],
         _count: true,
+        where: { lead: { deletedAt: null } },
       }),
 
       // 6 — Overdue: PENDING follow-ups scheduled before now by type
@@ -185,6 +188,7 @@ export async function getAnalyticsData(
         where: {
           status: FollowUpStatus.PENDING,
           scheduledAt: { lt: now },
+          lead: { deletedAt: null },
         },
       }),
 
@@ -202,6 +206,7 @@ export async function getAnalyticsData(
           // Filter for activities where metadata.to = "WON"
           // Using Prisma JSON path filter
           metadata: { path: ["to"], equals: "WON" },
+          lead: { deletedAt: null },
         },
         select: {
           leadId: true,
@@ -212,7 +217,7 @@ export async function getAnalyticsData(
 
       // 10 — Funnel: lead statuses (activity queried separately below for efficiency)
       db.lead.findMany({
-        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        where: { ...(dateFilter ? { createdAt: dateFilter } : {}), deletedAt: null },
         select: {
           id: true,
           status: true,
@@ -222,15 +227,16 @@ export async function getAnalyticsData(
 
       // 11 — Lead trend: just createdAt
       db.lead.findMany({
-        where: dateFilter ? { createdAt: dateFilter } : undefined,
+        where: { ...(dateFilter ? { createdAt: dateFilter } : {}), deletedAt: null },
         select: { createdAt: true },
       }),
 
-      // 12 — Pipeline health: current snapshot by status + value
+      // 12 — Pipeline health: current snapshot by status + value (active leads only)
       db.lead.groupBy({
         by: ["status"],
         _count: true,
         _sum: { quotedAmount: true },
+        where: { isWaste: false, deletedAt: null },
       }),
     ]);
 
@@ -242,7 +248,7 @@ export async function getAnalyticsData(
     let legacyLeadCount = 0;
     if (activityStart) {
       legacyLeadCount = await db.lead.count({
-        where: { isWaste: false,  createdAt: { lt: activityStart } },
+        where: { isWaste: false, deletedAt: null, createdAt: { lt: activityStart } },
       });
     }
 
@@ -478,7 +484,7 @@ export async function getAnalyticsData(
     //
     // Fetch WON leads with updatedAt for fallback
     const wonLeadsForTrend = await db.lead.findMany({
-      where: { isWaste: false, 
+      where: { isWaste: false, deletedAt: null,
         status: LeadStatus.WON,
         ...(dateFilter ? { createdAt: dateFilter } : {}),
       },

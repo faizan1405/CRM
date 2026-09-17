@@ -20,6 +20,7 @@ import type {
 } from "../types";
 
 import { NotificationCard } from "./notification-card";
+import { MobileNotificationPrompt } from "./mobile-notification-prompt";
 
 const FILTER_TABS: Array<{ value: NotificationFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -238,6 +239,9 @@ export function NotificationsWorkspace({
           </button>
         )}
       </div>
+
+      {/* Mobile Push Notifications Registration & Test Banner */}
+      <MobileNotificationPrompt />
 
       {/* Search Input Bar */}
       <div className="relative">

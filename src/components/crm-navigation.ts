@@ -1,4 +1,4 @@
-import { BarChart3, CalendarClock, Kanban, LayoutDashboard, Settings, UsersRound, Bell, Briefcase, StickyNote, BookOpen } from "lucide-react";
+import { BarChart3, CalendarClock, Kanban, LayoutDashboard, Settings, UsersRound, Bell, Briefcase, StickyNote, BookOpen, Trash2 } from "lucide-react";
 
 export const crmNavigation = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -10,6 +10,7 @@ export const crmNavigation = [
   { label: "Sales Assets", href: "/sales-assets", icon: Briefcase },
   { label: "Analytics", href: "/analytics", icon: BarChart3 },
   { label: "Guide", href: "/guide", icon: BookOpen },
+  { label: "Recently Deleted", href: "/recently-deleted", icon: Trash2 },
   { label: "Settings", href: "/settings", icon: Settings },
 ] as const;
 

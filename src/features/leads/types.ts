@@ -26,6 +26,7 @@ export type Lead = {
   quotedAmount: number | null;
   lastContactDate: string | null;
   nextFollowUpDate: string | null;
+  activeFollowUp?: import("@/features/followups/types").FollowUp | null;
   notes: string;
   createdAt: string;
   updatedAt: string;

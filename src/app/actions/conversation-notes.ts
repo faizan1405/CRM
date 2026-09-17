@@ -152,6 +152,8 @@ export async function applyCallNotes(
     try {
       revalidatePath("/leads");
       revalidatePath("/dashboard");
+      revalidatePath("/pipeline");
+      revalidatePath("/follow-ups");
     } catch {
       // safe in tests
     }

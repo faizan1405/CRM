@@ -6,7 +6,7 @@ import { useLeadNavigation } from "./lead-navigation-provider";
 import { statusFromDatabase, type DatabaseLeadStatus } from "./types";
 import { useEffect, useMemo, useState } from "react";
 import { changeLeadStatus, createLead, deleteLead, getLead, updateLead, updateQuickStatus } from "@/app/actions/leads";
-import { createFollowUp } from "@/app/actions/follow-ups";
+import { scheduleLeadFollowUp } from "@/app/actions/follow-ups";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { LeadCard } from "@/features/leads/lead-card";
@@ -152,33 +152,43 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     setSaving(true);
     setFeedback(null);
     const formData = new FormData();
+    if (data.id) {
+      formData.append("id", data.id);
+    } else if (followUpLead?.activeFollowUp?.id) {
+      formData.append("id", followUpLead.activeFollowUp.id);
+    }
     formData.append("leadId", data.leadId);
     formData.append("scheduledAt", data.scheduledAt);
     formData.append("type", data.type);
     formData.append("note", data.note);
-    const result = await createFollowUp(formData);
+    if (data.submissionId) {
+      formData.append("submissionId", data.submissionId);
+    }
+    const result = await scheduleLeadFollowUp(formData);
     setSaving(false);
     if (!result.success) {
       setFeedback({ tone: "error", message: result.error });
       return;
     }
 
+    const isRescheduled = Boolean(followUpLead?.activeFollowUp || data.id);
+    const updatedLead = result.data.leadRecord;
     const nextDate = new Date(result.data.scheduledAt).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
     setLeads((current) =>
       current.map((lead) =>
-        lead.id === data.leadId && (!lead.nextFollowUpDate || nextDate < lead.nextFollowUpDate)
-          ? { ...lead, nextFollowUpDate: nextDate }
+        lead.id === data.leadId
+          ? (updatedLead || { ...lead, nextFollowUpDate: nextDate, activeFollowUp: result.data })
           : lead
       )
     );
     setSelectedLead((current) =>
-      current?.id === data.leadId && (!current.nextFollowUpDate || nextDate < current.nextFollowUpDate)
-        ? { ...current, nextFollowUpDate: nextDate }
+      current?.id === data.leadId
+        ? (updatedLead || { ...current, nextFollowUpDate: nextDate, activeFollowUp: result.data })
         : current
     );
     if (selectedLead?.id === data.leadId) await refreshActivities();
     setFollowUpLead(null);
-    setFeedback({ tone: "success", message: "Follow-up added." });
+    setFeedback({ tone: "success", message: isRescheduled ? "Follow-up rescheduled." : "Follow-up added." });
   }
 
   async function setLeadStatus(nextStatus: LeadStatus) {
@@ -379,6 +389,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
       />}
       <FollowUpForm
         isOpen={Boolean(followUpLead)}
+        followUp={followUpLead?.activeFollowUp}
         defaultLeadId={followUpLead?.id}
         leads={followUpLead ? [{ id: followUpLead.id, name: followUpLead.name }] : []}
         saving={saving}

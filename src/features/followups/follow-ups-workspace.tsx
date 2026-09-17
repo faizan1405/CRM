@@ -2,9 +2,10 @@
 
 import { useSearchParams } from "next/navigation";
 import { useLeadNavigation } from "@/features/leads/lead-navigation-provider";
-import { getTelephoneHref } from "@/features/leads/contact-links";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWhatsApp } from "@/components/whatsapp-context";
+import { useCall } from "@/components/call-context";
+import { statusFromDatabase } from "@/features/leads/types";
 import { FollowUpCard } from "./follow-up-card";
 import { FollowUpForm } from "./follow-up-form";
 import { FollowUpEmptyState } from "./empty-state";
@@ -41,6 +42,7 @@ export function FollowUpsWorkspace({
   const searchParams = useSearchParams();
   const navigation = useLeadNavigation();
   const { openWhatsApp } = useWhatsApp();
+  const { openCallModal } = useCall();
   const { showToast } = useToast();
   const filterParam = searchParams.get("filter");
   const newParam = searchParams.get("new");
@@ -298,7 +300,27 @@ export function FollowUpsWorkspace({
                   key={followUp.id}
                   followUp={followUp}
                   statusInfo={statusInfo}
-                  onCall={() => { if (followUp.lead?.phone) window.location.href = getTelephoneHref(followUp.lead.phone); }}
+                  onCall={() => {
+                    if (followUp.lead?.phone) {
+                      openCallModal({
+                        id: followUp.lead.id,
+                        name: followUp.lead.name,
+                        phone: followUp.lead.phone,
+                        status: (statusFromDatabase[followUp.lead.status as keyof typeof statusFromDatabase] ?? followUp.lead.status) as import("@/features/leads/types").LeadStatus,
+                        email: "",
+                        business: followUp.lead.business || "",
+                        industry: "",
+                        source: "",
+                        budget: null,
+                        quotedAmount: null,
+                        lastContactDate: null,
+                        nextFollowUpDate: null,
+                        notes: "",
+                        createdAt: "",
+                        updatedAt: "",
+                      });
+                    }
+                  }}
                   onWhatsApp={() => { if (followUp.lead) openWhatsApp(followUp.lead); }}
                   onComplete={() => handleComplete(followUp)}
                   onReschedule={() => setRescheduleTarget(followUp)}

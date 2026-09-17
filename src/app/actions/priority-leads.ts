@@ -45,25 +45,25 @@ export async function getPriorityLeads(page: number = 1): Promise<{ success: boo
       newLeadsList
     ] = await Promise.all([
       db.followUp.findMany({
-        where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST }, lead: { isWaste: false } },
+        where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST }, lead: { isWaste: false, deletedAt: null } },
         include: { lead: { select: { id: true, name: true, phone: true, business: true, status: true } } },
         orderBy: { scheduledAt: "asc" },
         take: fetchLimit
       }),
       db.followUp.findMany({
-        where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { isWaste: false } },
+        where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { isWaste: false, deletedAt: null } },
         include: { lead: { select: { id: true, name: true, phone: true, business: true, status: true } } },
         orderBy: { scheduledAt: "asc" },
         take: fetchLimit
       }),
       db.lead.findMany({
-        where: { isWaste: false,  status: LeadStatus.PROPOSAL_SENT },
+        where: { isWaste: false, deletedAt: null, status: LeadStatus.PROPOSAL_SENT },
         select: { id: true, name: true, phone: true, business: true, status: true, updatedAt: true },
         orderBy: { updatedAt: "desc" },
         take: fetchLimit
       }),
       db.lead.findMany({
-        where: { isWaste: false,  status: LeadStatus.NEW },
+        where: { isWaste: false, deletedAt: null, status: LeadStatus.NEW },
         select: { id: true, name: true, phone: true, business: true, status: true, createdAt: true },
         orderBy: { createdAt: "desc" },
         take: fetchLimit
