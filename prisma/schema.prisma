@@ -441,6 +441,7 @@ model Payment {
   customType  String?
   method      PaymentMethod @default(UPI)
   note        String?       @db.Text
+  reference   String?
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
 

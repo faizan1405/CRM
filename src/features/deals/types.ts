@@ -40,6 +40,7 @@ export interface SerializedPayment {
   customType?: string | null;
   method: PaymentMethod;
   note?: string | null;
+  reference?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,6 +73,7 @@ export interface SerializedDeal {
     name: string;
     business?: string | null;
     phone: string;
+    email?: string | null;
     status: string;
   } | null;
 }
@@ -82,6 +84,11 @@ export interface DealSummaryMetrics {
   totalOutstanding: number;
   overdueAmount: number;
   totalDealsCount: number;
+  collectionRate?: number;
+  paidDealsCount?: number;
+  partiallyPaidDealsCount?: number;
+  unpaidDealsCount?: number;
+  overdueDealsCount?: number;
 }
 
 export type DealActionResult<T = undefined> =
@@ -127,4 +134,89 @@ export interface RecordPaymentInput {
   customType?: string;
   method: PaymentMethod;
   note?: string;
+  reference?: string;
 }
+
+export type AnalyticsTimeFilter = "all_time" | "this_month" | "last_month" | "last_30_days" | "this_year";
+
+export type TrendInterval = "daily" | "weekly" | "monthly";
+
+export interface PaymentTrendPoint {
+  key: string;
+  label: string;
+  amount: number;
+  count: number;
+}
+
+export interface UpcomingPaymentItem {
+  dealId: string;
+  clientName: string;
+  companyOrProject?: string | null;
+  amountDue: number;
+  dueDate: string;
+  daysRemaining: number;
+  currency: string;
+}
+
+export interface OverduePaymentItem {
+  dealId: string;
+  clientName: string;
+  companyOrProject?: string | null;
+  outstandingAmount: number;
+  dueDate: string;
+  daysOverdue: number;
+  currency: string;
+}
+
+export interface TopClientRankingItem {
+  clientName: string;
+  companyOrProject?: string | null;
+  dealCount: number;
+  totalDealValue: number;
+  totalReceived: number;
+  totalOutstanding: number;
+}
+
+export interface ClientTypeComparison {
+  dealValue: number;
+  received: number;
+  outstanding: number;
+  dealsCount: number;
+  collectionRate: number;
+}
+
+export interface DealsAnalyticsData {
+  timeFilter: AnalyticsTimeFilter;
+  // Core KPIs
+  totalDealValue: number;
+  totalReceived: number;
+  totalOutstanding: number;
+  overdueAmount: number;
+  collectionRate: number;
+  // Counts
+  totalDealsCount: number;
+  paidDealsCount: number;
+  partiallyPaidDealsCount: number;
+  unpaidDealsCount: number;
+  overdueDealsCount: number;
+  // Outstanding breakdown
+  upcomingOutstanding: number;
+  // Payment trend
+  dailyTrend: PaymentTrendPoint[];
+  weeklyTrend: PaymentTrendPoint[];
+  monthlyTrend: PaymentTrendPoint[];
+  // Lists
+  upcomingPayments: UpcomingPaymentItem[];
+  overduePayments: OverduePaymentItem[];
+  // Top Clients
+  topByDealValue: TopClientRankingItem[];
+  topByReceived: TopClientRankingItem[];
+  topByOutstanding: TopClientRankingItem[];
+  // Payment Methods
+  paymentMethodsBreakdown: Record<PaymentMethod, { amount: number; count: number; percentage: number }>;
+  totalPaymentsCount: number;
+  // Comparison (for All Deals)
+  crmClients: ClientTypeComparison;
+  otherClients: ClientTypeComparison;
+}
+

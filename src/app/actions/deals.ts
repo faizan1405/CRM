@@ -52,6 +52,7 @@ function serializePayment(p: {
   customType: string | null;
   method: PrismaPaymentMethod;
   note: string | null;
+  reference?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): SerializedPayment {
@@ -64,6 +65,7 @@ function serializePayment(p: {
     customType: p.customType,
     method: p.method as PaymentMethod,
     note: p.note,
+    reference: p.reference ?? null,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
   };
@@ -97,6 +99,7 @@ function serializeDeal(
       customType: string | null;
       method: PrismaPaymentMethod;
       note: string | null;
+      reference?: string | null;
       createdAt: Date;
       updatedAt: Date;
     }>;
@@ -105,6 +108,7 @@ function serializeDeal(
       name: string;
       business: string | null;
       phone: string;
+      email?: string | null;
       status: string;
     } | null;
   }
@@ -142,6 +146,7 @@ function serializeDeal(
           name: deal.lead.name,
           business: deal.lead.business,
           phone: deal.lead.phone,
+          email: deal.lead.email ?? null,
           status: deal.lead.status,
         }
       : null,
@@ -169,6 +174,7 @@ export async function getLeadDeal(leadId: string): Promise<DealActionResult<Seri
             name: true,
             business: true,
             phone: true,
+            email: true,
             status: true,
           },
         },
@@ -183,7 +189,41 @@ export async function getLeadDeal(leadId: string): Promise<DealActionResult<Seri
 }
 
 /**
- * Create or update deal info for a lead.
+ * Fetch a single deal by deal ID.
+ */
+export async function getDealById(dealId: string): Promise<DealActionResult<SerializedDeal | null>> {
+  try {
+    await requireAuthenticatedUser();
+    if (!dealId) throw new UserFacingError("Deal ID is required.");
+
+    const deal = await db.deal.findUnique({
+      where: { id: dealId },
+      include: {
+        payments: {
+          orderBy: { paymentDate: "desc" },
+        },
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            business: true,
+            phone: true,
+            email: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!deal) return { success: true, data: null };
+    return { success: true, data: serializeDeal(deal) };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+/**
+ * Create or update deal info for a lead or existing deal.
  * Guaranteed: One lead can have at most one deal (via unique leadId constraint).
  */
 export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealActionResult<SerializedDeal>> {
@@ -202,8 +242,14 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
       }
     }
 
-    // If dealId is provided and leadId is not provided, update directly by dealId
-    if (input.dealId && !input.leadId) {
+    // If dealId is provided, update by dealId
+    if (input.dealId) {
+      const existingDeal = await db.deal.findUnique({
+        where: { id: input.dealId },
+        include: { lead: true },
+      });
+      if (!existingDeal) throw new UserFacingError("Deal not found.");
+
       const updateData: Prisma.DealUpdateInput = {
         quotedAmount: input.quotedAmount !== undefined && input.quotedAmount !== null ? new Prisma.Decimal(input.quotedAmount) : null,
         finalAmount: new Prisma.Decimal(finalAmount),
@@ -213,23 +259,33 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
         nextPaymentDueAmount: input.nextPaymentDueAmount !== undefined && input.nextPaymentDueAmount !== null ? new Prisma.Decimal(input.nextPaymentDueAmount) : null,
       };
 
-      if (input.clientName !== undefined) {
-        updateData.clientNameSnapshot = input.clientName ? input.clientName.trim() : null;
-      }
-      if (input.companyName !== undefined) {
-        updateData.companyNameSnapshot = input.companyName ? input.companyName.trim() : null;
-      }
-      if (input.clientPhone !== undefined) {
-        updateData.clientPhone = input.clientPhone ? input.clientPhone.trim() : null;
-      }
-      if (input.clientEmail !== undefined) {
-        updateData.clientEmail = input.clientEmail ? input.clientEmail.trim() : null;
-      }
       if (input.projectName !== undefined) {
         updateData.projectName = input.projectName ? input.projectName.trim() : null;
       }
       if (input.notes !== undefined) {
         updateData.notes = input.notes ? input.notes.trim() : null;
+      }
+
+      // If deal is tied to a live CRM lead: keep snapshot in sync with canonical lead data
+      if (existingDeal.lead) {
+        updateData.clientNameSnapshot = existingDeal.lead.name;
+        updateData.companyNameSnapshot = existingDeal.lead.business || null;
+        updateData.clientPhone = existingDeal.lead.phone || null;
+        updateData.clientEmail = existingDeal.lead.email || null;
+      } else {
+        // Standalone Other Client or Preserved Deal (lead deleted): allow editing snapshots directly
+        if (input.clientName !== undefined) {
+          updateData.clientNameSnapshot = input.clientName ? input.clientName.trim() : null;
+        }
+        if (input.companyName !== undefined) {
+          updateData.companyNameSnapshot = input.companyName ? input.companyName.trim() : null;
+        }
+        if (input.clientPhone !== undefined) {
+          updateData.clientPhone = input.clientPhone ? input.clientPhone.trim() : null;
+        }
+        if (input.clientEmail !== undefined) {
+          updateData.clientEmail = input.clientEmail ? input.clientEmail.trim() : null;
+        }
       }
 
       const deal = await db.deal.update({
@@ -245,6 +301,7 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
               name: true,
               business: true,
               phone: true,
+              email: true,
               status: true,
             },
           },
@@ -252,19 +309,25 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
       });
 
       revalidatePath("/deals");
+      revalidatePath("/leads");
       return { success: true, data: serializeDeal(deal) };
     }
 
+    // Otherwise, create or update by leadId
     const leadId = input.leadId!;
     const lead = await db.lead.findUnique({
       where: { id: leadId },
-      select: { id: true, name: true, business: true },
+      select: { id: true, name: true, business: true, phone: true, email: true },
     });
 
     const data: Prisma.DealCreateInput = {
       lead: { connect: { id: leadId } },
       clientNameSnapshot: lead?.name || null,
       companyNameSnapshot: lead?.business || null,
+      clientPhone: lead?.phone || null,
+      clientEmail: lead?.email || null,
+      projectName: input.projectName ? input.projectName.trim() : null,
+      notes: input.notes ? input.notes.trim() : null,
       quotedAmount: input.quotedAmount !== undefined && input.quotedAmount !== null ? new Prisma.Decimal(input.quotedAmount) : null,
       finalAmount: new Prisma.Decimal(finalAmount),
       currency: input.currency || "INR",
@@ -285,6 +348,14 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
     if (lead) {
       updateData.clientNameSnapshot = lead.name;
       updateData.companyNameSnapshot = lead.business || null;
+      updateData.clientPhone = lead.phone || null;
+      updateData.clientEmail = lead.email || null;
+    }
+    if (input.projectName !== undefined) {
+      updateData.projectName = input.projectName ? input.projectName.trim() : null;
+    }
+    if (input.notes !== undefined) {
+      updateData.notes = input.notes ? input.notes.trim() : null;
     }
 
     const deal = await db.deal.upsert({
@@ -301,6 +372,7 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
             name: true,
             business: true,
             phone: true,
+            email: true,
             status: true,
           },
         },
@@ -417,6 +489,7 @@ export async function addDealPayment(input: RecordPaymentInput): Promise<DealAct
         customType: input.customType || null,
         method: (input.method as PrismaPaymentMethod) || "UPI",
         note: input.note ? input.note.trim() : null,
+        reference: input.reference ? input.reference.trim() : null,
       },
     });
 
@@ -466,6 +539,9 @@ export async function updateDealPayment(
     }
     if (input.note !== undefined) {
       updateData.note = input.note ? input.note.trim() : null;
+    }
+    if (input.reference !== undefined) {
+      updateData.reference = input.reference ? input.reference.trim() : null;
     }
 
     const updated = await db.payment.update({
@@ -542,6 +618,7 @@ export async function getAllDeals(options?: {
             name: true,
             business: true,
             phone: true,
+            email: true,
             status: true,
           },
         },
