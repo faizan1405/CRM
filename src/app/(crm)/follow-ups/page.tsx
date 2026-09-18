@@ -15,8 +15,7 @@ export default async function FollowUpsPage() {
   const followUps = followUpsRes.success ? [
     ...followUpsRes.data.overdue,
     ...followUpsRes.data.today,
-    ...followUpsRes.data.upcoming,
-    ...followUpsRes.data.completed
+    ...followUpsRes.data.upcoming
   ] : [];
 
   const leads = leadsRes.success ? leadsRes.data : [];

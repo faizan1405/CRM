@@ -1,0 +1,463 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { getSession } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { Prisma, DealStatus as PrismaDealStatus, PaymentType as PrismaPaymentType, PaymentMethod as PrismaPaymentMethod } from "@prisma/client";
+import type {
+  DealActionResult,
+  SerializedDeal,
+  SerializedPayment,
+  DealSummaryMetrics,
+  DealStatus,
+  PaymentType,
+  PaymentMethod,
+  UpsertDealInput,
+  RecordPaymentInput,
+} from "@/features/deals/types";
+import {
+  calculateTotalReceived,
+  calculateRemainingBalance,
+  derivePaymentStatus,
+  calculateDealMetrics,
+} from "@/features/deals/calculations";
+
+class UserFacingError extends Error {}
+
+async function requireAuthenticatedUser() {
+  const session = await getSession();
+  if (!session || typeof session.id !== "string") {
+    throw new UserFacingError("You must be signed in to manage deals and payments.");
+  }
+  return session;
+}
+
+function cleanError(error: unknown): string {
+  if (error instanceof UserFacingError) return error.message;
+  if (error instanceof Error) {
+    console.error("[Deals Action Error]:", error.message);
+    return error.message;
+  }
+  return "An unexpected error occurred.";
+}
+
+function serializePayment(p: {
+  id: string;
+  dealId: string;
+  amount: Prisma.Decimal;
+  paymentDate: Date;
+  type: PrismaPaymentType;
+  customType: string | null;
+  method: PrismaPaymentMethod;
+  note: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): SerializedPayment {
+  return {
+    id: p.id,
+    dealId: p.dealId,
+    amount: Number(p.amount),
+    paymentDate: p.paymentDate.toISOString().slice(0, 10),
+    type: p.type as PaymentType,
+    customType: p.customType,
+    method: p.method as PaymentMethod,
+    note: p.note,
+    createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
+  };
+}
+
+function serializeDeal(
+  deal: {
+    id: string;
+    leadId: string | null;
+    clientNameSnapshot?: string | null;
+    companyNameSnapshot?: string | null;
+    quotedAmount: Prisma.Decimal | null;
+    finalAmount: Prisma.Decimal;
+    currency: string;
+    status: PrismaDealStatus;
+    nextPaymentDueDate: Date | null;
+    nextPaymentDueAmount: Prisma.Decimal | null;
+    createdAt: Date;
+    updatedAt: Date;
+    payments?: Array<{
+      id: string;
+      dealId: string;
+      amount: Prisma.Decimal;
+      paymentDate: Date;
+      type: PrismaPaymentType;
+      customType: string | null;
+      method: PrismaPaymentMethod;
+      note: string | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>;
+    lead?: {
+      id: string;
+      name: string;
+      business: string | null;
+      phone: string;
+      status: string;
+    } | null;
+  }
+): SerializedDeal {
+  const payments = (deal.payments || []).map(serializePayment);
+  const totalReceived = calculateTotalReceived(payments);
+  const finalAmount = Number(deal.finalAmount) || 0;
+  const remainingBalance = calculateRemainingBalance(finalAmount, totalReceived);
+  const nextPaymentDueDate = deal.nextPaymentDueDate ? deal.nextPaymentDueDate.toISOString().slice(0, 10) : null;
+  const paymentStatus = derivePaymentStatus(finalAmount, totalReceived, nextPaymentDueDate);
+
+  return {
+    id: deal.id,
+    leadId: deal.leadId,
+    clientNameSnapshot: deal.clientNameSnapshot ?? null,
+    companyNameSnapshot: deal.companyNameSnapshot ?? null,
+    quotedAmount: deal.quotedAmount ? Number(deal.quotedAmount) : null,
+    finalAmount,
+    currency: deal.currency || "INR",
+    status: deal.status as DealStatus,
+    nextPaymentDueDate,
+    nextPaymentDueAmount: deal.nextPaymentDueAmount ? Number(deal.nextPaymentDueAmount) : null,
+    payments,
+    totalReceived,
+    remainingBalance,
+    paymentStatus,
+    lead: deal.lead
+      ? {
+          id: deal.lead.id,
+          name: deal.lead.name,
+          business: deal.lead.business,
+          phone: deal.lead.phone,
+          status: deal.lead.status,
+        }
+      : null,
+    createdAt: deal.createdAt.toISOString(),
+    updatedAt: deal.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * Fetch deal and payments for a specific lead.
+ */
+export async function getLeadDeal(leadId: string): Promise<DealActionResult<SerializedDeal | null>> {
+  try {
+    await requireAuthenticatedUser();
+
+    const deal = await db.deal.findUnique({
+      where: { leadId },
+      include: {
+        payments: {
+          orderBy: { paymentDate: "desc" },
+        },
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            business: true,
+            phone: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    if (!deal) return { success: true, data: null };
+    return { success: true, data: serializeDeal(deal) };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+/**
+ * Create or update deal info for a lead.
+ * Guaranteed: One lead can have at most one deal (via unique leadId constraint).
+ */
+export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealActionResult<SerializedDeal>> {
+  try {
+    await requireAuthenticatedUser();
+
+    if (!input.leadId && !input.dealId) throw new UserFacingError("Lead ID or Deal ID is required.");
+    const finalAmount = Number(input.finalAmount) || 0;
+    if (finalAmount < 0) throw new UserFacingError("Final deal value cannot be negative.");
+
+    let dueDate: Date | null = null;
+    if (input.nextPaymentDueDate) {
+      dueDate = new Date(`${input.nextPaymentDueDate}T00:00:00.000Z`);
+      if (Number.isNaN(dueDate.getTime())) {
+        throw new UserFacingError("Invalid next payment due date.");
+      }
+    }
+
+    // If dealId is provided and leadId is not provided, update directly by dealId
+    if (input.dealId && !input.leadId) {
+      const updateData: Prisma.DealUpdateInput = {
+        quotedAmount: input.quotedAmount !== undefined && input.quotedAmount !== null ? new Prisma.Decimal(input.quotedAmount) : null,
+        finalAmount: new Prisma.Decimal(finalAmount),
+        currency: input.currency || "INR",
+        status: (input.status as PrismaDealStatus) || "NEGOTIATING",
+        nextPaymentDueDate: dueDate,
+        nextPaymentDueAmount: input.nextPaymentDueAmount !== undefined && input.nextPaymentDueAmount !== null ? new Prisma.Decimal(input.nextPaymentDueAmount) : null,
+      };
+
+      const deal = await db.deal.update({
+        where: { id: input.dealId },
+        data: updateData,
+        include: {
+          payments: {
+            orderBy: { paymentDate: "desc" },
+          },
+          lead: {
+            select: {
+              id: true,
+              name: true,
+              business: true,
+              phone: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+      revalidatePath("/deals");
+      return { success: true, data: serializeDeal(deal) };
+    }
+
+    const leadId = input.leadId!;
+    const lead = await db.lead.findUnique({
+      where: { id: leadId },
+      select: { id: true, name: true, business: true },
+    });
+
+    const data: Prisma.DealCreateInput = {
+      lead: { connect: { id: leadId } },
+      clientNameSnapshot: lead?.name || null,
+      companyNameSnapshot: lead?.business || null,
+      quotedAmount: input.quotedAmount !== undefined && input.quotedAmount !== null ? new Prisma.Decimal(input.quotedAmount) : null,
+      finalAmount: new Prisma.Decimal(finalAmount),
+      currency: input.currency || "INR",
+      status: (input.status as PrismaDealStatus) || "NEGOTIATING",
+      nextPaymentDueDate: dueDate,
+      nextPaymentDueAmount: input.nextPaymentDueAmount !== undefined && input.nextPaymentDueAmount !== null ? new Prisma.Decimal(input.nextPaymentDueAmount) : null,
+    };
+
+    const updateData: Prisma.DealUpdateInput = {
+      quotedAmount: input.quotedAmount !== undefined && input.quotedAmount !== null ? new Prisma.Decimal(input.quotedAmount) : null,
+      finalAmount: new Prisma.Decimal(finalAmount),
+      currency: input.currency || "INR",
+      status: (input.status as PrismaDealStatus) || "NEGOTIATING",
+      nextPaymentDueDate: dueDate,
+      nextPaymentDueAmount: input.nextPaymentDueAmount !== undefined && input.nextPaymentDueAmount !== null ? new Prisma.Decimal(input.nextPaymentDueAmount) : null,
+    };
+
+    if (lead) {
+      updateData.clientNameSnapshot = lead.name;
+      updateData.companyNameSnapshot = lead.business || null;
+    }
+
+    const deal = await db.deal.upsert({
+      where: { leadId },
+      create: data,
+      update: updateData,
+      include: {
+        payments: {
+          orderBy: { paymentDate: "desc" },
+        },
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            business: true,
+            phone: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    revalidatePath("/deals");
+    revalidatePath("/leads");
+    return { success: true, data: serializeDeal(deal) };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+/**
+ * Record a new payment entry for a deal.
+ */
+export async function addDealPayment(input: RecordPaymentInput): Promise<DealActionResult<SerializedPayment>> {
+  try {
+    await requireAuthenticatedUser();
+
+    if (!input.dealId) throw new UserFacingError("Deal ID is required.");
+    const amount = Number(input.amount);
+    if (!amount || amount <= 0) throw new UserFacingError("Payment amount must be greater than 0.");
+
+    let paymentDate = new Date();
+    if (input.paymentDate) {
+      paymentDate = new Date(`${input.paymentDate}T00:00:00.000Z`);
+      if (Number.isNaN(paymentDate.getTime())) {
+        paymentDate = new Date();
+      }
+    }
+
+    const payment = await db.payment.create({
+      data: {
+        dealId: input.dealId,
+        amount: new Prisma.Decimal(amount),
+        paymentDate,
+        type: (input.type as PrismaPaymentType) || "PARTIAL",
+        customType: input.customType || null,
+        method: (input.method as PrismaPaymentMethod) || "UPI",
+        note: input.note ? input.note.trim() : null,
+      },
+    });
+
+    revalidatePath("/deals");
+    revalidatePath("/leads");
+    return { success: true, data: serializePayment(payment) };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+/**
+ * Edit an existing payment entry.
+ */
+export async function updateDealPayment(
+  paymentId: string,
+  input: Partial<RecordPaymentInput>
+): Promise<DealActionResult<SerializedPayment>> {
+  try {
+    await requireAuthenticatedUser();
+
+    if (!paymentId) throw new UserFacingError("Payment ID is required.");
+
+    const updateData: Prisma.PaymentUpdateInput = {};
+
+    if (input.amount !== undefined) {
+      const amount = Number(input.amount);
+      if (!amount || amount <= 0) throw new UserFacingError("Payment amount must be greater than 0.");
+      updateData.amount = new Prisma.Decimal(amount);
+    }
+
+    if (input.paymentDate) {
+      const date = new Date(`${input.paymentDate}T00:00:00.000Z`);
+      if (!Number.isNaN(date.getTime())) {
+        updateData.paymentDate = date;
+      }
+    }
+
+    if (input.type) {
+      updateData.type = input.type as PrismaPaymentType;
+    }
+    if (input.customType !== undefined) {
+      updateData.customType = input.customType || null;
+    }
+    if (input.method) {
+      updateData.method = input.method as PrismaPaymentMethod;
+    }
+    if (input.note !== undefined) {
+      updateData.note = input.note ? input.note.trim() : null;
+    }
+
+    const updated = await db.payment.update({
+      where: { id: paymentId },
+      data: updateData,
+    });
+
+    revalidatePath("/deals");
+    revalidatePath("/leads");
+    return { success: true, data: serializePayment(updated) };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+/**
+ * Safely delete a payment record.
+ */
+export async function deleteDealPayment(paymentId: string): Promise<DealActionResult<{ deletedId: string }>> {
+  try {
+    await requireAuthenticatedUser();
+    if (!paymentId) throw new UserFacingError("Payment ID is required.");
+
+    await db.payment.delete({
+      where: { id: paymentId },
+    });
+
+    revalidatePath("/deals");
+    revalidatePath("/leads");
+    return { success: true, data: { deletedId: paymentId } };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+/**
+ * Fetch all deals across clients, with payments, lead details, metrics, and filtering/sorting.
+ */
+export async function getAllDeals(options?: {
+  filter?: "all" | "unpaid" | "partially_paid" | "paid" | "overdue";
+  sortBy?: "highest_outstanding" | "nearest_due_date" | "latest_deal";
+}): Promise<DealActionResult<{ deals: SerializedDeal[]; metrics: DealSummaryMetrics }>> {
+  try {
+    await requireAuthenticatedUser();
+
+    const rawDeals = await db.deal.findMany({
+      include: {
+        payments: {
+          orderBy: { paymentDate: "desc" },
+        },
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            business: true,
+            phone: true,
+            status: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const serialized = rawDeals.map(serializeDeal);
+    const metrics = calculateDealMetrics(serialized);
+
+    // Apply filtering
+    let filtered = serialized;
+    const filter = options?.filter || "all";
+    if (filter === "unpaid") {
+      filtered = filtered.filter((d) => d.paymentStatus === "Unpaid");
+    } else if (filter === "partially_paid") {
+      filtered = filtered.filter((d) => d.paymentStatus === "Partially Paid");
+    } else if (filter === "paid") {
+      filtered = filtered.filter((d) => d.paymentStatus === "Paid");
+    } else if (filter === "overdue") {
+      filtered = filtered.filter((d) => d.paymentStatus === "Overdue");
+    }
+
+    // Apply sorting
+    const sortBy = options?.sortBy || "latest_deal";
+    if (sortBy === "highest_outstanding") {
+      filtered.sort((a, b) => b.remainingBalance - a.remainingBalance);
+    } else if (sortBy === "nearest_due_date") {
+      filtered.sort((a, b) => {
+        if (!a.nextPaymentDueDate && !b.nextPaymentDueDate) return 0;
+        if (!a.nextPaymentDueDate) return 1;
+        if (!b.nextPaymentDueDate) return -1;
+        return a.nextPaymentDueDate.localeCompare(b.nextPaymentDueDate);
+      });
+    } else {
+      // latest_deal (default)
+      filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+
+    return { success: true, data: { deals: filtered, metrics } };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}

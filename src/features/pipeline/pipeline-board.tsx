@@ -76,6 +76,67 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
 
+  const [scrollProgress, setScrollProgress] = useState({
+    leftPercent: 0,
+    widthPercent: 20,
+    canScroll: true,
+  });
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+
+    let rafId: number | null = null;
+
+    const updateIndicator = () => {
+      const { scrollLeft, scrollWidth, clientWidth } = el;
+      if (scrollWidth <= clientWidth || clientWidth === 0) {
+        setScrollProgress({ leftPercent: 0, widthPercent: 100, canScroll: false });
+        return;
+      }
+
+      const visibleRatio = clientWidth / scrollWidth;
+      const widthPercent = Math.max(16, Math.min(60, visibleRatio * 100));
+      const maxScroll = scrollWidth - clientWidth;
+      const progress = maxScroll > 0 ? Math.min(1, Math.max(0, scrollLeft / maxScroll)) : 0;
+      const leftPercent = progress * (100 - widthPercent);
+
+      setScrollProgress({
+        leftPercent,
+        widthPercent,
+        canScroll: true,
+      });
+    };
+
+    const onScroll = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        updateIndicator();
+        rafId = null;
+      });
+    };
+
+    updateIndicator();
+
+    el.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", updateIndicator);
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(() => {
+        updateIndicator();
+      });
+      ro.observe(el);
+    }
+
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", updateIndicator);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      ro?.disconnect();
+    };
+  }, [leads]);
+
   const {
     activities,
     filter: activityFilter,
@@ -353,15 +414,15 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         <div
           ref={stageRef}
           aria-label="Pipeline stages"
-          className="w-full min-h-0 min-w-0 flex-1 overflow-x-auto overscroll-x-contain touch-pan-x scroll-smooth custom-scrollbar sm:snap-x lg:snap-none"
-          style={{ scrollBehavior: "smooth" }}
+          className="w-full min-h-0 min-w-0 flex-1 overflow-x-auto overscroll-x-contain touch-pan-x touch-pan-y custom-scrollbar sm:snap-x lg:snap-none"
+          style={{ touchAction: "pan-x pan-y", WebkitOverflowScrolling: "touch" }}
         >
           <div className="flex min-h-full w-max min-w-full items-stretch gap-4 pb-6 sm:pb-4 px-4 sm:px-0">
             {COLUMNS.map((status) => (
               <div
                 key={status}
                 data-stage={status}
-                className="w-[85vw] sm:w-[18rem] lg:w-80 shrink-0 flex flex-col rounded-xl border border-slate-200 bg-slate-50 snap-center"
+                className="w-[85vw] sm:w-[18rem] lg:w-80 shrink-0 flex flex-col rounded-xl border border-slate-200 bg-slate-50 sm:snap-center"
               >
                 <PipelineColumnHeader status={status} count={grouped[status].length} />
 
@@ -406,6 +467,43 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
           </div>
         </div>
       </DragDropContext>
+
+      {/* Custom Mobile Horizontal Scroll Indicator */}
+      {scrollProgress.canScroll && (
+        <div
+          data-testid="pipeline-mobile-scroll-indicator"
+          aria-hidden="true"
+          className="sm:hidden mt-3 mb-1 px-4 flex flex-col items-center justify-center gap-1.5 w-full select-none shrink-0"
+        >
+          <div
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const clickX = e.clientX - rect.left;
+              const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+              const el = stageRef.current;
+              if (el) {
+                el.scrollTo({
+                  left: ratio * (el.scrollWidth - el.clientWidth),
+                  behavior: "smooth",
+                });
+              }
+            }}
+            className="relative w-36 h-1 bg-slate-200/90 rounded-full overflow-hidden cursor-pointer"
+          >
+            <div
+              data-testid="pipeline-mobile-scroll-thumb"
+              className="absolute top-0 bottom-0 bg-blue-600 rounded-full"
+              style={{
+                width: `${scrollProgress.widthPercent}%`,
+                left: `${scrollProgress.leftPercent}%`,
+              }}
+            />
+          </div>
+          <span className="text-[10px] font-medium text-slate-400">
+            Swipe stages horizontally
+          </span>
+        </div>
+      )}
 
       {selectedLead && <LeadDetailPanel key={selectedLead.id}         lead={selectedLead}
         saving={saving}

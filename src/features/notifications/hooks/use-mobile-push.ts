@@ -71,8 +71,8 @@ export function useMobilePush() {
 
     setIsSupported(supported);
 
-    // On iOS Safari tabs (not added to Home Screen), Web Push requires PWA install
-    if (ios && !standalone && !supported) {
+    // On iOS, Apple Web Push strictly requires running from the installed Home Screen PWA
+    if (ios && !standalone) {
       setRequiresPwaInstall(true);
       return;
     }

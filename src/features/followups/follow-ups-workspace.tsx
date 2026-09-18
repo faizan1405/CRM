@@ -20,13 +20,12 @@ import {
 } from "./formatters";
 import { useToast } from "@/components/toast-provider";
 
-type TabKey = "today" | "overdue" | "upcoming" | "completed";
+type TabKey = "today" | "overdue" | "upcoming";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "today", label: "Today" },
   { key: "overdue", label: "Overdue" },
   { key: "upcoming", label: "Upcoming" },
-  { key: "completed", label: "Completed" },
 ];
 
 type FollowUpsWorkspaceProps = {
@@ -84,7 +83,6 @@ export function FollowUpsWorkspace({
       Overdue: pending.filter(isFollowUpOverdue).length,
       Today: pending.filter(isFollowUpToday).length,
       Upcoming: pending.filter(isFollowUpUpcoming).length,
-      Completed: followUps.filter((f) => f.status === "Completed").length,
     };
   }, [followUps]);
 
@@ -97,8 +95,6 @@ export function FollowUpsWorkspace({
         return pending.filter(isFollowUpToday);
       case "upcoming":
         return pending.filter(isFollowUpUpcoming);
-      case "completed":
-        return followUps.filter((f) => f.status === "Completed");
       default:
         return [];
     }
@@ -211,8 +207,6 @@ export function FollowUpsWorkspace({
         return { title: "No follow-ups due today.", description: "Add one to get started." };
       case "upcoming":
         return { title: "Nothing upcoming.", description: "Follow-ups beyond today will appear here." };
-      case "completed":
-        return { title: "No completed follow-ups yet.", description: "Mark follow-ups as done to see them here." };
       default:
         return { title: "No follow-ups.", description: "" };
     }
@@ -250,9 +244,7 @@ export function FollowUpsWorkspace({
                 ? stats.Overdue
                 : tab.key === "today"
                 ? stats.Today
-                : tab.key === "upcoming"
-                ? stats.Upcoming
-                : stats.Completed;
+                : stats.Upcoming;
             return (
               <button
                 key={tab.key}

@@ -18,6 +18,7 @@ import type { LeadLossRecord } from "@/features/lost-reasons/types";
 import { CopyContactButton } from "@/components/copy-contact-button";
 import { formatLeadAge, formatLastContacted, formatNextFollowUp } from "@/lib/date-utils";
 import { ChangeStatusSheet } from "./change-status-sheet";
+import { LeadDealSection } from "@/features/deals/components/lead-deal-section";
 
 function DetailItem({ label, value, action }: { label: string; value: string; action?: React.ReactNode }) {
   return (
@@ -253,6 +254,9 @@ export function LeadDetailPanel({
                 </dl>
               </div>
             </details>
+
+            {/* Deal & Payments Section */}
+            <LeadDealSection leadId={lead.id} leadQuotedAmount={lead.quotedAmount} />
 
             {/* Expandable Activity & Notes */}
             <details open className="group rounded-xl border border-[var(--border)] bg-white overflow-hidden [&_summary::-webkit-details-marker]:hidden">

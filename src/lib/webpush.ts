@@ -90,7 +90,8 @@ export async function sendRealPushNotification(
       payloadString,
       {
         TTL: 24 * 60 * 60, // 24 hours
-        urgency: payload.requireInteraction ? "high" : "normal",
+        urgency: "high", // Immediate delivery: ensures Apple APNs wakes phone immediately
+        topic: payload.tag ? payload.tag.slice(0, 32) : undefined,
         timeout: 10000, // 10s network timeout
       }
     );

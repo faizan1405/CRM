@@ -33,13 +33,6 @@ const statusConfig: Record<
     leftBorder: "border-l-4 border-l-amber-500",
     hoverBorder: "hover:border-amber-300",
   },
-  Completed: {
-    label: "Done",
-    badgeClass: "bg-slate-100 text-slate-700 ring-slate-200",
-    cardBg: "bg-slate-50/60",
-    leftBorder: "border-l-4 border-l-slate-400",
-    hoverBorder: "hover:border-slate-300",
-  },
   Cancelled: {
     label: "Cancelled",
     badgeClass: "bg-slate-100 text-slate-600 ring-slate-200",
@@ -87,7 +80,7 @@ export function FollowUpCard({
   }, [followUp]);
 
   const status = statusConfig[timingKey] ?? statusConfig.Upcoming;
-  const isPast = timingKey === "Overdue" || timingKey === "Completed" || timingKey === "Cancelled";
+  const isPast = timingKey === "Overdue" || timingKey === "Cancelled";
 
   const isSystemNote = (n?: string) => {
     if (!n) return false;
@@ -185,7 +178,7 @@ export function FollowUpCard({
       </div>
 
       {/* Bottom: Call, WhatsApp, Reschedule */}
-      {timingKey !== "Completed" && timingKey !== "Cancelled" ? (
+      {timingKey !== "Cancelled" ? (
         <div
           className="mt-3 flex items-center gap-2 border-t border-slate-100/90 pt-2.5"
           onClick={(e) => e.stopPropagation()}

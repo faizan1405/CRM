@@ -348,6 +348,16 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
       if (oldLead.status !== updatedLead.status) changed.push("status");
       
       if (changed.length > 0) {
+        if (oldLead.name !== updatedLead.name || oldLead.business !== updatedLead.business) {
+          await tx.deal.updateMany({
+            where: { leadId },
+            data: {
+              clientNameSnapshot: updatedLead.name,
+              companyNameSnapshot: updatedLead.business,
+            },
+          });
+        }
+
         await tx.leadActivity.create({
           data: {
             leadId,
@@ -582,9 +592,18 @@ export async function permanentlyDeleteLead(id: string): Promise<LeadActionResul
   try {
     await requireAuthenticatedUser();
     const leadId = readLeadId(id);
-    const lead = await db.lead.findUnique({ where: { id: leadId }, select: { id: true, deletedAt: true } });
+    const lead = await db.lead.findUnique({ where: { id: leadId }, select: { id: true, name: true, business: true, deletedAt: true } });
     if (!lead) return { success: false, error: "Lead not found." };
     if (!lead.deletedAt) return { success: false, error: "Lead is not in Recently Deleted. Delete it first." };
+
+    // Ensure snapshot fields on Deal are populated before permanently deleting the Lead
+    await db.deal.updateMany({
+      where: { leadId },
+      data: {
+        clientNameSnapshot: lead.name,
+        companyNameSnapshot: lead.business,
+      },
+    });
 
     const deleted = await db.lead.delete({ where: { id: leadId }, select: { id: true } });
     try {
@@ -596,6 +615,7 @@ export async function permanentlyDeleteLead(id: string): Promise<LeadActionResul
       revalidatePath("/analytics");
       revalidatePath("/follow-ups");
       revalidatePath("/recently-deleted");
+      revalidatePath("/deals");
     } catch {
       // safe in test execution
     }
@@ -646,6 +666,21 @@ export async function deleteAllLeadsAction(): Promise<{
       const activityCount = await tx.leadActivity.count();
       const insightCount = await tx.leadAIInsight.count();
 
+      // Ensure Deal snapshots before leads are purged
+      const leadsWithDeals = await tx.lead.findMany({
+        where: { deal: { isNot: null } },
+        select: { id: true, name: true, business: true },
+      });
+      for (const l of leadsWithDeals) {
+        await tx.deal.updateMany({
+          where: { leadId: l.id },
+          data: {
+            clientNameSnapshot: l.name,
+            companyNameSnapshot: l.business,
+          },
+        });
+      }
+
       // Explicitly delete dependent records first for foreign key integrity
       await tx.salesNotification.deleteMany({ where: { leadId: { not: null } } });
       await tx.leadLossEvent.deleteMany({});
@@ -673,6 +708,7 @@ export async function deleteAllLeadsAction(): Promise<{
       revalidatePath("/dashboard");
       revalidatePath("/analytics");
       revalidatePath("/daily-briefing");
+      revalidatePath("/deals");
     } catch {
       // safe in test execution
     }

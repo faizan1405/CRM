@@ -1,4 +1,5 @@
 export type MobileAlertCategory =
+  | "FOLLOWUP_DUE"
   | "FOLLOWUP_REMINDER"
   | "OVERDUE_FOLLOWUP"
   | "URGENT_LEAD";

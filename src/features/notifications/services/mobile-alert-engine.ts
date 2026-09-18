@@ -43,7 +43,7 @@ export function buildMobilePushPayload(options: {
   requireInteraction?: boolean;
 }): MobilePushPayload {
   const actions =
-    options.category === "OVERDUE_FOLLOWUP"
+    options.category === "OVERDUE_FOLLOWUP" || options.category === "FOLLOWUP_DUE"
       ? [
           { action: "call", title: "📞 Call Now" },
           { action: "reschedule", title: "📅 Reschedule" },
@@ -74,16 +74,22 @@ export function buildMobilePushPayload(options: {
       actionType: actions[0]?.action as "call" | "view" | "reschedule",
     },
     actions,
-    vibrate: options.category === "OVERDUE_FOLLOWUP" ? [300, 100, 300, 100, 300] : [200, 100, 200],
-    requireInteraction: options.requireInteraction ?? (options.category === "OVERDUE_FOLLOWUP"),
+    vibrate:
+      options.category === "OVERDUE_FOLLOWUP" || options.category === "FOLLOWUP_DUE"
+        ? [300, 100, 300, 100, 300]
+        : [200, 100, 200],
+    requireInteraction:
+      options.requireInteraction ??
+      (options.category === "OVERDUE_FOLLOWUP" || options.category === "FOLLOWUP_DUE"),
   };
 }
 
 /**
  * Evaluates CRM data and generates candidate mobile alerts for:
- * 1. Follow-up reminders (due soon or today)
- * 2. Overdue follow-ups
- * 3. Urgent / High-priority leads
+ * 1. Follow-up due now (reached or passed scheduledAt)
+ * 2. Follow-up reminders (upcoming within window)
+ * 3. Overdue follow-ups (>60 min overdue)
+ * 4. Urgent / High-priority leads
  */
 export async function evaluateMobileAlerts(
   options: AlertEngineOptions = {}
@@ -111,16 +117,21 @@ export async function evaluateMobileAlerts(
     const scheduledISTDate = formatISTDate(f.scheduledAt);
     const scheduledISTTime = formatISTTime(f.scheduledAt);
 
-    // 1. OVERDUE FOLLOW-UP
-    if (scheduledTime < now.getTime()) {
-      const dedupeKey = `mobile_overdue_${f.id}_${todayIST}`;
-      const title = `⚠️ Overdue Follow-up: ${f.lead.name}`;
-      const body = `Scheduled ${f.type} follow-up was due at ${scheduledISTTime}. Tap to call or reschedule immediately.`;
-      const payload = buildMobilePushPayload({
-        category: "OVERDUE_FOLLOWUP",
-        title,
-        body,
-        tag: dedupeKey,
+    // 1. FOLLOW-UP DUE (scheduledAt reached or passed)
+    if (scheduledTime <= now.getTime()) {
+      // Due alert has durable dedupe key per specific scheduled instance
+      const dueDedupeKey = `mobile_due_${f.id}_${f.scheduledAt.getTime()}`;
+      const contextSnippet = f.note?.trim()
+        ? ` Note: ${f.note.trim().slice(0, 60)}`
+        : ` Type: ${f.type}`;
+      const dueTitle = `⏰ Follow-up due now: ${f.lead.name}`;
+      const dueBody = `Follow-up due now: ${f.lead.name} scheduled for ${scheduledISTTime}.${contextSnippet}`;
+
+      const duePayload = buildMobilePushPayload({
+        category: "FOLLOWUP_DUE",
+        title: dueTitle,
+        body: dueBody,
+        tag: dueDedupeKey,
         leadId: f.lead.id,
         leadName: f.lead.name,
         phone: f.lead.phone,
@@ -129,24 +140,58 @@ export async function evaluateMobileAlerts(
       });
 
       alerts.push({
-        id: `alert-overdue-${f.id}`,
-        category: "OVERDUE_FOLLOWUP",
+        id: `alert-due-${f.id}-${f.scheduledAt.getTime()}`,
+        category: "FOLLOWUP_DUE",
         priority: "CRITICAL",
-        title,
-        body,
+        title: dueTitle,
+        body: dueBody,
         leadId: f.lead.id,
         leadName: f.lead.name,
         phone: f.lead.phone,
         scheduledAt: f.scheduledAt.toISOString(),
-        payload,
-        dedupeKey,
+        payload: duePayload,
+        dedupeKey: dueDedupeKey,
         createdAt: now.toISOString(),
       });
+
+      // If significantly overdue (> 60 minutes), also include OVERDUE_FOLLOWUP alert for daily escalation
+      if (now.getTime() - scheduledTime >= 60 * 60 * 1000) {
+        const overdueDedupeKey = `mobile_overdue_${f.id}_${todayIST}`;
+        const overdueTitle = `⚠️ Overdue Follow-up: ${f.lead.name}`;
+        const overdueBody = `Scheduled ${f.type} follow-up was due at ${scheduledISTTime}. Tap to call or reschedule immediately.`;
+        const overduePayload = buildMobilePushPayload({
+          category: "OVERDUE_FOLLOWUP",
+          title: overdueTitle,
+          body: overdueBody,
+          tag: overdueDedupeKey,
+          leadId: f.lead.id,
+          leadName: f.lead.name,
+          phone: f.lead.phone,
+          scheduledAt: f.scheduledAt.toISOString(),
+          requireInteraction: true,
+        });
+
+        alerts.push({
+          id: `alert-overdue-${f.id}`,
+          category: "OVERDUE_FOLLOWUP",
+          priority: "CRITICAL",
+          title: overdueTitle,
+          body: overdueBody,
+          leadId: f.lead.id,
+          leadName: f.lead.name,
+          phone: f.lead.phone,
+          scheduledAt: f.scheduledAt.toISOString(),
+          payload: overduePayload,
+          dedupeKey: overdueDedupeKey,
+          createdAt: now.toISOString(),
+        });
+      }
+
       continue;
     }
 
-    // 2. FOLLOW-UP REMINDER (within window or due today)
-    if (scheduledTime <= reminderThreshold.getTime() || scheduledISTDate === todayIST) {
+    // 2. FOLLOW-UP REMINDER (upcoming within window, scheduledTime > now.getTime())
+    if (scheduledTime <= reminderThreshold.getTime()) {
       const dedupeKey = `mobile_reminder_${f.id}_${todayIST}`;
       const title = `⏰ Follow-up Reminder: ${f.lead.name}`;
       const body = `Upcoming ${f.type} follow-up scheduled for ${scheduledISTTime} today.`;

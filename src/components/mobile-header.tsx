@@ -27,7 +27,7 @@ export function MobileHeader() {
       <div className="flex items-center gap-1">
         <GlobalSearch trigger="mobile" />
         <Link 
-          href="/notifications" 
+          href="/settings?tab=notifications" 
           className="grid size-10 place-items-center rounded-full text-slate-600 hover:bg-slate-100 active:scale-95 transition-transform"
           aria-label="Notifications"
         >

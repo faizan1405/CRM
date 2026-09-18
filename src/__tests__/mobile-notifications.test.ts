@@ -95,6 +95,34 @@ describe("Agent B — Mobile Notification System Integration", () => {
       expect(reminder!.payload.actions).toBeDefined();
       expect(reminder!.payload.actions!.some((act) => act.action === "call")).toBe(true);
     });
+
+    it("generates an urgent FOLLOWUP_DUE notification when follow-up reaches scheduledAt", async () => {
+      const lead = await createTestLead("Due Target");
+      const dueTime = new Date(Date.now() - 2 * 60 * 1000); // 2 minutes ago (reached scheduled time)
+
+      const followUp = await db.followUp.create({
+        data: {
+          leadId: lead.id,
+          scheduledAt: dueTime,
+          type: "CALL",
+          status: "PENDING",
+          note: "Urgent contract review call",
+        },
+      });
+
+      const alerts = await evaluateMobileAlerts();
+      const dueAlert = alerts.find((a) => a.leadId === lead.id && a.category === "FOLLOWUP_DUE");
+
+      expect(dueAlert).toBeDefined();
+      expect(dueAlert!.priority).toBe("CRITICAL");
+      expect(dueAlert!.title).toContain("Follow-up due now");
+      expect(dueAlert!.title).toContain(lead.name);
+      expect(dueAlert!.body).toContain("Follow-up due now");
+      expect(dueAlert!.body).toContain(lead.name);
+      expect(dueAlert!.body).toContain("Urgent contract review call");
+      expect(dueAlert!.dedupeKey).toBe(`mobile_due_${followUp.id}_${dueTime.getTime()}`);
+      expect(dueAlert!.payload.requireInteraction).toBe(true);
+    });
   });
 
   describe("2. Overdue Follow-ups", () => {

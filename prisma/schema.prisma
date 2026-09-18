@@ -67,6 +67,7 @@ model Lead {
   aiInsight        LeadAIInsight?
   lossEvents       LeadLossEvent[]
   notifications    SalesNotification[]
+  deal             Deal?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
@@ -375,3 +376,64 @@ model DispatchedMobileAlert {
   @@index([userId])
   @@index([dispatchedAt])
 }
+
+enum DealStatus {
+  NO_DEAL
+  NEGOTIATING
+  CONFIRMED
+  COMPLETED
+}
+
+enum PaymentType {
+  ADVANCE
+  PARTIAL
+  FINAL
+  CUSTOM
+}
+
+enum PaymentMethod {
+  UPI
+  BANK_TRANSFER
+  CASH
+  CARD
+  PAYPAL
+  OTHER
+}
+
+model Deal {
+  id                   String        @id @default(uuid())
+  leadId               String?       @unique
+  lead                 Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  clientNameSnapshot   String?
+  companyNameSnapshot  String?
+  quotedAmount         Decimal?      @db.Decimal(12, 2)
+  finalAmount          Decimal       @default(0) @db.Decimal(12, 2)
+  currency             String        @default("INR")
+  status               DealStatus    @default(NEGOTIATING)
+  nextPaymentDueDate   DateTime?     @db.Date
+  nextPaymentDueAmount Decimal?      @db.Decimal(12, 2)
+  payments             Payment[]
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([status])
+  @@index([nextPaymentDueDate])
+}
+
+model Payment {
+  id          String        @id @default(uuid())
+  dealId      String
+  deal        Deal          @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  amount      Decimal       @db.Decimal(12, 2)
+  paymentDate DateTime      @default(now())
+  type        PaymentType   @default(PARTIAL)
+  customType  String?
+  method      PaymentMethod @default(UPI)
+  note        String?       @db.Text
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([dealId])
+  @@index([paymentDate])
+}
+
