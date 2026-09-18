@@ -29,6 +29,8 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   OTHER: "Other",
 };
 
+export type DealSource = "CRM_LEAD" | "OTHER_CLIENT";
+
 export interface SerializedPayment {
   id: string;
   dealId: string;
@@ -44,9 +46,14 @@ export interface SerializedPayment {
 
 export interface SerializedDeal {
   id: string;
+  source: DealSource;
   leadId: string | null;
   clientNameSnapshot?: string | null;
   companyNameSnapshot?: string | null;
+  clientPhone?: string | null;
+  clientEmail?: string | null;
+  projectName?: string | null;
+  notes?: string | null;
   quotedAmount: number | null;
   finalAmount: number;
   currency: string;
@@ -81,9 +88,29 @@ export type DealActionResult<T = undefined> =
   | { success: true; data: T }
   | { success: false; error: string };
 
+export interface CreateOtherClientDealInput {
+  clientName: string;
+  finalAmount: number;
+  companyName?: string | null;
+  clientPhone?: string | null;
+  clientEmail?: string | null;
+  projectName?: string | null;
+  currency?: string;
+  status?: DealStatus;
+  nextPaymentDueDate?: string | null;
+  nextPaymentDueAmount?: number | null;
+  notes?: string | null;
+}
+
 export interface UpsertDealInput {
   leadId?: string | null;
   dealId?: string | null;
+  clientName?: string | null;
+  companyName?: string | null;
+  clientPhone?: string | null;
+  clientEmail?: string | null;
+  projectName?: string | null;
+  notes?: string | null;
   quotedAmount?: number | null;
   finalAmount: number;
   currency?: string;

@@ -400,12 +400,22 @@ enum PaymentMethod {
   OTHER
 }
 
+enum DealSource {
+  CRM_LEAD
+  OTHER_CLIENT
+}
+
 model Deal {
   id                   String        @id @default(uuid())
+  source               DealSource    @default(CRM_LEAD)
   leadId               String?       @unique
   lead                 Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
   clientNameSnapshot   String?
   companyNameSnapshot  String?
+  clientPhone          String?
+  clientEmail          String?
+  projectName          String?
+  notes                String?       @db.Text
   quotedAmount         Decimal?      @db.Decimal(12, 2)
   finalAmount          Decimal       @default(0) @db.Decimal(12, 2)
   currency             String        @default("INR")
@@ -418,6 +428,7 @@ model Deal {
 
   @@index([status])
   @@index([nextPaymentDueDate])
+  @@index([source])
 }
 
 model Payment {

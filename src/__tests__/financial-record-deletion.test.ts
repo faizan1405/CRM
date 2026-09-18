@@ -223,6 +223,7 @@ describe("Financial Record Safety: Lead -> Deal & Payments", () => {
         initialDeals: [
           {
             id: "deal-null-lead-1",
+            source: "CRM_LEAD",
             leadId: null,
             clientNameSnapshot: "Financial Safety Test",
             companyNameSnapshot: "Safety Corp",

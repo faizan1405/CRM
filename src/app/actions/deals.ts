@@ -3,17 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { Prisma, DealStatus as PrismaDealStatus, PaymentType as PrismaPaymentType, PaymentMethod as PrismaPaymentMethod } from "@prisma/client";
+import { Prisma, DealStatus as PrismaDealStatus, PaymentType as PrismaPaymentType, PaymentMethod as PrismaPaymentMethod, DealSource as PrismaDealSource } from "@prisma/client";
 import type {
   DealActionResult,
   SerializedDeal,
   SerializedPayment,
   DealSummaryMetrics,
   DealStatus,
+  DealSource,
   PaymentType,
   PaymentMethod,
   UpsertDealInput,
   RecordPaymentInput,
+  CreateOtherClientDealInput,
 } from "@/features/deals/types";
 import {
   calculateTotalReceived,
@@ -70,9 +72,14 @@ function serializePayment(p: {
 function serializeDeal(
   deal: {
     id: string;
+    source?: PrismaDealSource | string;
     leadId: string | null;
     clientNameSnapshot?: string | null;
     companyNameSnapshot?: string | null;
+    clientPhone?: string | null;
+    clientEmail?: string | null;
+    projectName?: string | null;
+    notes?: string | null;
     quotedAmount: Prisma.Decimal | null;
     finalAmount: Prisma.Decimal;
     currency: string;
@@ -111,9 +118,14 @@ function serializeDeal(
 
   return {
     id: deal.id,
+    source: (deal.source as DealSource) || "CRM_LEAD",
     leadId: deal.leadId,
     clientNameSnapshot: deal.clientNameSnapshot ?? null,
     companyNameSnapshot: deal.companyNameSnapshot ?? null,
+    clientPhone: deal.clientPhone ?? null,
+    clientEmail: deal.clientEmail ?? null,
+    projectName: deal.projectName ?? null,
+    notes: deal.notes ?? null,
     quotedAmount: deal.quotedAmount ? Number(deal.quotedAmount) : null,
     finalAmount,
     currency: deal.currency || "INR",
@@ -201,6 +213,25 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
         nextPaymentDueAmount: input.nextPaymentDueAmount !== undefined && input.nextPaymentDueAmount !== null ? new Prisma.Decimal(input.nextPaymentDueAmount) : null,
       };
 
+      if (input.clientName !== undefined) {
+        updateData.clientNameSnapshot = input.clientName ? input.clientName.trim() : null;
+      }
+      if (input.companyName !== undefined) {
+        updateData.companyNameSnapshot = input.companyName ? input.companyName.trim() : null;
+      }
+      if (input.clientPhone !== undefined) {
+        updateData.clientPhone = input.clientPhone ? input.clientPhone.trim() : null;
+      }
+      if (input.clientEmail !== undefined) {
+        updateData.clientEmail = input.clientEmail ? input.clientEmail.trim() : null;
+      }
+      if (input.projectName !== undefined) {
+        updateData.projectName = input.projectName ? input.projectName.trim() : null;
+      }
+      if (input.notes !== undefined) {
+        updateData.notes = input.notes ? input.notes.trim() : null;
+      }
+
       const deal = await db.deal.update({
         where: { id: input.dealId },
         data: updateData,
@@ -278,6 +309,80 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
 
     revalidatePath("/deals");
     revalidatePath("/leads");
+    return { success: true, data: serializeDeal(deal) };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+/**
+ * Create a standalone Other Client deal (no CRM lead relationship).
+ */
+export async function createOtherClientDeal(
+  input: CreateOtherClientDealInput
+): Promise<DealActionResult<SerializedDeal>> {
+  try {
+    await requireAuthenticatedUser();
+
+    const clientName = input.clientName ? input.clientName.trim() : "";
+    if (!clientName) {
+      throw new UserFacingError("Client name is required.");
+    }
+
+    const finalAmount = Number(input.finalAmount);
+    if (isNaN(finalAmount) || finalAmount < 0) {
+      throw new UserFacingError("Final deal value must be a valid non-negative number.");
+    }
+
+    let dueDate: Date | null = null;
+    if (input.nextPaymentDueDate) {
+      dueDate = new Date(`${input.nextPaymentDueDate}T00:00:00.000Z`);
+      if (Number.isNaN(dueDate.getTime())) {
+        throw new UserFacingError("Invalid next payment due date.");
+      }
+    }
+
+    let dueAmount: Prisma.Decimal | null = null;
+    if (input.nextPaymentDueAmount !== undefined && input.nextPaymentDueAmount !== null && String(input.nextPaymentDueAmount).trim() !== "") {
+      const parsedDue = Number(input.nextPaymentDueAmount);
+      if (!isNaN(parsedDue) && parsedDue >= 0) {
+        dueAmount = new Prisma.Decimal(parsedDue);
+      }
+    }
+
+    const deal = await db.deal.create({
+      data: {
+        source: "OTHER_CLIENT",
+        leadId: null,
+        clientNameSnapshot: clientName,
+        companyNameSnapshot: input.companyName?.trim() || null,
+        clientPhone: input.clientPhone?.trim() || null,
+        clientEmail: input.clientEmail?.trim() || null,
+        projectName: input.projectName?.trim() || null,
+        notes: input.notes?.trim() || null,
+        finalAmount: new Prisma.Decimal(finalAmount),
+        currency: input.currency?.trim() || "INR",
+        status: (input.status as PrismaDealStatus) || "CONFIRMED",
+        nextPaymentDueDate: dueDate,
+        nextPaymentDueAmount: dueAmount,
+      },
+      include: {
+        payments: {
+          orderBy: { paymentDate: "desc" },
+        },
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            business: true,
+            phone: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    revalidatePath("/deals");
     return { success: true, data: serializeDeal(deal) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -391,6 +496,26 @@ export async function deleteDealPayment(paymentId: string): Promise<DealActionRe
     revalidatePath("/deals");
     revalidatePath("/leads");
     return { success: true, data: { deletedId: paymentId } };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+/**
+ * Safely delete an entire deal and all its associated payments.
+ */
+export async function deleteDeal(dealId: string): Promise<DealActionResult<{ deletedId: string }>> {
+  try {
+    await requireAuthenticatedUser();
+    if (!dealId) throw new UserFacingError("Deal ID is required.");
+
+    // Delete associated payments first (or handled via DB cascade)
+    await db.payment.deleteMany({ where: { dealId } });
+    await db.deal.delete({ where: { id: dealId } });
+
+    revalidatePath("/deals");
+    revalidatePath("/leads");
+    return { success: true, data: { deletedId: dealId } };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
