@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Package, Globe, MessageSquare } from "lucide-react";
 import { WhatsAppTemplatesWorkspace } from "@/features/whatsapp-templates/components/templates-workspace";
 import { PackagesWorkspace } from "./packages-workspace";
 import { SamplesWorkspace } from "./samples-workspace";
+import {
+  subscribePackagesUpdated,
+  setCachedPackages,
+} from "../packages-sync";
 
 import { 
   createWhatsAppTemplate, 
@@ -25,6 +29,21 @@ export function SalesAssetsWorkspace({
   initialTemplates: WhatsAppTemplate[];
 }) {
   const [activeTab, setActiveTab] = useState<"packages" | "samples" | "templates">("packages");
+  const [packages, setPackages] = useState<WebsitePackage[]>(initialPackages);
+
+  useEffect(() => {
+    if (initialPackages && initialPackages.length > 0) {
+      setPackages(initialPackages);
+      setCachedPackages(initialPackages);
+    }
+  }, [initialPackages]);
+
+  useEffect(() => {
+    const unsubscribe = subscribePackagesUpdated((updatedPkgs) => {
+      setPackages(updatedPkgs);
+    });
+    return unsubscribe;
+  }, []);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
@@ -71,7 +90,11 @@ export function SalesAssetsWorkspace({
 
       <div className="mt-6">
         {activeTab === "packages" && (
-          <PackagesWorkspace initialPackages={initialPackages} />
+          <PackagesWorkspace 
+            initialPackages={initialPackages} 
+            packages={packages} 
+            onPackagesChange={setPackages} 
+          />
         )}
         {activeTab === "samples" && (
           <SamplesWorkspace initialSamples={initialSamples} />

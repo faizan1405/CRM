@@ -1,4 +1,6 @@
 import type { PlaceholderInfo, WhatsAppComposerLead } from "./types";
+import { getCachedPackages, formatPackageListForMessage } from "@/features/sales-assets/packages-sync";
+import type { WebsitePackage } from "@prisma/client";
 
 export const SUPPORTED_PLACEHOLDERS: PlaceholderInfo[] = [
   {
@@ -189,6 +191,7 @@ export const SAMPLE_PREVIEW_VALUES: Record<string, string> = {
   "{budget}": "₹45,000",
   "{followUpDate}": "Tomorrow (16 Sep)",
   "{followUpTime}": "11:30 AM",
+  "{{leadName}}": "Rahul",
 };
 
 /**
@@ -197,18 +200,28 @@ export const SAMPLE_PREVIEW_VALUES: Record<string, string> = {
 export function interpolatePlaceholders(
   templateText: string,
   lead?: WhatsAppComposerLead | null,
-  fallbackToSamples = true
+  fallbackToSamples = true,
+  packages?: WebsitePackage[]
 ): string {
   if (!templateText) return "";
 
   if (lead) {
-     return renderWhatsAppMessage(templateText, lead);
+    let rendered = renderWhatsAppMessage(templateText, lead);
+    if (rendered.includes("{{packagePricingLinks}}")) {
+      const pkgs = packages || getCachedPackages() || [];
+      rendered = rendered.replaceAll("{{packagePricingLinks}}", formatPackageListForMessage(pkgs));
+    }
+    return rendered;
   }
 
   if (fallbackToSamples) {
     let result = templateText;
     for (const [key, value] of Object.entries(SAMPLE_PREVIEW_VALUES)) {
       result = result.replaceAll(key, value);
+    }
+    if (result.includes("{{packagePricingLinks}}")) {
+      const pkgs = packages || getCachedPackages() || [];
+      result = result.replaceAll("{{packagePricingLinks}}", formatPackageListForMessage(pkgs));
     }
     return result;
   }

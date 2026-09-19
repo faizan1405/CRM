@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Edit2, Check, X, ArrowUp, ArrowDown, MessageCircle } from "lucide-react";
 import { 
   createWebsitePackage, 
@@ -8,13 +9,44 @@ import {
 } from "@/app/actions/sales-assets";
 import type { WebsitePackage } from "@prisma/client";
 import { useWhatsApp } from "@/components/whatsapp-context";
+import {
+  broadcastPackagesUpdated,
+  setCachedPackages,
+  subscribePackagesUpdated,
+} from "../packages-sync";
 
-export function PackagesWorkspace({ initialPackages }: { initialPackages: WebsitePackage[] }) {
+export function PackagesWorkspace({ 
+  initialPackages = [],
+  packages: controlledPackages,
+  onPackagesChange,
+}: { 
+  initialPackages?: WebsitePackage[];
+  packages?: WebsitePackage[];
+  onPackagesChange?: (packages: WebsitePackage[]) => void;
+}) {
+  const router = useRouter();
   const { openWhatsAppForAsset } = useWhatsApp();
-  const [packages, setPackages] = useState<WebsitePackage[]>(initialPackages);
+  const [packages, setPackages] = useState<WebsitePackage[]>(controlledPackages || initialPackages);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<WebsitePackage>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  // Sync state if parent props update
+  useEffect(() => {
+    const next = controlledPackages || initialPackages;
+    if (next && next.length > 0) {
+      setPackages(next);
+      setCachedPackages(next);
+    }
+  }, [controlledPackages, initialPackages]);
+
+  // Listen to package broadcast updates across components
+  useEffect(() => {
+    const unsubscribe = subscribePackagesUpdated((updatedPkgs) => {
+      setPackages(updatedPkgs);
+    });
+    return unsubscribe;
+  }, []);
 
   const handleEdit = (pkg: WebsitePackage) => {
     setEditForm(pkg);
@@ -41,18 +73,28 @@ export function PackagesWorkspace({ initialPackages }: { initialPackages: Websit
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      let updatedPackages = [...packages];
       if (editForm.id === "new") {
-        
         const res = await createWebsitePackage(editForm);
-        if (res.success) {
-          setPackages(packages.map((p) => (p.id === "new" ? res.data as WebsitePackage : p)));
+        if (res.success && res.data) {
+          const created = res.data as WebsitePackage;
+          updatedPackages = packages.map((p) => (p.id === "new" ? created : p));
         }
       } else {
-        
         const res = await updateWebsitePackage(editForm.id as string, editForm);
-        if (res.success) {
-          setPackages(packages.map((p) => (p.id === editForm.id ? res.data as WebsitePackage : p)));
+        if (res.success && res.data) {
+          const updated = res.data as WebsitePackage;
+          updatedPackages = packages.map((p) => (p.id === editForm.id ? updated : p));
         }
+      }
+      setPackages(updatedPackages);
+      setCachedPackages(updatedPackages);
+      broadcastPackagesUpdated(updatedPackages);
+      onPackagesChange?.(updatedPackages);
+      try {
+        router.refresh();
+      } catch {
+        // safe fallback
       }
       setIsEditing(null);
     } catch (e) {
@@ -87,6 +129,14 @@ export function PackagesWorkspace({ initialPackages }: { initialPackages: Websit
     newPackages[targetIndex] = temp;
 
     setPackages(newPackages);
+    setCachedPackages(newPackages);
+    broadcastPackagesUpdated(newPackages);
+    onPackagesChange?.(newPackages);
+    try {
+      router.refresh();
+    } catch {
+      // safe fallback
+    }
     
     // Save to DB
     await updateWebsitePackage(newPackages[index].id, { sortOrder: newPackages[index].sortOrder });

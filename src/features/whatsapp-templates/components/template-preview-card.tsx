@@ -1,24 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CheckCheck, Eye, Code2, Sparkles } from "lucide-react";
 import { interpolatePlaceholders } from "../placeholders";
 import type { WhatsAppComposerLead } from "../types";
+import type { WebsitePackage } from "@prisma/client";
+import { getCachedPackages, subscribePackagesUpdated } from "@/features/sales-assets/packages-sync";
 
 interface TemplatePreviewCardProps {
   body: string;
   lead?: WhatsAppComposerLead | null;
+  packages?: WebsitePackage[];
   className?: string;
 }
 
 export function TemplatePreviewCard({
   body,
   lead,
+  packages: propPackages,
   className = "",
 }: TemplatePreviewCardProps) {
   const [viewMode, setViewMode] = useState<"rendered" | "raw">("rendered");
+  const [packages, setPackages] = useState<WebsitePackage[]>(() => propPackages || getCachedPackages() || []);
 
-  const renderedMessage = interpolatePlaceholders(body, lead, true);
+  useEffect(() => {
+    if (propPackages) {
+      setPackages(propPackages);
+    }
+  }, [propPackages]);
+
+  useEffect(() => {
+    const unsubscribe = subscribePackagesUpdated((updatedPkgs) => {
+      setPackages(updatedPkgs);
+    });
+    return unsubscribe;
+  }, []);
+
+  const renderedMessage = interpolatePlaceholders(body, lead, true, packages);
   const currentTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",

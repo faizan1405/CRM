@@ -21,6 +21,7 @@ import { DEFAULT_WHATSAPP_TEMPLATES } from "@/features/whatsapp-templates/defaul
 import { requestGroqJson, AIConfigError, AIServiceError } from "@/lib/ai/groq-client";
 import { z } from "zod";
 import type { WhatsAppTemplateCategory as PrismaWhatsAppTemplateCategory } from "@prisma/client";
+import { improveWhatsAppSalesMessage } from "@/features/whatsapp-templates/services/whatsapp-ai-improver";
 
 class UserFacingError extends Error {}
 
@@ -508,5 +509,59 @@ Please refine and return strictly JSON.`;
     }
   } catch (error) {
     return { success: false, error: cleanError(error) };
+  }
+}
+
+export type ImproveWhatsAppMessageResult = {
+  success: boolean;
+  improvedMessage?: string;
+  data?: {
+    improvedMessage: string;
+  };
+  error?: string;
+};
+
+/**
+ * Server action to rewrite and improve a WhatsApp sales message draft.
+ * Reuses the CRM's existing Groq AI infrastructure.
+ * Enforces strict safety, zero hallucination of facts/pricing, and language style preservation.
+ */
+export async function improveWhatsAppMessage(
+  input: string | { message?: string; text?: string }
+): Promise<ImproveWhatsAppMessageResult> {
+  try {
+    await requireAuthenticatedUser();
+
+    const rawText = typeof input === "string" ? input : input?.text ?? input?.message ?? "";
+    const text = rawText.trim();
+
+    if (!text) {
+      return {
+        success: false,
+        error: "Write a message first.",
+      };
+    }
+
+    if (text.length > 2000) {
+      return {
+        success: false,
+        error: "Message must be 2,000 characters or fewer.",
+      };
+    }
+
+    const improved = await improveWhatsAppSalesMessage(text);
+
+    return {
+      success: true,
+      improvedMessage: improved,
+      data: {
+        improvedMessage: improved,
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: cleanError(error),
+    };
   }
 }

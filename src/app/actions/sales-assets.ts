@@ -33,7 +33,13 @@ export async function createWebsitePackage(data: any) {
         sortOrder: data.sortOrder ?? 0,
       },
     });
-    revalidatePath("/sales-assets");
+    try {
+      revalidatePath("/settings");
+      revalidatePath("/sales-assets");
+      revalidatePath("/", "layout");
+    } catch {
+      // Safe fallback in test contexts
+    }
     return { success: true, data: pkg };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -47,7 +53,13 @@ export async function updateWebsitePackage(id: string, data: any) {
       where: { id },
       data,
     });
-    revalidatePath("/sales-assets");
+    try {
+      revalidatePath("/settings");
+      revalidatePath("/sales-assets");
+      revalidatePath("/", "layout");
+    } catch {
+      // Safe fallback in test contexts
+    }
     return { success: true, data: pkg };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
@@ -57,7 +69,13 @@ export async function updateWebsitePackage(id: string, data: any) {
 export async function deleteWebsitePackage(id: string) {
   try {
     await db.websitePackage.delete({ where: { id } });
-    revalidatePath("/sales-assets");
+    try {
+      revalidatePath("/settings");
+      revalidatePath("/sales-assets");
+      revalidatePath("/", "layout");
+    } catch {
+      // Safe fallback in test contexts
+    }
     return { success: true };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };

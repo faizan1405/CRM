@@ -8,3 +8,4 @@ export * from "./components/template-editor";
 export * from "./components/delete-confirm-dialog";
 export * from "./components/whatsapp-lead-composer";
 export * from "./components/templates-workspace";
+export * from "./services/whatsapp-ai-improver";
