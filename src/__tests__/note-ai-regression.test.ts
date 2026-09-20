@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { improveNoteText, formatNumberedPoints, LEAD_NOTE_IMPROVE_SYSTEM_PROMPT } from "@/app/actions/conversation-notes";
+import { improveNoteText } from "@/app/actions/conversation-notes";
+import {
+  formatNumberedPoints,
+  LEAD_NOTE_IMPROVE_SYSTEM_PROMPT,
+} from "@/lib/format-numbered-points";
 import * as groqClient from "@/lib/ai/groq-client";
 
 vi.mock("@/lib/auth", () => ({
