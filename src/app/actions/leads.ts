@@ -110,7 +110,7 @@ function leadData(formData: FormData) {
   };
 }
 
-export const leadIncludeStandard = {
+const leadIncludeStandard = {
   aiInsight: true,
   deal: {
     select: {
