@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { GlobalSearch } from "@/components/global-search";
+import { CrmRefreshButton } from "@/components/crm-refresh-button";
 import { Bell } from "lucide-react";
 import Link from "next/link";
 import { crmNavigation } from "./crm-navigation";
@@ -25,6 +26,7 @@ export function MobileHeader() {
       </h1>
       
       <div className="flex items-center gap-1">
+        <CrmRefreshButton variant="mobile" />
         <GlobalSearch trigger="mobile" />
         <Link 
           href="/settings?tab=notifications" 

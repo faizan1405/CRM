@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Activity, NoteAddedActivity, NoteEditedActivity, StatusChangedActivity, FollowUpCreatedActivity, FollowUpRescheduledActivity, FollowUpCompletedActivity, FollowUpCancelledActivity, LeadUpdatedActivity } from "./types";
 import { ActivityIcon } from "./activity-icon";
 import { formatActivityTimestamp, formatFollowUpDateShort } from "./formatters";
@@ -10,14 +11,22 @@ function renderNoteText(text: string): string {
 }
 
 function ActivityNoteAdded({ activity }: { activity: NoteAddedActivity }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = activity.noteText.length > 120;
+  const displayText = isLong && !expanded ? activity.noteText.slice(0, 120) + "..." : activity.noteText;
+
   return (
     <div>
-      <p className="text-sm leading-relaxed text-slate-700">
-        {renderNoteText(activity.noteText)}
+      <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+        {displayText}
       </p>
-      {activity.noteText.length > 120 && (
-        <button type="button" className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-700">
-          Show more
+      {isLong && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+        >
+          {expanded ? "Show less" : "Show more"}
         </button>
       )}
     </div>
@@ -25,15 +34,28 @@ function ActivityNoteAdded({ activity }: { activity: NoteAddedActivity }) {
 }
 
 function ActivityNoteEdited({ activity }: { activity: NoteEditedActivity }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = activity.noteText.length > 120;
+  const displayText = isLong && !expanded ? activity.noteText.slice(0, 120) + "..." : activity.noteText;
+
   return (
     <div>
-      <p className="text-sm leading-relaxed text-slate-700">
-        {renderNoteText(activity.noteText)}
+      <p className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+        {displayText}
       </p>
       {activity.previousText && (
-        <p className="mt-1 text-xs text-slate-400 line-through">
+        <p className="mt-1 text-xs text-slate-400 line-through whitespace-pre-wrap">
           {renderNoteText(activity.previousText)}
         </p>
+      )}
+      {isLong && (
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
       )}
     </div>
   );

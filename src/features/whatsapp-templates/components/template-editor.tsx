@@ -131,7 +131,7 @@ export function TemplateEditor({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Initial Outreach & Intro..."
-              className="h-10 w-full rounded-xl border border-slate-200 px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              className="h-10 w-full rounded-xl border border-slate-200 px-3 text-base sm:text-sm text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
             />
           </div>
 
@@ -146,7 +146,7 @@ export function TemplateEditor({
               id="template-category-select"
               value={category}
               onChange={(e) => setCategory(e.target.value as WhatsAppTemplateCategoryKey)}
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-base sm:text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
             >
               {CATEGORY_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -180,7 +180,7 @@ export function TemplateEditor({
             onChange={(e) => setBody(e.target.value)}
             placeholder="Type your WhatsApp template here... Use {name}, {business}, etc. for dynamic inserts..."
             rows={5}
-            className="w-full rounded-xl border border-slate-200 p-3 text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100 min-h-[120px]"
+            className="w-full rounded-xl border border-slate-200 p-3 text-base sm:text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100 min-h-[120px]"
           />
         </div>
 

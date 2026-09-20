@@ -168,7 +168,7 @@ export function NoteEditor({
             }}
             placeholder="Type your personal note here... ideas, reminders, sales observations, rough notes..."
             rows={10}
-            className="w-full resize-none border-0 bg-transparent text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 min-h-[180px] sm:min-h-[260px]"
+            className="w-full resize-none border-0 bg-transparent text-base sm:text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0 min-h-[180px] sm:min-h-[260px]"
           />
         </div>
 

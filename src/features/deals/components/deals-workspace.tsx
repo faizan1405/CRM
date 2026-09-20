@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { 
   SerializedDeal, 
@@ -100,6 +100,16 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
   const { showToast } = useToast();
 
   const [deals, setDeals] = useState<SerializedDeal[]>(initialDeals);
+
+  // Sync deals with incoming data on revalidation / route refresh
+  useEffect(() => {
+    setDeals(initialDeals);
+    setSelectedDealForDetail((prev) => {
+      if (!prev) return null;
+      const updated = initialDeals.find((d) => d.id === prev.id);
+      return updated || prev;
+    });
+  }, [initialDeals]);
   const [activeTab, setActiveTab] = useState<"all" | "crm" | "other">("all");
   const [filter, setFilter] = useState<"all" | "unpaid" | "partially_paid" | "paid" | "overdue">("all");
   const [sortBy, setSortBy] = useState<"highest_outstanding" | "nearest_due_date" | "latest_deal">("highest_outstanding");
@@ -789,7 +799,7 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search client, business, project..."
-              className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-slate-200 focus:border-blue-500 focus:outline-none"
+              className="w-full pl-8 pr-3 py-1.5 text-base sm:text-xs rounded-lg border border-slate-200 focus:border-blue-500 focus:outline-none"
             />
           </div>
 
@@ -798,7 +808,7 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="py-1.5 px-2 text-xs rounded-lg border border-slate-200 bg-white text-slate-700 font-medium focus:border-blue-500 focus:outline-none cursor-pointer"
+              className="py-1.5 px-2 text-base sm:text-xs rounded-lg border border-slate-200 bg-white text-slate-700 font-medium focus:border-blue-500 focus:outline-none cursor-pointer"
             >
               <option value="highest_outstanding">Highest Outstanding</option>
               <option value="nearest_due_date">Nearest Due Date</option>

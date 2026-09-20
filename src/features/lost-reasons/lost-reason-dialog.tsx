@@ -68,7 +68,7 @@ function LostReasonDialogInner({ leadName = "Lead", leadId, initialReason, initi
               value={notes} 
               onChange={event => setNotes(event.target.value)} 
               rows={3} 
-              className="mt-2 w-full rounded-xl border border-slate-200 p-3 text-[14px] focus:border-rose-500 focus:ring-1 focus:ring-rose-500 resize-y" 
+              className="mt-2 w-full rounded-xl border border-slate-200 p-3 text-base sm:text-sm focus:border-rose-500 focus:ring-1 focus:ring-rose-500 resize-y" 
             />
           </label>
           <button type="submit" disabled={pending || !notes.trim()} className="min-h-[44px] w-full rounded-xl bg-rose-600 px-4 text-[15px] font-bold text-white shadow-sm hover:bg-rose-700 active:bg-rose-800 disabled:opacity-50 transition-colors">

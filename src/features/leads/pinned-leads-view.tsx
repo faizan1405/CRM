@@ -7,13 +7,15 @@ import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
 import { useWhatsApp } from "@/components/whatsapp-context";
 import { useCall } from "@/components/call-context";
 import { CopyContactButton } from "@/components/copy-contact-button";
-import type { Lead } from "@/features/leads/types";
+import type { Lead, LeadSortOption } from "@/features/leads/types";
 
 type PinnedLeadsViewProps = {
   leads: Lead[];
   onSelect: (lead: Lead) => void;
   onTogglePin: (lead: Lead) => void;
   onAddFollowUp: (lead: Lead) => void;
+  sortBy?: LeadSortOption;
+  onSortByChange?: (value: LeadSortOption) => void;
 };
 
 export function PinnedLeadsView({
@@ -21,6 +23,8 @@ export function PinnedLeadsView({
   onSelect,
   onTogglePin,
   onAddFollowUp,
+  sortBy = "default",
+  onSortByChange,
 }: PinnedLeadsViewProps) {
   const { openWhatsApp } = useWhatsApp();
   const { openCallModal } = useCall();
@@ -41,11 +45,29 @@ export function PinnedLeadsView({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between px-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
           {leads.length} {leads.length === 1 ? "Prospect Shortlisted" : "Prospects Shortlisted"}
         </p>
-        <span className="text-xs text-amber-600 font-medium">★ Priority Focus</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-amber-600 font-medium hidden sm:inline">★ Priority Focus</span>
+          {onSortByChange && (
+            <label className="inline-flex items-center gap-1.5 text-xs text-slate-500">
+              <span className="sr-only">Sort pinned leads</span>
+              <select
+                value={sortBy}
+                onChange={(e) => onSortByChange(e.target.value as LeadSortOption)}
+                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
+                aria-label="Sort pinned leads"
+              >
+                <option value="default">Sort: Default</option>
+                <option value="name_asc">Name A → Z</option>
+                <option value="name_desc">Name Z → A</option>
+                <option value="most_stale">Most Stale First</option>
+              </select>
+            </label>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

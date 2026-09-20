@@ -66,6 +66,16 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   }, [requestedStage]);
 
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
+
+  // Sync leads with incoming data on revalidation / route refresh
+  useEffect(() => {
+    setLeads(initialLeads);
+    setSelectedLead((prev) => {
+      if (!prev) return null;
+      const updated = initialLeads.find((l) => l.id === prev.id);
+      return updated || prev;
+    });
+  }, [initialLeads]);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);

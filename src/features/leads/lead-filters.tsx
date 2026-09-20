@@ -1,5 +1,5 @@
 import { ArrowDownUp, Clock, GitMerge, Search, SlidersHorizontal, Star, X } from "lucide-react";
-import { leadStatuses, type LeadStatus } from "@/features/leads/types";
+import { leadStatuses, type LeadSortOption, type LeadStatus } from "@/features/leads/types";
 import { type LeadOperationalState } from "@/features/leads/types";
 
 type LeadFiltersProps = {
@@ -9,18 +9,18 @@ type LeadFiltersProps = {
   pinnedOnly?: boolean;
   staleOnly?: boolean;
   duplicatesOnly?: boolean;
-  sortBy?: "default" | "most_stale";
+  sortBy?: LeadSortOption;
   onQueryChange: (value: string) => void;
   onStatusChange: (value: LeadStatus | "All") => void;
   onOperationalFilterChange?: (value: LeadOperationalState | undefined) => void;
   onPinnedOnlyChange?: (value: boolean) => void;
   onStaleOnlyChange?: (value: boolean) => void;
   onDuplicatesOnlyChange?: (value: boolean) => void;
-  onSortByChange?: (value: "default" | "most_stale") => void;
+  onSortByChange?: (value: LeadSortOption) => void;
   onClear: () => void;
 };
 
-const controlClass = "h-11 rounded-lg border border-slate-200 bg-white text-sm text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
+const controlClass = "h-11 rounded-lg border border-slate-200 bg-white text-base text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:text-sm";
 
 const activeClasses: Record<LeadOperationalState, { bg: string; ring: string; text: string }> = {
   FOLLOW_UP_NOW: { bg: "bg-emerald-50", ring: "ring-emerald-200", text: "text-emerald-700" },
@@ -61,7 +61,7 @@ export function LeadFilters({
     pinnedOnly ||
     staleOnly ||
     duplicatesOnly ||
-    sortBy === "most_stale";
+    (sortBy !== "default" && sortBy !== undefined);
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-4">
@@ -73,13 +73,30 @@ export function LeadFilters({
             <input value={query} onChange={(event) => onQueryChange(event.target.value)} type="search" placeholder="Search name, business, phone or email" className={`${controlClass} w-full pl-10 pr-3`} />
           </label>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="min-w-0">
+            <label className="min-w-0 flex-1 sm:flex-initial">
               <span className="sr-only">Filter by status</span>
               <select value={status} onChange={(event) => onStatusChange(event.target.value as LeadStatus | "All")} className={`${controlClass} w-full px-3 sm:w-44`}>
                 <option value="All">All statuses</option>
                 {leadStatuses.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
             </label>
+            {onSortByChange && (
+              <label className="min-w-0 flex-1 sm:flex-initial">
+                <span className="sr-only">Sort leads</span>
+                <select
+                  value={sortBy}
+                  onChange={(event) => onSortByChange(event.target.value as LeadSortOption)}
+                  className={`${controlClass} w-full px-3 sm:w-44`}
+                  aria-label="Sort leads"
+                  data-testid="leads-sort-select"
+                >
+                  <option value="default">Sort: Default</option>
+                  <option value="name_asc">Name A → Z</option>
+                  <option value="name_desc">Name Z → A</option>
+                  <option value="most_stale">Most Stale First</option>
+                </select>
+              </label>
+            )}
             {hasFilters ? (
               <button type="button" onClick={onClear} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer">
                 <X aria-hidden="true" size={17} /> Clear

@@ -435,7 +435,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                   required
                   defaultValue={deal?.finalAmount ?? leadQuotedAmount ?? ""}
                   placeholder="30000"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -449,7 +449,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                     min="0"
                     defaultValue={deal?.quotedAmount ?? leadQuotedAmount ?? ""}
                     placeholder="35000"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -458,7 +458,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                     type="text"
                     name="currency"
                     defaultValue={deal?.currency ?? "INR"}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -468,7 +468,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                 <select
                   name="status"
                   defaultValue={deal?.status ?? "NEGOTIATING"}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                 >
                   <option value="NO_DEAL">No Deal</option>
                   <option value="NEGOTIATING">Negotiating</option>
@@ -484,7 +484,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                     type="date"
                     name="nextPaymentDueDate"
                     defaultValue={deal?.nextPaymentDueDate ?? ""}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -496,7 +496,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                     min="0"
                     defaultValue={deal?.nextPaymentDueAmount ?? ""}
                     placeholder="12000"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -554,7 +554,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                   required
                   defaultValue={editingPayment?.amount ?? (remaining > 0 ? remaining : "")}
                   placeholder="10000"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -566,7 +566,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                     name="paymentDate"
                     required
                     defaultValue={editingPayment?.paymentDate ?? new Date().toISOString().slice(0, 10)}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   />
                 </div>
                 <div>
@@ -574,7 +574,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                   <select
                     name="method"
                     defaultValue={editingPayment?.method ?? "UPI"}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   >
                     <option value="UPI">UPI</option>
                     <option value="BANK_TRANSFER">Bank Transfer</option>
@@ -592,7 +592,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                   <select
                     name="type"
                     defaultValue={editingPayment?.type ?? (totalReceived === 0 ? "ADVANCE" : remaining <= 0 ? "FINAL" : "PARTIAL")}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   >
                     <option value="ADVANCE">Advance</option>
                     <option value="PARTIAL">Partial Payment</option>
@@ -607,7 +607,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                     name="customType"
                     defaultValue={editingPayment?.customType ?? ""}
                     placeholder="Milestone 2"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -619,7 +619,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                   name="reference"
                   defaultValue={editingPayment?.reference ?? ""}
                   placeholder="Txn #987654 or UPI reference"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none font-mono"
                 />
               </div>
 
@@ -630,7 +630,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                   rows={2}
                   defaultValue={editingPayment?.note ?? ""}
                   placeholder="e.g. Advance received for homepage and admin panel"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none resize-none"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none resize-none"
                 />
               </div>
 

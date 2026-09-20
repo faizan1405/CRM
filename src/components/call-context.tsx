@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
-import type { Lead } from "@/features/leads/types";
+import type { Lead, LeadStatus } from "@/features/leads/types";
 import { CallOutcomeModal } from "./call-outcome-modal";
 
 type CallContextType = {
@@ -13,9 +13,11 @@ const CallContext = createContext<CallContextType | null>(null);
 export function CallProvider({
   children,
   onFollowUpNeeded,
+  onStatusChanged,
 }: {
   children: ReactNode;
   onFollowUpNeeded?: (leadId: string, date: string, time: string) => void;
+  onStatusChanged?: (leadId: string, newStatus: LeadStatus) => void;
 }) {
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
 
@@ -35,6 +37,7 @@ export function CallProvider({
         isOpen={!!activeLead}
         lead={activeLead}
         onClose={closeCallModal}
+        onStatusChanged={onStatusChanged}
         onFollowUpScheduled={(leadId, scheduledAt) => {
           if (onFollowUpNeeded) {
             const d = new Date(scheduledAt);

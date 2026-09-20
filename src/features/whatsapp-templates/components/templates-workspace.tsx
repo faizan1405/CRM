@@ -214,7 +214,7 @@ export function WhatsAppTemplatesWorkspace({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search templates by title or message content..."
-          className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-sm text-slate-900 placeholder:text-slate-400 shadow-xs focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+          className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-base sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-xs focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
         />
         {searchQuery && (
           <button

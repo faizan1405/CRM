@@ -5,7 +5,11 @@ export function formatCurrency(value: number | null) {
 
 export function formatDate(value: string | null) {
   if (!value) return "Not set";
-  const [year, month, day] = value.split("-");
+  const dateOnly = value.includes("T") ? value.split("T")[0] : value;
+  const [year, month, day] = dateOnly.split("-");
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${day} ${months[Number(month) - 1]} ${year}`;
+  const m = months[Number(month) - 1];
+  if (!m || !day || !year) return value;
+  return `${Number(day)} ${m} ${year}`;
 }
+

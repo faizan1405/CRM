@@ -25,7 +25,7 @@ export function ChangeStatusSheet({
     <BottomSheet
       isOpen={isOpen}
       onClose={onClose}
-      title="Change Status"
+      title="Change Status (Pipeline Status)"
       saving={saving}
       footer={
         <button
@@ -41,12 +41,13 @@ export function ChangeStatusSheet({
       <div className="flex items-center gap-2 mb-4 -mt-2">
         <span className="text-sm font-medium text-slate-600">Current:</span>
         <LeadStatusBadge status={currentStatus} />
+        <span className="text-xs text-slate-400 font-medium">(Pipeline Status)</span>
       </div>
 
       <div
         className="grid grid-cols-1 gap-2.5 sm:grid-cols-2"
         role="group"
-        aria-label="Status options"
+        aria-label="Pipeline status options"
       >
         {leadStatuses.map((status) => {
           const isCurrent = status === currentStatus;

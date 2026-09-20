@@ -116,7 +116,7 @@ export function StructuredFieldRow({
           onChange={(e) => onChange(e.target.value.trim() === "" ? null : e.target.value)}
           placeholder={placeholder}
           disabled={disabled}
-          className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 placeholder:italic focus:border-blue-500 focus:bg-white focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50/50 px-3 text-base sm:text-sm font-medium text-slate-900 outline-none transition placeholder:text-slate-400 placeholder:italic focus:border-blue-500 focus:bg-white focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
         />
       </div>
     </div>

@@ -637,7 +637,7 @@ export function WhatsAppTemplatePicker({
               if (improveError) setImproveError(null);
             }}
             placeholder={selectedTemplateId === "custom" ? "Type your custom WhatsApp message here..." : undefined}
-            className="w-full rounded-xl border border-slate-200 p-3 text-[14px] leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 min-h-[160px] resize-y"
+            className="w-full rounded-xl border border-slate-200 p-3 text-base sm:text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 min-h-[160px] resize-y"
           />
 
           {/* AI Improve feature - strictly for Custom Message workflow */}

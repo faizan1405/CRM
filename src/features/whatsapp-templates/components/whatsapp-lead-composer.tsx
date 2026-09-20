@@ -182,7 +182,7 @@ export function WhatsAppLeadComposer({
               id="composer-template-select"
               value={selectedTemplateId}
               onChange={(e) => handleTemplateChange(e.target.value)}
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-base sm:text-sm font-medium text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
             >
               {activeTemplates.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -251,7 +251,7 @@ export function WhatsAppLeadComposer({
               onChange={(e) => setCustomMessage(e.target.value)}
               placeholder="Edit your personalized WhatsApp message..."
               rows={6}
-              className="w-full rounded-xl border border-slate-200 p-3.5 text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100 min-h-[140px]"
+              className="w-full rounded-xl border border-slate-200 p-3.5 text-base sm:text-sm leading-relaxed text-slate-800 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100 min-h-[140px]"
             />
           </div>
 

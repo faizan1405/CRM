@@ -27,11 +27,15 @@
 
 html {
   min-width: 320px;
+  max-width: 100%;
+  overflow-x: clip;
   background: var(--background);
 }
 
 body {
   margin: 0;
+  max-width: 100%;
+  overflow-x: clip;
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
@@ -42,6 +46,17 @@ button, a { -webkit-tap-highlight-color: transparent; }
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* ── Prevent iOS Safari Auto-Zoom on Form Focus ──────────── */
+/* Safari automatically zooms when form controls have font-size < 16px.
+   Enforce >= 16px on mobile viewports (<640px) while leaving desktop completely untouched. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]):not([type="button"]):not([type="reset"]):not([type="submit"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 
 /* ── Motion System ─────────────────────────────────────── */
@@ -64,6 +79,13 @@ button, a { -webkit-tap-highlight-color: transparent; }
 @keyframes lead-panel-in {
   from { transform: translateX(1.25rem); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
+}
+
+@media (max-width: 639px) {
+  @keyframes lead-panel-in {
+    from { transform: translateY(8px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
 }
 
 @keyframes toast-in {

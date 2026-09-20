@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Search,
   Plus,
@@ -34,6 +34,16 @@ export function NotesWorkspace({
   onImproveNote,
 }: PersonalNotesProps) {
   const [notes, setNotes] = useState<PersonalNote[]>(initialNotes);
+
+  // Sync notes with incoming data on revalidation / route refresh
+  useEffect(() => {
+    setNotes(initialNotes);
+    setSelectedNote((prev) => {
+      if (!prev) return null;
+      const updated = initialNotes.find((n) => n.id === prev.id);
+      return updated || prev;
+    });
+  }, [initialNotes]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNote, setSelectedNote] = useState<PersonalNote | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -309,7 +319,7 @@ export function NotesWorkspace({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search notes, ideas, reminders..."
-          className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-sm text-slate-900 placeholder:text-slate-400 shadow-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-base sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
         />
         {searchQuery && (
           <button

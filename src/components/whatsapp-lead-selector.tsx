@@ -72,7 +72,7 @@ export function WhatsAppLeadSelector({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search lead by name or phone..."
-          className="flex-1 bg-transparent px-3 py-2 text-[15px] text-slate-900 placeholder:text-slate-400 focus:outline-none"
+          className="flex-1 bg-transparent px-3 py-2 text-base sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none"
           autoFocus
         />
       </div>

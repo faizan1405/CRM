@@ -151,7 +151,7 @@ export function LeadDetailPanel({
   const hasActivity = activities.length > 0;
 
   return (
-    <div className="fixed inset-x-0 top-0 z-50 h-dvh">
+    <div className="fixed inset-x-0 top-0 z-50 h-dvh overflow-hidden">
       <button
         type="button"
         tabIndex={-1}
@@ -164,7 +164,7 @@ export function LeadDetailPanel({
         role="dialog"
         aria-modal="true"
         aria-labelledby="lead-detail-title"
-        className="absolute inset-y-0 right-0 flex h-full min-h-0 w-full max-w-xl flex-col bg-[var(--background)] shadow-2xl motion-safe:animate-[lead-panel-in_180ms_ease-out]"
+        className="absolute inset-y-0 right-0 flex h-full min-h-0 w-full max-w-full sm:max-w-xl flex-col bg-[var(--background)] shadow-2xl motion-safe:animate-[lead-panel-in_180ms_ease-out] overflow-hidden"
       >
         <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-5 sm:px-6">
           <div className="min-w-0">

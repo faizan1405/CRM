@@ -307,7 +307,7 @@ export function GuideWorkspace() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search guide (e.g., Quick Status, Colors, Follow-ups)..."
-            className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-4 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-4 text-base sm:text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 placeholder:text-slate-400"
           />
         </div>
 

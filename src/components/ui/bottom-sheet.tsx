@@ -32,7 +32,7 @@ export function BottomSheet({
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-[60] flex h-[100dvh] items-end justify-center sm:items-center"
+      className="fixed inset-x-0 bottom-0 z-[60] flex h-[100dvh] items-end justify-center sm:items-center overflow-hidden"
       role="dialog"
       aria-modal="true"
     >
@@ -45,7 +45,7 @@ export function BottomSheet({
         className="absolute inset-0 bg-slate-950/45 transition-opacity"
       />
       <aside
-        className={`relative flex w-full max-w-lg flex-col rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl border border-slate-200 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200 ${
+        className={`relative flex w-full max-w-full sm:max-w-lg min-w-0 flex-col rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl border border-slate-200 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-0 duration-200 overflow-hidden ${
           fullHeight ? "max-h-[92dvh] h-[92dvh]" : "max-h-[92dvh]"
         }`}
       >

@@ -2,10 +2,11 @@
 
 import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
 import { useEffect, useId, useRef, useState } from "react";
-import type { Lead } from "@/features/leads/types";
+import type { Lead, LeadStatus } from "@/features/leads/types";
 import { FOLLOW_UP_PRESETS, getPresetDate, DEFAULT_TIME } from "@/lib/date-presets";
 import { logActivity } from "@/app/actions/activities";
 import { scheduleLeadFollowUp } from "@/app/actions/follow-ups";
+import { changeLeadStatus } from "@/app/actions/leads";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import {
   getFollowUpSuggestion,
@@ -21,6 +22,7 @@ type CallOutcomeModalProps = {
   lead: Lead | null;
   onClose: () => void;
   onFollowUpScheduled?: (leadId: string, scheduledAt: string) => void;
+  onStatusChanged?: (leadId: string, newStatus: LeadStatus) => void;
 };
 
 export function CallOutcomeModal({
@@ -28,9 +30,11 @@ export function CallOutcomeModal({
   lead,
   onClose,
   onFollowUpScheduled,
+  onStatusChanged,
 }: CallOutcomeModalProps) {
   const [saving, setSaving] = useState(false);
   const [outcome, setOutcome] = useState<"PICKED" | "NOT_PICKED" | "CALL_BACK" | "INTERESTED" | null>(null);
+  const [pipelineStep, setPipelineStep] = useState<"SUGGESTION" | "FOLLOWUP" | null>(null);
   const [suggestion, setSuggestion] = useState<FollowUpSuggestion | null>(null);
   const [isChanging, setIsChanging] = useState(false);
   const [scheduledDate, setScheduledDate] = useState("");
@@ -47,6 +51,7 @@ export function CallOutcomeModal({
   useEffect(() => {
     if (isOpen) {
       setOutcome(null);
+      setPipelineStep(null);
       setSuggestion(null);
       setIsChanging(false);
       setScheduledDate("");
@@ -60,6 +65,8 @@ export function CallOutcomeModal({
   if (!isOpen || !lead) return null;
 
   const activeExistingFollowUp = getActiveFutureFollowUp(lead);
+  const isNewLead = lead.status?.toLowerCase() === "new";
+  const isQualifiedLead = lead.status?.toLowerCase() === "qualified";
 
   const applyOutcomeSuggestion = (outcomeType: SalesOutcomeType) => {
     const sug = getFollowUpSuggestion(outcomeType);
@@ -83,13 +90,17 @@ export function CallOutcomeModal({
       setSaving(true);
       try {
         await logActivity(lead.id, "LEAD_UPDATED", "Call picked");
-        showToast("Call logged: Picked", "success");
-        onClose();
       } catch (e) {
         console.error("Failed to log call outcome", e);
-        showToast("Failed to log call outcome", "error");
       } finally {
         setSaving(false);
+      }
+
+      if (isNewLead) {
+        setPipelineStep("SUGGESTION");
+      } else {
+        showToast("Call logged: Picked", "success");
+        onClose();
       }
       return;
     }
@@ -104,24 +115,39 @@ export function CallOutcomeModal({
         setSaving(false);
       }
       applyOutcomeSuggestion("NOT_PICKED");
+      setPipelineStep("FOLLOWUP");
       return;
     }
 
     if (selectedOutcome === "INTERESTED") {
       setSaving(true);
       try {
-        await logActivity(lead.id, "LEAD_UPDATED", "Call picked - Interested");
+        await logActivity(lead.id, "LEAD_UPDATED", "Call picked — Interested");
       } catch (e) {
         console.error("Failed to log call outcome", e);
       } finally {
         setSaving(false);
       }
       applyOutcomeSuggestion("INTERESTED");
+      if (!isQualifiedLead) {
+        setPipelineStep("SUGGESTION");
+      } else {
+        setPipelineStep("FOLLOWUP");
+      }
       return;
     }
 
     if (selectedOutcome === "CALL_BACK") {
+      setSaving(true);
+      try {
+        await logActivity(lead.id, "LEAD_UPDATED", "Call Back");
+      } catch (e) {
+        console.error("Failed to log call outcome", e);
+      } finally {
+        setSaving(false);
+      }
       applyOutcomeSuggestion("CALL_BACK");
+      setPipelineStep("FOLLOWUP");
       return;
     }
   };
@@ -180,14 +206,23 @@ export function CallOutcomeModal({
 
   const isFormValid = Boolean(scheduledDate && scheduledTime);
 
+  const getModalTitle = () => {
+    if (!outcome) return "Call Outcome";
+    if (outcome === "PICKED") return "Call Outcome: Picked";
+    if (outcome === "NOT_PICKED") return "Call Outcome: Not Picked";
+    if (outcome === "INTERESTED") return "Call Outcome: Interested";
+    if (outcome === "CALL_BACK") return "Call Outcome: Call Back";
+    return "Call Outcome";
+  };
+
   return (
     <BottomSheet
       isOpen={isOpen}
       onClose={onClose}
-      title={outcome ? (outcome === "CALL_BACK" ? "Call Back" : "Follow-up Suggestion") : "Call Outcome"}
+      title={getModalTitle()}
       saving={saving}
       footer={
-        outcome ? (
+        outcome && pipelineStep === "FOLLOWUP" ? (
           activeExistingFollowUp ? (
             <div className="flex flex-col gap-2 w-full">
               <div className="flex items-center gap-2">
@@ -293,6 +328,121 @@ export function CallOutcomeModal({
           >
             Interested
           </button>
+        </div>
+      ) : outcome === "PICKED" && pipelineStep === "SUGGESTION" ? (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 shadow-xs flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Call outcome</span>
+            <span className="text-sm font-bold text-slate-800">Picked</span>
+          </div>
+
+          <div className="rounded-xl border border-blue-200 bg-blue-50/70 p-4 shadow-xs space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Suggested pipeline update</p>
+            <p className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <span>New</span>
+              <span className="text-slate-400">→</span>
+              <span className="text-blue-700 font-extrabold">Contacted</span>
+            </p>
+            <p className="text-xs text-slate-600">
+              Would you like to update the pipeline status for this lead to Contacted?
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => {
+                showToast("Call logged: Picked", "success");
+                onClose();
+              }}
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-50 transition-colors shadow-sm cursor-pointer"
+            >
+              Keep New
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  const res = await changeLeadStatus(lead.id, "Contacted");
+                  if (res.success) {
+                    onStatusChanged?.(lead.id, "Contacted");
+                    showToast("Pipeline status updated: Contacted", "success");
+                  } else {
+                    showToast(res.error || "Failed to update pipeline status", "error");
+                  }
+                  onClose();
+                } catch (e) {
+                  console.error(e);
+                  showToast("Failed to update pipeline status", "error");
+                } finally {
+                  setSaving(false);
+                }
+              }}
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-blue-600 px-4 text-[15px] font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              {saving ? "Updating..." : "Mark Contacted"}
+            </button>
+          </div>
+        </div>
+      ) : outcome === "INTERESTED" && pipelineStep === "SUGGESTION" ? (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 shadow-xs flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Call outcome</span>
+            <span className="text-sm font-bold text-slate-800">Interested</span>
+          </div>
+
+          <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-4 shadow-xs space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-purple-700">Suggested pipeline update</p>
+            <p className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <span>Current</span>
+              <span className="text-slate-400">→</span>
+              <span className="text-purple-700 font-extrabold">Qualified</span>
+            </p>
+            <p className="text-xs text-slate-600">
+              Would you like to advance this lead to Qualified in the pipeline?
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => {
+                setPipelineStep("FOLLOWUP");
+              }}
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 disabled:opacity-50 transition-colors shadow-sm cursor-pointer"
+            >
+              Keep Current Status
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              onClick={async () => {
+                setSaving(true);
+                try {
+                  const res = await changeLeadStatus(lead.id, "Qualified");
+                  if (res.success) {
+                    onStatusChanged?.(lead.id, "Qualified");
+                    showToast("Pipeline status updated: Qualified", "success");
+                  } else {
+                    showToast(res.error || "Failed to update pipeline status", "error");
+                  }
+                } catch (e) {
+                  console.error(e);
+                  showToast("Failed to update pipeline status", "error");
+                } finally {
+                  setSaving(false);
+                  setPipelineStep("FOLLOWUP");
+                }
+              }}
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-purple-600 px-3 text-xs sm:text-sm font-semibold text-white shadow-sm hover:bg-purple-700 active:bg-purple-800 disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              {saving ? "Updating..." : "Mark Qualified"}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">

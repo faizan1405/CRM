@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useLeadNavigation } from "@/features/leads/lead-navigation-provider";
 import {
@@ -43,6 +43,11 @@ export function NotificationsWorkspace({
   const [notifications, setNotifications] = useState<SmartNotification[]>(
     initialNotifications
   );
+
+  // Sync notifications with incoming data on revalidation / route refresh
+  useEffect(() => {
+    setNotifications(initialNotifications);
+  }, [initialNotifications]);
   const [selectedFilter, setSelectedFilter] = useState<NotificationFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { improveNoteText } from "@/app/actions/conversation-notes";
-import { Sparkles } from "lucide-react";
+import { Sparkles, RotateCcw } from "lucide-react";
 
 type NoteComposerProps = {
   onAddNote: (text: string) => Promise<{ success: boolean; error?: string }>;
@@ -13,11 +13,12 @@ type NoteComposerProps = {
 
 export function NoteComposer({ onAddNote, disabled = false, autoFocus = false, id = "note-composer" }: NoteComposerProps) {
   const [text, setText] = useState("");
+  const [originalDraft, setOriginalDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [improving, setImproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const MAX_CHARS = 500;
+  const MAX_CHARS = 1000;
 
   useEffect(() => {
     if (autoFocus && !disabled && textareaRef.current) {
@@ -39,6 +40,7 @@ export function NoteComposer({ onAddNote, disabled = false, autoFocus = false, i
         setError(result.error || "Failed to add note.");
       } else {
         setText("");
+        setOriginalDraft(null);
         setError(null);
       }
     } catch {
@@ -59,6 +61,7 @@ export function NoteComposer({ onAddNote, disabled = false, autoFocus = false, i
       if (!res.success) {
         setError(res.error || "Failed to improve note.");
       } else if (res.data) {
+        setOriginalDraft(text);
         setText(res.data);
       }
     } catch {
@@ -68,11 +71,17 @@ export function NoteComposer({ onAddNote, disabled = false, autoFocus = false, i
     }
   };
 
+  const handleUndo = () => {
+    if (originalDraft !== null) {
+      setText(originalDraft);
+      setOriginalDraft(null);
+      setError(null);
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      // Prevent native composition events from triggering submit
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       if (e.nativeEvent.isComposing) return;
-      
       e.preventDefault();
       handleSubmit();
     }
@@ -96,10 +105,10 @@ export function NoteComposer({ onAddNote, disabled = false, autoFocus = false, i
             setError(null);
           }
         }}
-        rows={3}
+        rows={4}
         placeholder="What happened during this interaction?"
         disabled={disabled || saving || improving}
-        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base sm:text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50 resize-y whitespace-pre-wrap leading-relaxed"
         aria-describedby={error ? "note-error" : "note-chars"}
       />
 
@@ -121,25 +130,40 @@ export function NoteComposer({ onAddNote, disabled = false, autoFocus = false, i
         </p>
       )}
 
-      <div className="mt-2.5 flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={handleImprove}
-          disabled={disabled || saving || improving || !text.trim()}
-          className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 hover:text-blue-600 active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-        >
-          {improving ? (
-            <>
-              <span className="size-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" aria-hidden="true" />
-              Improving...
-            </>
-          ) : (
-            <>
-              <Sparkles className="size-4 text-blue-500" />
-              Improve
-            </>
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleImprove}
+            disabled={disabled || saving || improving || !text.trim()}
+            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 hover:text-blue-600 active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+          >
+            {improving ? (
+              <>
+                <span className="size-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" aria-hidden="true" />
+                Improving...
+              </>
+            ) : (
+              <>
+                <Sparkles className="size-4 text-blue-500" />
+                Improve with AI
+              </>
+            )}
+          </button>
+
+          {originalDraft !== null && (
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={disabled || saving || improving}
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+              aria-label="Undo improvement"
+            >
+              <RotateCcw className="size-3.5 text-slate-500" />
+              Undo
+            </button>
           )}
-        </button>
+        </div>
 
         <button
           type="button"

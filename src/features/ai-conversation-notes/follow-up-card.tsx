@@ -127,7 +127,7 @@ export function FollowUpCard({
               value={date || ""}
               onChange={(e) => onDateChange(e.target.value || null)}
               disabled={disabled}
-              className="mt-1 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
+              className="mt-1 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base sm:text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
             />
           </div>
           <div>
@@ -143,7 +143,7 @@ export function FollowUpCard({
               value={time || ""}
               onChange={(e) => onTimeChange(e.target.value || null)}
               disabled={disabled}
-              className="mt-1 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
+              className="mt-1 h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base sm:text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
             />
           </div>
         </div>

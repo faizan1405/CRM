@@ -1,10 +1,10 @@
 "use client";
 
 import { CheckCircle2, GitMerge, Plus, SearchX, Star, UsersRound } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useLeadNavigation } from "./lead-navigation-provider";
 import { statusFromDatabase, type DatabaseLeadStatus } from "./types";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { changeLeadStatus, createLead, deleteLead, getLead, togglePinLead, updateLead, updateQuickStatus } from "@/app/actions/leads";
 import { scheduleLeadFollowUp } from "@/app/actions/follow-ups";
 import { EmptyState } from "@/components/empty-state";
@@ -17,7 +17,8 @@ const LeadForm = dynamic(() => import("@/features/leads/lead-form").then(m => m.
 import { LeadTable } from "@/features/leads/lead-table";
 import { PinnedLeadsView } from "./pinned-leads-view";
 import { DeleteLeadDialog } from "./delete-lead-dialog";
-import type { Lead, LeadStatus, QuickStatusType } from "@/features/leads/types";
+import type { Lead, LeadSortOption, LeadStatus, QuickStatusType } from "@/features/leads/types";
+import { parseSortParam, sortLeads, sortOptionToQueryParam } from "./lead-sorting";
 import { LostReasonDialog } from "@/features/lost-reasons/lost-reason-dialog";
 import type { LostReasonSubmission } from "@/features/lost-reasons/types";
 import { useLeadActivities } from "@/features/activity/use-activities";
@@ -39,6 +40,8 @@ type LeadsWorkspaceProps = {
 };
 
 export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: LeadsWorkspaceProps) {
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const navigation = useLeadNavigation();
   const statusParam = searchParams.get("status");
@@ -50,6 +53,16 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
   const staleParam = searchParams.get("stale");
   const sortParam = searchParams.get("sort");
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
+
+  // Sync leads with incoming data on revalidation / route refresh
+  useEffect(() => {
+    setLeads(initialLeads);
+    setSelectedLead((prev) => {
+      if (!prev) return null;
+      const updated = initialLeads.find((l) => l.id === prev.id);
+      return updated || prev;
+    });
+  }, [initialLeads]);
   const [activeView, setActiveView] = useState<"all" | "pinned">(() => {
     return viewParam === "pinned" ? "pinned" : "all";
   });
@@ -59,7 +72,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
   const [staleOnly, setStaleOnly] = useState(() => filterParam === "stale" || staleParam === "true");
   const [duplicatesOnly, setDuplicatesOnly] = useState(false);
   const [mergeModalData, setMergeModalData] = useState<{ leadA: Lead; leadB: Lead } | null>(null);
-  const [sortBy, setSortBy] = useState<"default" | "most_stale">(() => sortParam === "stale" ? "most_stale" : "default");
+  const [sortBy, setSortBy] = useState<LeadSortOption>(() => parseSortParam(sortParam));
   const [formOpen, setFormOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -133,10 +146,8 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
   }, [filterParam, staleParam]);
 
   useEffect(() => {
-    if (sortParam === "stale") {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSortBy("most_stale");
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSortBy(parseSortParam(sortParam));
   }, [sortParam]);
 
   useEffect(() => {
@@ -165,29 +176,39 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     });
   }, [leads, query, status, pinnedOnly, staleOnly]);
 
-  const sortedLeads = useMemo(() => {
-    return [...filteredLeads].sort((a, b) => {
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
-
-      if (sortBy === "most_stale") {
-        const aDays = a.staleInfo?.inactivityDays ?? 0;
-        const bDays = b.staleInfo?.inactivityDays ?? 0;
-        if (bDays !== aDays) {
-          return bDays - aDays;
-        }
-        const aTime = new Date(a.createdAt).getTime();
-        const bTime = new Date(b.createdAt).getTime();
-        return aTime - bTime;
+  const handleSortByChange = useCallback(
+    (nextSort: LeadSortOption) => {
+      setSortBy(nextSort);
+      const params = new URLSearchParams(searchParams ? searchParams.toString() : "");
+      const sortParamValue = sortOptionToQueryParam(nextSort);
+      if (sortParamValue) {
+        params.set("sort", sortParamValue);
+      } else {
+        params.delete("sort");
       }
+      const qs = params.toString();
+      const targetUrl = qs ? `${pathname || "/leads"}?${qs}` : pathname || "/leads";
+      if (typeof window !== "undefined" && window.history?.replaceState) {
+        window.history.replaceState(null, "", targetUrl);
+      }
+      if (router?.replace) {
+        router.replace(targetUrl, { scroll: false });
+      }
+    },
+    [pathname, router, searchParams]
+  );
 
-      return 0;
-    });
+  const sortedLeads = useMemo(() => {
+    return sortLeads(filteredLeads, sortBy);
   }, [filteredLeads, sortBy]);
 
   const pinnedLeads = useMemo(() => {
     return leads.filter((lead) => Boolean(lead.isPinned));
   }, [leads]);
+
+  const sortedPinnedLeads = useMemo(() => {
+    return sortLeads(pinnedLeads, sortBy);
+  }, [pinnedLeads, sortBy]);
 
   function replaceLead(updatedLead: Lead) {
     setLeads((current) => current.map((lead) => (lead.id === updatedLead.id ? updatedLead : lead)));
@@ -408,7 +429,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     setPinnedOnly(false);
     setStaleOnly(false);
     setDuplicatesOnly(false);
-    setSortBy("default");
+    handleSortByChange("default");
   }
 
   return (
@@ -489,7 +510,9 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
 
       {activeView === "pinned" ? (
         <PinnedLeadsView
-          leads={pinnedLeads}
+          leads={sortedPinnedLeads}
+          sortBy={sortBy}
+          onSortByChange={handleSortByChange}
           onSelect={selectLead}
           onTogglePin={handleTogglePin}
           onAddFollowUp={setFollowUpLead}
@@ -508,7 +531,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
             onPinnedOnlyChange={setPinnedOnly}
             onStaleOnlyChange={setStaleOnly}
             onDuplicatesOnlyChange={setDuplicatesOnly}
-            onSortByChange={setSortBy}
+            onSortByChange={handleSortByChange}
             onClear={clearFilters}
           />
 

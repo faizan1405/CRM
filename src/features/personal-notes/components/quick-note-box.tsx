@@ -130,7 +130,7 @@ export function QuickNoteBox({ onSave, className = "", onImproveNote }: QuickNot
           onKeyDown={handleKeyDown}
           placeholder="Write anything... (e.g. need call rakesh tomorrow, check ad results)"
           rows={isFocused || content ? 3 : 1}
-          className="w-full resize-none border-0 bg-transparent text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0 leading-relaxed"
+          className="w-full resize-none border-0 bg-transparent text-base sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0 leading-relaxed"
         />
 
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
