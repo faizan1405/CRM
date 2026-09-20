@@ -57,11 +57,16 @@ model Lead {
   status           LeadStatus          @default(NEW)
   quickStatus      QuickStatus         @default(NONE)
   isWaste          Boolean             @default(false)
+  isPinned         Boolean             @default(false)
   quotedAmount     Decimal?            @db.Decimal(12, 2)
   lastContactDate  DateTime?           @db.Date
   nextFollowUpDate DateTime?           @db.Date
   notes            String?             @db.Text
   deletedAt        DateTime?
+  mergedIntoLeadId String?
+  mergedAt         DateTime?
+  mergedInto       Lead?               @relation("LeadMerges", fields: [mergedIntoLeadId], references: [id], onDelete: SetNull)
+  mergedLeads      Lead[]              @relation("LeadMerges")
   followUps        FollowUp[]
   activities       LeadActivity[]
   aiInsight        LeadAIInsight?
@@ -78,6 +83,8 @@ model Lead {
   @@index([leadSource])
   @@index([createdAt])
   @@index([deletedAt])
+  @@index([isPinned])
+  @@index([mergedIntoLeadId])
 }
 
 enum FollowUpType {
@@ -121,6 +128,7 @@ enum ActivityType {
   FOLLOWUP_COMPLETED
   FOLLOWUP_CANCELLED
   WHATSAPP_OPENED
+  LEAD_MERGED
 }
 
 model LeadActivity {

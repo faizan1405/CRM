@@ -59,13 +59,27 @@ async function createFollowUp(leadId: string, overrides: Partial<Prisma.FollowUp
   return db.followUp.create({ data });
 }
 
+async function createDeal(leadId: string, finalAmount: number) {
+  return db.deal.create({
+    data: {
+      leadId,
+      finalAmount,
+      status: "CONFIRMED",
+      source: "CRM_LEAD",
+    },
+  });
+}
+
 // ─── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("Analytics Data Layer", () => {
-  const allIds = { leads: [] as string[], activities: [] as string[], followUps: [] as string[] };
+  const allIds = { leads: [] as string[], activities: [] as string[], followUps: [] as string[], deals: [] as string[] };
   const ids = allIds;
 
   afterAll(async () => {
+    if (allIds.deals.length > 0) {
+      await db.deal.deleteMany({ where: { id: { in: allIds.deals } } }).catch(() => {});
+    }
     if (allIds.followUps.length > 0) {
       await db.followUp.deleteMany({ where: { id: { in: allIds.followUps } } }).catch(() => {});
     }
@@ -219,21 +233,27 @@ describe("Analytics Data Layer", () => {
 
   describe("won revenue and average deal", () => {
     it("includes WON leads in revenue sum", async () => {
-      const w1 = await createLead({ status: "WON", quotedAmount: 100000 });
-      const w2 = await createLead({ status: "WON", quotedAmount: 300000 });
+      const w1 = await createLead({ status: "WON" });
+      const d1 = await createDeal(w1.id, 100000);
+      const w2 = await createLead({ status: "WON" });
+      const d2 = await createDeal(w2.id, 300000);
       ids.leads.push(w1.id, w2.id);
+      ids.deals.push(d1.id, d2.id);
 
       const result = await getAnalyticsData("30d");
       expect(result.success).toBe(true);
       if (!result.success) return;
 
-      expect(result.data.coreMetrics.wonRevenue).toBeGreaterThanOrEqual(0);
+      expect(result.data.coreMetrics.wonRevenue).toBeGreaterThanOrEqual(400000);
     });
 
     it("computes average won deal correctly", async () => {
-      const w1 = await createLead({ status: "WON", quotedAmount: 200000 });
-      const w2 = await createLead({ status: "WON", quotedAmount: 600000 });
+      const w1 = await createLead({ status: "WON" });
+      const d1 = await createDeal(w1.id, 200000);
+      const w2 = await createLead({ status: "WON" });
+      const d2 = await createDeal(w2.id, 600000);
       ids.leads.push(w1.id, w2.id);
+      ids.deals.push(d1.id, d2.id);
 
       const result = await getAnalyticsData("30d");
       expect(result.success).toBe(true);
@@ -242,7 +262,7 @@ describe("Analytics Data Layer", () => {
       expect(result.data.coreMetrics.avgWonDeal).toBeGreaterThanOrEqual(0);
     });
 
-    it("does not crash when WON leads have null quotedAmount", async () => {
+    it("does not crash when WON leads have no Deal", async () => {
       const w = await createLead({ status: "WON", quotedAmount: null });
       ids.leads.push(w.id);
 
@@ -458,10 +478,12 @@ describe("Analytics Data Layer", () => {
   // ── 14. Formula Verification ────────────────────────────────────────────────
 
   describe("formula verification", () => {
-    it("wonRevenue equals sum of quotedAmount for WON leads", async () => {
+    it("wonRevenue equals sum of Deal finalAmount for WON leads", async () => {
       const expectedRevenue = 250000;
-      const w = await createLead({ status: "WON", quotedAmount: expectedRevenue });
+      const w = await createLead({ status: "WON" });
+      const deal = await createDeal(w.id, expectedRevenue);
       ids.leads.push(w.id);
+      ids.deals.push(deal.id);
 
       const result = await getAnalyticsData("30d");
       expect(result.success).toBe(true);

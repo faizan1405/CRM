@@ -141,6 +141,8 @@ export async function markLeadLost(
       revalidatePath("/pipeline");
       revalidatePath("/dashboard");
       revalidatePath("/analytics");
+      revalidatePath("/follow-ups");
+      revalidatePath(`/leads/${leadId}`);
     } catch {
       // safe in tests
     }

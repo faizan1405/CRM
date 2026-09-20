@@ -7,7 +7,7 @@ import { RecentActivity } from "@/features/dashboard/components/recent-activity"
 
 import { getDashboardData } from "@/app/actions/dashboard";
 import Link from "next/link";
-import { CalendarClock, ArrowRight, AlertTriangle } from "lucide-react";
+import { CalendarClock, ArrowRight, AlertTriangle, Star, Clock } from "lucide-react";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -32,16 +32,50 @@ export default async function DashboardPage() {
       
       <KPICards data={data.kpis} />
       
-      <section aria-labelledby="today-followups-heading">
-        <h2 id="today-followups-heading" className="mb-2 text-[15px] sm:text-lg font-bold text-slate-900">Today&apos;s Follow-ups</h2>
-        <Link href="/follow-ups?filter=today" className="flex min-w-0 items-center gap-3 rounded-xl border bg-white p-3 sm:p-4 shadow-sm hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-150 hover:border-blue-300 focus-visible:ring-2 focus-visible:ring-blue-600">
-          <div className="bg-blue-50 p-2 rounded-lg">
-            <CalendarClock className="size-5 sm:size-6 shrink-0 text-blue-600" aria-hidden="true" />
-          </div>
-          <div className="min-w-0 flex-1"><p className="text-[14px] sm:text-sm font-bold text-slate-900">{data.kpis.followUpsToday} scheduled today</p><p className="mt-0.5 text-[11px] sm:text-xs text-slate-500">View your schedule, mark done, or reschedule.</p></div>
-          <ArrowRight className="size-4 sm:size-5 shrink-0 text-slate-400" aria-hidden="true" />
-        </Link>
-      </section>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+        <section aria-labelledby="today-followups-heading">
+          <h2 id="today-followups-heading" className="mb-2 text-[15px] sm:text-lg font-bold text-slate-900">Today&apos;s Follow-ups</h2>
+          <Link href="/follow-ups?filter=today" className="flex min-w-0 items-center gap-3 rounded-xl border bg-white p-3 sm:p-4 shadow-sm hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-150 hover:border-blue-300 focus-visible:ring-2 focus-visible:ring-blue-600">
+            <div className="bg-blue-50 p-2 rounded-lg">
+              <CalendarClock className="size-5 sm:size-6 shrink-0 text-blue-600" aria-hidden="true" />
+            </div>
+            <div className="min-w-0 flex-1"><p className="text-[14px] sm:text-sm font-bold text-slate-900">{data.kpis.followUpsToday} scheduled today</p><p className="mt-0.5 text-[11px] sm:text-xs text-slate-500">View your schedule, mark done, or reschedule.</p></div>
+            <ArrowRight className="size-4 sm:size-5 shrink-0 text-slate-400" aria-hidden="true" />
+          </Link>
+        </section>
+
+        <section aria-labelledby="pinned-leads-heading">
+          <h2 id="pinned-leads-heading" className="mb-2 text-[15px] sm:text-lg font-bold text-slate-900">Pinned Leads</h2>
+          <Link href="/leads?view=pinned" className="flex min-w-0 items-center gap-3 rounded-xl border bg-white p-3 sm:p-4 shadow-sm hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-150 hover:border-amber-300 focus-visible:ring-2 focus-visible:ring-amber-500">
+            <div className="bg-amber-50 p-2 rounded-lg">
+              <Star className="size-5 sm:size-6 shrink-0 fill-amber-400 text-amber-500" aria-hidden="true" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] sm:text-sm font-bold text-slate-900">
+                {data.kpis.pinnedLeads} {data.kpis.pinnedLeads === 1 ? "pinned lead" : "pinned leads"}
+              </p>
+              <p className="mt-0.5 text-[11px] sm:text-xs text-slate-500">Your focused shortlist of serious prospects.</p>
+            </div>
+            <ArrowRight className="size-4 sm:size-5 shrink-0 text-slate-400" aria-hidden="true" />
+          </Link>
+        </section>
+
+        <section aria-labelledby="stale-leads-heading">
+          <h2 id="stale-leads-heading" className="mb-2 text-[15px] sm:text-lg font-bold text-slate-900">Stale Leads</h2>
+          <Link href="/leads?filter=stale" className="flex min-w-0 items-center gap-3 rounded-xl border bg-white p-3 sm:p-4 shadow-sm hover:-translate-y-0.5 active:scale-[0.98] transition-all duration-150 hover:border-amber-300 focus-visible:ring-2 focus-visible:ring-amber-500">
+            <div className="bg-amber-50 p-2 rounded-lg">
+              <Clock className="size-5 sm:size-6 shrink-0 text-amber-600" aria-hidden="true" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] sm:text-sm font-bold text-slate-900">
+                {data.kpis.staleLeads} {data.kpis.staleLeads === 1 ? "stale lead" : "stale leads"}
+              </p>
+              <p className="mt-0.5 text-[11px] sm:text-xs text-slate-500">No activity or update for 3+ days.</p>
+            </div>
+            <ArrowRight className="size-4 sm:size-5 shrink-0 text-slate-400" aria-hidden="true" />
+          </Link>
+        </section>
+      </div>
 
       <section aria-labelledby="recent-activity-heading">
         <h2 id="recent-activity-heading" className="mb-2 text-[15px] sm:text-lg font-bold tracking-tight text-slate-900">Recent Activity</h2>

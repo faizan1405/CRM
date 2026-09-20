@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { ActionCard } from "@/components/action-card";
-import { Phone, CalendarClock } from "lucide-react";
+import { Phone, CalendarClock, Star } from "lucide-react";
 import type { FollowUp } from "./types";
 import { formatFollowUpDate, formatTime, getFollowUpStatusInfo } from "./formatters";
 import { getTypeIcon, typeStyles } from "./follow-up-types";
@@ -60,6 +60,7 @@ export function FollowUpCard({
   onReschedule,
   onCancel,
   onOpenLead,
+  onTogglePin,
   isCompleting = false,
 }: {
   followUp: FollowUp;
@@ -70,6 +71,7 @@ export function FollowUpCard({
   onReschedule: () => void;
   onCancel?: () => void;
   onOpenLead: () => void;
+  onTogglePin?: () => void;
   isCompleting?: boolean;
 }) {
   const typeInfo = typeStyles[followUp.type] ?? typeStyles.Other;
@@ -103,15 +105,34 @@ export function FollowUpCard({
     >
       {/* Top: Lead name, timing badge, canonical status */}
       <div className="flex items-start justify-between gap-2.5">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate font-semibold text-slate-900 text-[15px] leading-snug">
-            {followUp.lead?.name || "Unknown"}
-          </h3>
-          {followUp.lead?.business && (
-            <p className="truncate text-xs text-slate-500 mt-0.5">
-              {followUp.lead.business}
-            </p>
+        <div className="flex items-start gap-1.5 min-w-0 flex-1">
+          {onTogglePin && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePin();
+              }}
+              aria-label={followUp.lead?.isPinned ? `Unpin ${followUp.lead?.name}` : `Pin ${followUp.lead?.name}`}
+              title={followUp.lead?.isPinned ? "Unpin lead" : "Pin lead"}
+              className="inline-flex min-h-[30px] min-w-[30px] items-center justify-center p-1 rounded-md text-slate-300 hover:text-amber-500 hover:bg-amber-50 active:scale-95 transition-all shrink-0 -mt-0.5 cursor-pointer"
+            >
+              <Star
+                size={16}
+                className={followUp.lead?.isPinned ? "fill-amber-400 text-amber-500" : "text-slate-300 hover:text-amber-500"}
+              />
+            </button>
           )}
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate font-semibold text-slate-900 text-[15px] leading-snug">
+              {followUp.lead?.name || "Unknown"}
+            </h3>
+            {followUp.lead?.business && (
+              <p className="truncate text-xs text-slate-500 mt-0.5">
+                {followUp.lead.business}
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-1.5 flex-wrap justify-end">

@@ -174,7 +174,7 @@ function GlobalSearchModal() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<
-    { id: string; name: string; phone: string; status: string; nextFollowUpDate: Date | null; notes: string | null }[]
+    { id: string; name: string; phone: string; status: string; nextFollowUpDate: Date | string | null; notes: string | null }[]
   >([]);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const { openLead } = useLeadNavigation() || {};

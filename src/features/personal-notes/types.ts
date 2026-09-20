@@ -32,4 +32,6 @@ export interface PersonalNotesProps {
   onDeleteNote?: (id: string) => Promise<void> | void;
   onPinNote?: (id: string, pinned: boolean) => Promise<void> | void;
   onAITransform?: (text: string, action: AITransformAction) => Promise<string> | string;
+  onImproveNote?: (text: string) => Promise<string>;
 }
+

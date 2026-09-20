@@ -21,6 +21,7 @@ import {
   deletePersonalNote,
   togglePersonalNotePinned,
   transformPersonalNoteAction,
+  improvePersonalNote,
 } from "@/app/actions/personal-notes";
 
 export function NotesWorkspace({
@@ -30,6 +31,7 @@ export function NotesWorkspace({
   onDeleteNote,
   onPinNote,
   onAITransform,
+  onImproveNote,
 }: PersonalNotesProps) {
   const [notes, setNotes] = useState<PersonalNote[]>(initialNotes);
   const [searchQuery, setSearchQuery] = useState("");
@@ -229,16 +231,16 @@ export function NotesWorkspace({
     }
   };
 
-  // Default AI transformer invocation
-  const handleAITransform = async (text: string, action: AITransformAction): Promise<string> => {
-    if (onAITransform) {
-      return await onAITransform(text, action);
+  // AI Note Improver invocation
+  const handleImproveNote = async (text: string): Promise<string> => {
+    if (onImproveNote) {
+      return await onImproveNote(text);
     }
-    const res = await transformPersonalNoteAction(text, action);
+    const res = await improvePersonalNote(text);
     if (res.success && typeof res.data === "string") {
       return res.data;
     }
-    throw new Error(res.error || "AI transformation failed.");
+    throw new Error(res.error || "Unable to improve note right now. Please try again or edit manually.");
   };
 
   return (
@@ -323,7 +325,7 @@ export function NotesWorkspace({
 
       {/* Quick Note Box (Fast Mobile-first Capture) */}
       <section aria-label="Quick note capture">
-        <QuickNoteBox onSave={handleQuickSave} />
+        <QuickNoteBox onSave={handleQuickSave} onImproveNote={handleImproveNote} />
       </section>
 
       {/* Main Content Layout: Desktop Split Screen vs Mobile Stack */}
@@ -424,7 +426,7 @@ export function NotesWorkspace({
                 setIsEditorOpen(false);
                 setSelectedNote(null);
               }}
-              onAITransform={handleAITransform}
+              onImproveNote={handleImproveNote}
               isSaving={isSaving}
             />
           </div>
@@ -443,7 +445,7 @@ export function NotesWorkspace({
                 setIsEditorOpen(false);
                 setSelectedNote(null);
               }}
-              onAITransform={handleAITransform}
+              onImproveNote={handleImproveNote}
               isSaving={isSaving}
             />
           </div>

@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import { statusFromDatabase, type DatabaseLeadStatus } from "@/features/leads/types";
 import { useCallback, useMemo, useState } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
-import { changeLeadStatus, createLead, deleteLead, getLead, updateLead } from "@/app/actions/leads";
+import { changeLeadStatus, createLead, deleteLead, getLead, togglePinLead, updateLead } from "@/app/actions/leads";
 import { scheduleLeadFollowUp } from "@/app/actions/follow-ups";
 import { useToast } from "@/components/toast-provider";
 import dynamic from "next/dynamic";
@@ -24,6 +24,7 @@ import type { LostReasonSubmission } from "@/features/lost-reasons/types";
 import { useLeadActivities } from "@/features/activity/use-activities";
 import { FollowUpForm } from "@/features/followups/follow-up-form";
 import type { NewFollowUpInput } from "@/features/followups/types";
+import { getFollowUpSuggestion, type FollowUpSuggestion } from "@/lib/follow-up-suggestions";
 
 const COLUMNS: LeadStatus[] = [
   "New",
@@ -48,7 +49,6 @@ function PipelineAnalyticsSection({
       </div>
       <div className="flex-1 min-w-0 flex flex-col gap-4 overflow-hidden w-full">
         <PipelineSummary leads={leads} grouped={grouped} />
-        <PipelineConversion leads={leads} grouped={grouped} />
       </div>
     </div>
   );
@@ -72,6 +72,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [followUpLead, setFollowUpLead] = useState<Lead | null>(null);
+  const [followUpSuggestion, setFollowUpSuggestion] = useState<FollowUpSuggestion | null>(null);
   const [lostReasonLead, setLostReasonLead] = useState<Lead | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { showToast } = useToast();
@@ -220,6 +221,10 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       setError(res.error || "Failed to update lead status");
     } else {
       replaceLead(res.data);
+      if (destStatus === "Proposal Sent") {
+        setFollowUpSuggestion(getFollowUpSuggestion("PROPOSAL_SENT"));
+        setFollowUpLead(res.data);
+      }
       if (destStatus !== "Won") {
         showToast(`Status changed to ${destStatus}`, "success", {
           label: "Undo",
@@ -236,6 +241,24 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       }
     }
   }, [leads, replaceLead, showToast]);
+
+  const handleTogglePin = async (lead: Lead) => {
+    const nextPinned = !lead.isPinned;
+    const updatedLead: Lead = { ...lead, isPinned: nextPinned };
+    replaceLead(updatedLead);
+    try {
+      const result = await togglePinLead(lead.id, nextPinned);
+      if (!result.success) {
+        replaceLead(lead);
+        showToast(result.error, "error");
+      } else {
+        replaceLead(result.data);
+      }
+    } catch {
+      replaceLead(lead);
+      showToast("Failed to update pin state.", "error");
+    }
+  };
 
   const handleSelectLead = async (lead: Lead) => {
     setSelectedLead(lead);
@@ -260,6 +283,10 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     }
     replaceLead(result.data);
     await refreshActivities();
+    if (nextStatus === "Proposal Sent") {
+      setFollowUpSuggestion(getFollowUpSuggestion("PROPOSAL_SENT"));
+      setFollowUpLead(result.data);
+    }
     if (nextStatus !== "Won") {
       showToast(`Status changed to ${nextStatus}`, "success", {
         label: "Undo",
@@ -336,15 +363,18 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     setEditingLead(null);
   };
 
-  const handleAddFollowUp = async (data: NewFollowUpInput) => {
+  const handleAddFollowUp = async (data: NewFollowUpInput & { mode?: "reschedule" | "create" }) => {
     setSaving(true);
     setError(null);
     const formData = new FormData();
-    if (data.id) {
+    if (data.mode === "create") {
+      formData.append("mode", "create");
+    } else if (data.id) {
       formData.append("id", data.id);
     } else if (followUpLead?.activeFollowUp?.id) {
       formData.append("id", followUpLead.activeFollowUp.id);
     }
+    if (data.mode) formData.append("mode", data.mode);
     formData.append("leadId", data.leadId);
     formData.append("scheduledAt", data.scheduledAt);
     formData.append("type", data.type);
@@ -449,6 +479,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
                                   lead={lead}
                                   dragHandleProps={provided.dragHandleProps}
                                   onClick={() => handleSelectLead(lead)}
+                                  onTogglePin={handleTogglePin}
                                 />
                               </div>
                             )}
@@ -517,6 +548,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         }}
         onStatusChange={handleStatusChange}
         onDelete={async () => setDeleteTarget(selectedLead)}
+        onLeadUpdated={replaceLead}
         activities={activities}
         activityFilter={activityFilter}
         onActivityFilterChange={setActivityFilter}
@@ -525,9 +557,35 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         onAddFollowUp={selectedLead ? () => setFollowUpLead(selectedLead) : undefined}
         onEditNote={handleEditNote}
         onDeleteNote={handleDeleteNote}
+        onTogglePin={() => handleTogglePin(selectedLead)}
+        onOpenLead={async (targetId) => {
+          const found = leads.find((l) => l.id === targetId);
+          if (found) {
+            setSelectedLead(found);
+          } else {
+            const res = await getLead(targetId);
+            if (res.success) {
+              setSelectedLead(res.data);
+            }
+          }
+        }}
       />}
 
-      <FollowUpForm isOpen={Boolean(followUpLead)} followUp={followUpLead?.activeFollowUp} defaultLeadId={followUpLead?.id} leads={followUpLead ? [{ id: followUpLead.id, name: followUpLead.name }] : []} saving={saving} onClose={() => { if (!saving) setFollowUpLead(null); }} onSubmit={handleAddFollowUp} />
+      <FollowUpForm
+        isOpen={Boolean(followUpLead)}
+        followUp={followUpLead?.activeFollowUp}
+        defaultLeadId={followUpLead?.id}
+        leads={followUpLead ? [{ id: followUpLead.id, name: followUpLead.name }] : []}
+        saving={saving}
+        suggestion={followUpSuggestion}
+        onClose={() => {
+          if (!saving) {
+            setFollowUpLead(null);
+            setFollowUpSuggestion(null);
+          }
+        }}
+        onSubmit={handleAddFollowUp}
+      />
       
       {formOpen && <LeadForm 
         open={formOpen} 
@@ -540,6 +598,21 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
           } 
         }} 
         onSubmit={handleSaveLead} 
+        onOpenDuplicate={(candidate) => {
+          const found = leads.find((l) => l.id === candidate.id);
+          setFormOpen(false);
+          setEditingLead(null);
+          if (found) {
+            setSelectedLead(found);
+          }
+        }}
+        onLeadEnriched={(enrichedLead) => {
+          replaceLead(enrichedLead);
+          setFormOpen(false);
+          setEditingLead(null);
+          setSelectedLead(enrichedLead);
+          showToast(`Updated existing lead ${enrichedLead.name}`, "success");
+        }}
       />}
 
       <DeleteLeadDialog lead={deleteTarget} saving={saving} onCancel={() => { if (!saving) setDeleteTarget(null); }} onDelete={handleRemoveLead} />

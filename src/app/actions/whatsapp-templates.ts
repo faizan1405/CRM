@@ -349,7 +349,10 @@ export async function renderTemplateForLead(
       followUpTime: followUpTimeStr,
     };
 
-    const renderedMessage = renderWhatsAppMessage(template.message, lead);
+    const renderedMessage = renderWhatsAppMessage(template.message, lead, {
+      title: template.title,
+      category: template.category,
+    });
 
     return {
       success: true,

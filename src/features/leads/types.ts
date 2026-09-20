@@ -30,9 +30,16 @@ export type Lead = {
   notes: string;
   createdAt: string;
   updatedAt: string;
+  isPinned?: boolean;
+  mergedIntoLeadId?: string | null;
+  mergedAt?: string | null;
+  mergedInto?: { id: string; name: string; phone: string; status: string } | null;
+  dealValue?: number | null;
+  lastActivity?: { message: string; createdAt: string; type?: string } | null;
   isWaste?: boolean;
   operationalState?: LeadOperationalState;
   aiAttention?: import("@/features/ai-attention/types").AIAttentionLeadData;
+  staleInfo?: import("@/lib/stale-leads").LeadStaleInfo;
 };
 
 export type NewLeadInput = Pick<
@@ -42,7 +49,24 @@ export type NewLeadInput = Pick<
 
 export type LeadActionResult<T = undefined> =
   | { success: true; data: T }
-  | { success: false; error: string };
+  | { success: false; error: string; duplicateCandidate?: import("./ai-entry-types").DuplicateLeadCandidate | null };
+
+export type MergeLeadsInput = {
+  primaryLeadId: string;
+  mergedLeadId: string;
+  fieldResolutions: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    business?: string;
+    industry?: string;
+    leadSource?: string;
+    budget?: number | null;
+    quotedAmount?: number | null;
+    status?: LeadStatus;
+  };
+  survivingFollowUpId?: string;
+};
 
 export const statusToDatabase = {
   New: "NEW",

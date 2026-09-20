@@ -78,6 +78,7 @@ function serializeFollowUp(
           business: followUp.lead.business ?? "",
           phone: followUp.lead.phone,
           status: followUp.lead.status,
+          isPinned: Boolean(followUp.lead.isPinned),
         }
       : undefined,
     leadNote: canonicalNote,
@@ -85,15 +86,15 @@ function serializeFollowUp(
 }
 
 async function syncNextFollowUpDate(leadId: string) {
-  const earliest = await db.followUp.findFirst({
+  const active = await db.followUp.findFirst({
     where: { leadId, status: "PENDING" },
-    orderBy: { scheduledAt: "asc" },
+    orderBy: { updatedAt: "desc" },
   });
 
   try {
     await db.lead.update({
       where: { id: leadId },
-      data: { nextFollowUpDate: earliest ? earliest.scheduledAt : null },
+      data: { nextFollowUpDate: active ? active.scheduledAt : null },
     });
   } catch {
     // safe if lead was removed concurrently
@@ -132,7 +133,7 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
     const submissionId = String(formData.get("submissionId") ?? "").trim() || undefined;
     if (submissionId && submissionId.length > 120) throw new UserFacingError("Invalid submission ID.");
 
-    const lead = await db.lead.findFirst({ where: { id: leadId, deletedAt: null } });
+    const lead = await db.lead.findFirst({ where: { id: leadId, deletedAt: null, mergedIntoLeadId: null } });
     if (!lead) throw new UserFacingError("Lead not found.");
 
     if (submissionId) {
@@ -157,6 +158,16 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
           return idempExisting;
         }
       }
+
+      // Invariant: ONE Lead -> maximum ONE active PENDING follow-up
+      // Safely supersede any existing PENDING follow-ups for this lead
+      await tx.followUp.updateMany({
+        where: {
+          leadId,
+          status: "PENDING",
+        },
+        data: { status: "CANCELLED" },
+      });
 
       const newFollowUp = await tx.followUp.create({
         data: {
@@ -245,6 +256,7 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
     safeRevalidatePath("/leads");
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath("/pipeline");
+    safeRevalidatePath("/analytics");
     safeRevalidatePath(`/leads/${leadId}`);
     return { success: true, data: serializeFollowUp(followUp) };
   } catch (error) {
@@ -264,6 +276,7 @@ export async function getFollowUps(): Promise<FollowUpActionResult<{
       where: {
         lead: {
           deletedAt: null,
+          mergedIntoLeadId: null,
         },
       },
       include: { 
@@ -278,7 +291,7 @@ export async function getFollowUps(): Promise<FollowUpActionResult<{
           },
         },
       },
-      orderBy: { scheduledAt: "asc" },
+      orderBy: [{ updatedAt: "desc" }, { scheduledAt: "asc" }],
     });
 
     const now = new Date();
@@ -292,12 +305,21 @@ export async function getFollowUps(): Promise<FollowUpActionResult<{
       completed: [] as FollowUp[],
     };
 
+    // Ensure strict ONE active follow-up per lead across pending tabs
+    const seenActiveLeadIds = new Set<string>();
+
     for (const raw of followUps) {
       const item = serializeFollowUp(raw);
       if (item.status === "Completed" || item.status === "Cancelled") {
         result.completed.push(item);
         continue;
       }
+
+      // If this lead already has an active follow-up placed, skip superseded/older active rows
+      if (seenActiveLeadIds.has(item.leadId)) {
+        continue;
+      }
+      seenActiveLeadIds.add(item.leadId);
 
       const itemDate = new Date(item.scheduledAt);
       const itemDateString = formatter.format(itemDate);
@@ -310,6 +332,11 @@ export async function getFollowUps(): Promise<FollowUpActionResult<{
         result.upcoming.push(item);
       }
     }
+
+    // Sort active tabs by scheduledAt asc for clean timeline display
+    result.overdue.sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+    result.today.sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+    result.upcoming.sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
 
     return { success: true, data: result };
   } catch (error) {
@@ -421,6 +448,7 @@ export async function updateFollowUp(
     safeRevalidatePath("/leads");
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath("/pipeline");
+    safeRevalidatePath("/analytics");
     safeRevalidatePath(`/leads/${followUp.leadId}`);
     return { success: true, data: serializeFollowUp(followUp) };
   } catch (error) {
@@ -469,6 +497,7 @@ export async function markFollowUpComplete(id: string): Promise<FollowUpActionRe
     safeRevalidatePath("/leads");
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath("/pipeline");
+    safeRevalidatePath("/analytics");
     safeRevalidatePath(`/leads/${followUp.leadId}`);
     return { success: true, data: serializeFollowUp(followUp) };
   } catch (error) {
@@ -517,6 +546,7 @@ export async function cancelFollowUp(id: string): Promise<FollowUpActionResult<F
     safeRevalidatePath("/leads");
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath("/pipeline");
+    safeRevalidatePath("/analytics");
     safeRevalidatePath(`/leads/${followUp.leadId}`);
     return { success: true, data: serializeFollowUp(followUp) };
   } catch (error) {
@@ -553,6 +583,7 @@ export async function undoCreateFollowUp(id: string): Promise<FollowUpActionResu
     safeRevalidatePath("/leads");
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath("/pipeline");
+    safeRevalidatePath("/analytics");
     safeRevalidatePath(`/leads/${existing.leadId}`);
     return { success: true, data: null };
   } catch (error) {
@@ -599,6 +630,7 @@ export async function undoRescheduleFollowUp(
     safeRevalidatePath("/leads");
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath("/pipeline");
+    safeRevalidatePath("/analytics");
     safeRevalidatePath(`/leads/${followUp.leadId}`);
     return { success: true, data: serializeFollowUp(followUp) };
   } catch (error) {
@@ -619,6 +651,7 @@ export async function scheduleLeadFollowUp(
     id?: string;
     followUpId?: string;
     submissionId?: string;
+    mode?: "reschedule" | "create";
   }
 ): Promise<FollowUpActionResult<ScheduleFollowUpResult>> {
   try {
@@ -630,6 +663,8 @@ export async function scheduleLeadFollowUp(
     let explicitId: string | undefined;
     let submissionId: string | undefined;
 
+    let mode: "reschedule" | "create" | undefined;
+
     if (formDataOrInput instanceof FormData) {
       leadId = String(formDataOrInput.get("leadId") ?? "").trim();
       scheduledAtRaw = String(formDataOrInput.get("scheduledAt") ?? "").trim();
@@ -637,6 +672,7 @@ export async function scheduleLeadFollowUp(
       note = String(formDataOrInput.get("note") ?? "").trim();
       explicitId = String(formDataOrInput.get("id") ?? formDataOrInput.get("followUpId") ?? "").trim() || undefined;
       submissionId = String(formDataOrInput.get("submissionId") ?? "").trim() || undefined;
+      mode = (String(formDataOrInput.get("mode") ?? "").trim() as "reschedule" | "create") || undefined;
     } else {
       leadId = String(formDataOrInput.leadId ?? "").trim();
       scheduledAtRaw = formDataOrInput.scheduledAt instanceof Date ? formDataOrInput.scheduledAt.toISOString() : String(formDataOrInput.scheduledAt ?? "").trim();
@@ -644,6 +680,7 @@ export async function scheduleLeadFollowUp(
       note = String(formDataOrInput.note ?? "").trim();
       explicitId = String(formDataOrInput.id ?? formDataOrInput.followUpId ?? "").trim() || undefined;
       submissionId = String(formDataOrInput.submissionId ?? "").trim() || undefined;
+      mode = (formDataOrInput as { mode?: "reschedule" | "create" }).mode;
     }
 
     if (!leadId) throw new UserFacingError("Lead ID is required.");
@@ -658,20 +695,22 @@ export async function scheduleLeadFollowUp(
     const validUserId = await resolveValidUserId(session.id);
 
     const followUp = await db.$transaction(async (tx) => {
-      // Find existing pending follow-up to reschedule if available
+      // Find existing pending follow-up to reschedule if available (unless mode === "create")
       let existing = null;
-      if (explicitId) {
-        existing = await tx.followUp.findUnique({
-          where: { id: explicitId },
-          include: { lead: true },
-        });
-      }
-      if (!existing) {
-        existing = await tx.followUp.findFirst({
-          where: { leadId, status: "PENDING" },
-          orderBy: { scheduledAt: "asc" },
-          include: { lead: true },
-        });
+      if (mode !== "create") {
+        if (explicitId) {
+          existing = await tx.followUp.findUnique({
+            where: { id: explicitId },
+            include: { lead: true },
+          });
+        }
+        if (!existing) {
+          existing = await tx.followUp.findFirst({
+            where: { leadId, status: "PENDING" },
+            orderBy: { scheduledAt: "asc" },
+            include: { lead: true },
+          });
+        }
       }
 
       let targetFollowUp;
@@ -769,6 +808,17 @@ export async function scheduleLeadFollowUp(
         }
       }
 
+      // Invariant: Enforce at most ONE active PENDING follow-up per lead
+      // Safely supersede all other PENDING follow-ups for this lead
+      await tx.followUp.updateMany({
+        where: {
+          leadId,
+          status: "PENDING",
+          id: { not: targetFollowUp.id },
+        },
+        data: { status: "CANCELLED" },
+      });
+
       await markLeadAIInsightNeedsRefresh(leadId, tx);
       return targetFollowUp;
     });
@@ -779,6 +829,7 @@ export async function scheduleLeadFollowUp(
     safeRevalidatePath("/leads");
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath("/pipeline");
+    safeRevalidatePath("/analytics");
     safeRevalidatePath(`/leads/${leadId}`);
 
     // Fetch updated lead record for caller state updates
@@ -793,6 +844,20 @@ export async function scheduleLeadFollowUp(
         leadRecord: leadResult.success ? leadResult.data : undefined,
       },
     };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+export async function getActiveFollowUp(leadId: string): Promise<FollowUpActionResult<FollowUp | null>> {
+  try {
+    await requireAuthenticatedUser();
+    const existing = await db.followUp.findFirst({
+      where: { leadId, status: "PENDING" },
+      orderBy: { updatedAt: "desc" },
+      include: { lead: true },
+    });
+    return { success: true, data: existing ? serializeFollowUp(existing) : null };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }

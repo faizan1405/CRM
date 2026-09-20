@@ -1,4 +1,4 @@
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { ArrowDownUp, Clock, GitMerge, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import { leadStatuses, type LeadStatus } from "@/features/leads/types";
 import { type LeadOperationalState } from "@/features/leads/types";
 
@@ -6,9 +6,17 @@ type LeadFiltersProps = {
   query: string;
   status: LeadStatus | "All";
   operationalFilter?: LeadOperationalState;
+  pinnedOnly?: boolean;
+  staleOnly?: boolean;
+  duplicatesOnly?: boolean;
+  sortBy?: "default" | "most_stale";
   onQueryChange: (value: string) => void;
   onStatusChange: (value: LeadStatus | "All") => void;
   onOperationalFilterChange?: (value: LeadOperationalState | undefined) => void;
+  onPinnedOnlyChange?: (value: boolean) => void;
+  onStaleOnlyChange?: (value: boolean) => void;
+  onDuplicatesOnlyChange?: (value: boolean) => void;
+  onSortByChange?: (value: "default" | "most_stale") => void;
   onClear: () => void;
 };
 
@@ -29,8 +37,31 @@ const operationalFilters: { value: LeadOperationalState; label: string; dot: str
   { value: "WASTE", label: "Waste", dot: "bg-slate-400" },
 ];
 
-export function LeadFilters({ query, status, operationalFilter, onQueryChange, onStatusChange, onOperationalFilterChange, onClear }: LeadFiltersProps) {
-  const hasFilters = query.length > 0 || status !== "All" || operationalFilter !== undefined;
+export function LeadFilters({
+  query,
+  status,
+  operationalFilter,
+  pinnedOnly = false,
+  staleOnly = false,
+  duplicatesOnly = false,
+  sortBy = "default",
+  onQueryChange,
+  onStatusChange,
+  onOperationalFilterChange,
+  onPinnedOnlyChange,
+  onStaleOnlyChange,
+  onDuplicatesOnlyChange,
+  onSortByChange,
+  onClear,
+}: LeadFiltersProps) {
+  const hasFilters =
+    query.length > 0 ||
+    status !== "All" ||
+    operationalFilter !== undefined ||
+    pinnedOnly ||
+    staleOnly ||
+    duplicatesOnly ||
+    sortBy === "most_stale";
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)] sm:p-4">
@@ -50,7 +81,7 @@ export function LeadFilters({ query, status, operationalFilter, onQueryChange, o
               </select>
             </label>
             {hasFilters ? (
-              <button type="button" onClick={onClear} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
+              <button type="button" onClick={onClear} className="inline-flex h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 cursor-pointer">
                 <X aria-hidden="true" size={17} /> Clear
               </button>
             ) : (
@@ -59,28 +90,82 @@ export function LeadFilters({ query, status, operationalFilter, onQueryChange, o
           </div>
         </div>
 
-        {onOperationalFilterChange && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-slate-500">Quick:</span>
-            {operationalFilters.map(({ value, label, dot }) => {
-              const isActive = operationalFilter === value;
-              const active = activeClasses[value];
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => onOperationalFilterChange(isActive ? undefined : value)}
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors ${
-                    isActive ? `${active.bg} ring-1 ${active.ring} ${active.text}` : "bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
-                  }`}
-                >
-                  <span className={`size-2 rounded-full ${dot}`} />
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-slate-500">Quick:</span>
+          {onDuplicatesOnlyChange && (
+            <button
+              type="button"
+              onClick={() => onDuplicatesOnlyChange(!duplicatesOnly)}
+              className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors cursor-pointer ${
+                duplicatesOnly
+                  ? "bg-amber-100 text-amber-900 ring-1 ring-amber-300"
+                  : "bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              <GitMerge className={`size-3.5 ${duplicatesOnly ? "text-amber-700" : "text-slate-400"}`} />
+              Possible Duplicates
+            </button>
+          )}
+          {onPinnedOnlyChange && (
+            <button
+              type="button"
+              onClick={() => onPinnedOnlyChange(!pinnedOnly)}
+              className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors cursor-pointer ${
+                pinnedOnly
+                  ? "bg-amber-100 text-amber-900 ring-1 ring-amber-300"
+                  : "bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              <Star className={`size-3.5 ${pinnedOnly ? "fill-amber-500 text-amber-500" : "text-slate-400"}`} />
+              Pinned only
+            </button>
+          )}
+          {onStaleOnlyChange && (
+            <button
+              type="button"
+              onClick={() => onStaleOnlyChange(!staleOnly)}
+              className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors cursor-pointer ${
+                staleOnly
+                  ? "bg-amber-100 text-amber-900 ring-1 ring-amber-300"
+                  : "bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              <Clock className={`size-3.5 ${staleOnly ? "text-amber-700" : "text-slate-400"}`} />
+              Stale Leads
+            </button>
+          )}
+          {onSortByChange && (
+            <button
+              type="button"
+              onClick={() => onSortByChange(sortBy === "most_stale" ? "default" : "most_stale")}
+              className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors cursor-pointer ${
+                sortBy === "most_stale"
+                  ? "bg-orange-100 text-orange-900 ring-1 ring-orange-300"
+                  : "bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              <ArrowDownUp className={`size-3.5 ${sortBy === "most_stale" ? "text-orange-700" : "text-slate-400"}`} />
+              Most Stale First
+            </button>
+          )}
+          {onOperationalFilterChange && operationalFilters.map(({ value, label, dot }) => {
+            const isActive = operationalFilter === value;
+            const active = activeClasses[value];
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => onOperationalFilterChange(isActive ? undefined : value)}
+                className={`inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition-colors cursor-pointer ${
+                  isActive ? `${active.bg} ring-1 ${active.ring} ${active.text}` : "bg-slate-50 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100"
+                }`}
+              >
+                <span className={`size-2 rounded-full ${dot}`} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import type { WebsitePackage } from "@prisma/client";
+import { formatPaymentTermsSentence } from "@/lib/payment-terms";
 
 const PACKAGES_UPDATED_EVENT = "crm:packages-updated";
 
@@ -108,5 +109,10 @@ export function formatSinglePackageForMessage(pkg: WebsitePackage): string {
     .map((line) => (line.startsWith("•") || line.startsWith("-") ? line : `• ${line}`))
     .join("\n");
 
-  return `What's up from you?\n\nSharing our ${pkg.name} Website Package:\n\n${pkg.name} Package — ${priceDisplay}\n\n${formattedInclusions}\n\nLet me know if you'd like to proceed or discuss the requirement.`;
+  const termsSentence = formatPaymentTermsSentence();
+  const packageHeading = pkg.name.toLowerCase().endsWith("package")
+    ? pkg.name
+    : `${pkg.name} Package`;
+
+  return `What's up from you?\n\nSharing our ${packageHeading} Website Package:\n\n${packageHeading} — ${priceDisplay}\n\n${formattedInclusions}\n\n${termsSentence}\n\nLet me know if you'd like to proceed or discuss the requirement.`;
 }

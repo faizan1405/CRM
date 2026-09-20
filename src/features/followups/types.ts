@@ -47,6 +47,7 @@ export type FollowUp = {
     business: string;
     phone: string | null;
     status: string;
+    isPinned?: boolean;
   };
   leadNote?: string;
 };

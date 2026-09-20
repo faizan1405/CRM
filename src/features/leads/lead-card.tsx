@@ -1,7 +1,7 @@
 "use client";
 
 import { ActionCard } from "@/components/action-card";
-import { Phone, MessageCircle, CalendarPlus, Trash2, FileText, Check } from "lucide-react";
+import { Phone, MessageCircle, CalendarPlus, Trash2, FileText, Check, Star, Clock } from "lucide-react";
 import { formatCurrency } from "@/features/leads/formatters";
 import { getTelephoneHref } from "@/features/leads/contact-links";
 import { useWhatsApp } from "@/components/whatsapp-context";
@@ -22,6 +22,7 @@ type LeadCardProps = {
   onSelect: (lead: Lead, action?: "note" | "status") => void;
   onAddFollowUp: (lead: Lead) => void;
   onDelete?: (lead: Lead) => void;
+  onTogglePin?: (lead: Lead) => void;
   onUpdateQuickStatus?: (lead: Lead, statusKey: QuickStatusType | "WON" | "LOST") => void;
   whatsAppMessage?: string;
   aiAttention?: AIAttentionLeadData;
@@ -32,6 +33,7 @@ export function LeadCard({
   onSelect,
   onAddFollowUp,
   onDelete,
+  onTogglePin,
   onUpdateQuickStatus,
   whatsAppMessage,
   aiAttention,
@@ -55,23 +57,53 @@ export function LeadCard({
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
           <h3 className="truncate font-bold text-slate-950 text-[16px] tracking-tight leading-none">{lead.name}</h3>
           <LeadStatusBadge status={lead.status} />
+          {lead.staleInfo?.isStale && (
+            <span
+              role="status"
+              aria-label={lead.staleInfo.staleLabel}
+              title={lead.staleInfo.staleLabel}
+              className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800"
+            >
+              <Clock size={11} className="text-amber-600 shrink-0" aria-hidden="true" />
+              <span>{lead.staleInfo.staleLabel}</span>
+            </span>
+          )}
           {!isTerminal && ai.score >= 80 && (
             <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
           )}
         </div>
-        {onDelete && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(lead);
-            }}
-            aria-label={`Delete ${lead.name}`}
-            className="text-slate-300 hover:text-rose-600 transition-colors shrink-0 -mt-1 -mr-1 p-1 rounded active:bg-slate-100"
-          >
-            <Trash2 size={16} />
-          </button>
-        )}
+        <div className="flex items-center gap-0.5 shrink-0 -mt-1 -mr-1">
+          {onTogglePin && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePin(lead);
+              }}
+              aria-label={lead.isPinned ? `Unpin ${lead.name}` : `Pin ${lead.name}`}
+              title={lead.isPinned ? "Unpin lead" : "Pin lead"}
+              className="p-1 rounded-md text-slate-300 hover:text-amber-500 hover:bg-amber-50 active:scale-95 transition-all min-h-[36px] min-w-[36px] flex items-center justify-center cursor-pointer"
+            >
+              <Star
+                size={17}
+                className={lead.isPinned ? "fill-amber-400 text-amber-500" : "text-slate-300 hover:text-amber-500"}
+              />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(lead);
+              }}
+              aria-label={`Delete ${lead.name}`}
+              className="text-slate-300 hover:text-rose-600 transition-colors p-1 rounded-md active:bg-slate-100 min-h-[36px] min-w-[36px] flex items-center justify-center cursor-pointer"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ROW 2: Phone + Age */}

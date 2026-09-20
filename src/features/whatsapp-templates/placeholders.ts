@@ -1,6 +1,12 @@
 import type { PlaceholderInfo, WhatsAppComposerLead } from "./types";
 import { getCachedPackages, formatPackageListForMessage } from "@/features/sales-assets/packages-sync";
 import type { WebsitePackage } from "@prisma/client";
+import {
+  formatPaymentTermsSentence,
+  isPaymentTermsRelevant,
+  hasPaymentTerms,
+  attachPaymentTermsIfRelevant,
+} from "@/lib/payment-terms";
 
 export const SUPPORTED_PLACEHOLDERS: PlaceholderInfo[] = [
   {
@@ -38,6 +44,12 @@ export const SUPPORTED_PLACEHOLDERS: PlaceholderInfo[] = [
     label: "Follow-up Time",
     sampleValue: "11:30 AM",
     description: "Scheduled follow-up time",
+  },
+  {
+    key: "{paymentTerms}",
+    label: "Payment Terms",
+    sampleValue: "Payment Terms: 30% advance and 70% before final delivery.",
+    description: "Canonical business payment terms",
   },
 ];
 
@@ -88,10 +100,16 @@ export function formatBudget(budget: number | string | null | undefined): string
  */
 export function renderWhatsAppMessage(
   templateText: string,
-  lead?: WhatsAppComposerLead | null
+  lead?: WhatsAppComposerLead | null,
+  options?: { title?: string; category?: string }
 ): string {
   if (!templateText) return "";
   let rendered = templateText;
+
+  // Replace payment terms placeholder if present
+  const termsSentence = formatPaymentTermsSentence();
+  rendered = rendered.replaceAll("{paymentTerms}", termsSentence);
+  rendered = rendered.replaceAll("{{paymentTerms}}", termsSentence);
 
   // 1. Lead Name
   const name = lead?.name?.trim() || "";
@@ -178,6 +196,19 @@ export function renderWhatsAppMessage(
     .replace(/\n\s*\n\s*\n/g, "\n\n")
     .trim();
 
+  // Attach payment terms if relevant and not already present
+  if (
+    options &&
+    isPaymentTermsRelevant({
+      title: options.title,
+      category: options.category,
+      content: rendered,
+    }) &&
+    !hasPaymentTerms(rendered)
+  ) {
+    rendered = attachPaymentTermsIfRelevant(rendered, options);
+  }
+
   return rendered;
 }
 
@@ -191,7 +222,9 @@ export const SAMPLE_PREVIEW_VALUES: Record<string, string> = {
   "{budget}": "₹45,000",
   "{followUpDate}": "Tomorrow (16 Sep)",
   "{followUpTime}": "11:30 AM",
+  "{paymentTerms}": formatPaymentTermsSentence(),
   "{{leadName}}": "Rahul",
+  "{{paymentTerms}}": formatPaymentTermsSentence(),
 };
 
 /**
@@ -201,29 +234,44 @@ export function interpolatePlaceholders(
   templateText: string,
   lead?: WhatsAppComposerLead | null,
   fallbackToSamples = true,
-  packages?: WebsitePackage[]
+  packages?: WebsitePackage[],
+  options?: { title?: string; category?: string }
 ): string {
   if (!templateText) return "";
 
+  const termsSentence = formatPaymentTermsSentence();
+  let rendered = templateText;
+
   if (lead) {
-    let rendered = renderWhatsAppMessage(templateText, lead);
+    rendered = renderWhatsAppMessage(rendered, lead, options);
     if (rendered.includes("{{packagePricingLinks}}")) {
       const pkgs = packages || getCachedPackages() || [];
       rendered = rendered.replaceAll("{{packagePricingLinks}}", formatPackageListForMessage(pkgs));
     }
-    return rendered;
+  } else if (fallbackToSamples) {
+    for (const [key, value] of Object.entries(SAMPLE_PREVIEW_VALUES)) {
+      rendered = rendered.replaceAll(key, value);
+    }
+    if (rendered.includes("{{packagePricingLinks}}")) {
+      const pkgs = packages || getCachedPackages() || [];
+      rendered = rendered.replaceAll("{{packagePricingLinks}}", formatPackageListForMessage(pkgs));
+    }
   }
 
-  if (fallbackToSamples) {
-    let result = templateText;
-    for (const [key, value] of Object.entries(SAMPLE_PREVIEW_VALUES)) {
-      result = result.replaceAll(key, value);
-    }
-    if (result.includes("{{packagePricingLinks}}")) {
-      const pkgs = packages || getCachedPackages() || [];
-      result = result.replaceAll("{{packagePricingLinks}}", formatPackageListForMessage(pkgs));
-    }
-    return result;
+  rendered = rendered.replaceAll("{paymentTerms}", termsSentence);
+  rendered = rendered.replaceAll("{{paymentTerms}}", termsSentence);
+
+  if (
+    options &&
+    isPaymentTermsRelevant({
+      title: options.title,
+      category: options.category,
+      content: rendered,
+    }) &&
+    !hasPaymentTerms(rendered)
+  ) {
+    rendered = attachPaymentTermsIfRelevant(rendered, options);
   }
-  return templateText;
+
+  return rendered;
 }

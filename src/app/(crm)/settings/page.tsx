@@ -4,11 +4,12 @@ import { getNotifications } from "@/app/actions/notifications";
 import { getWebsitePackages, getWebsiteSamples } from "@/app/actions/sales-assets";
 import { getWhatsAppTemplates } from "@/app/actions/whatsapp-templates";
 import { getRecentlyDeletedLeads } from "@/app/actions/leads";
+import { fetchBusinessSummary } from "@/app/actions/export";
 import type { SettingsTab } from "@/features/settings/types";
 
 export const metadata: Metadata = {
   title: "Settings & Workspace | CRM",
-  description: "Manage CRM workspace settings, notifications, sales assets, reference guide, and recently deleted leads.",
+  description: "Manage CRM workspace settings, notifications, sales assets, reference guide, exports, and recently deleted leads.",
 };
 
 export const dynamic = "force-dynamic";
@@ -22,12 +23,13 @@ export default async function SettingsPage({
   const tab = (params?.tab as SettingsTab) || "general";
 
   // Fetch relevant data based on tab or for quick hub overview
-  const [notificationsRes, packagesRes, samplesRes, templatesRes, deletedRes] = await Promise.all([
+  const [notificationsRes, packagesRes, samplesRes, templatesRes, deletedRes, businessSummaryRes] = await Promise.all([
     tab === "notifications" || tab === "general" ? getNotifications() : Promise.resolve({ success: true, data: [] }),
     tab === "sales-assets" ? getWebsitePackages() : Promise.resolve({ success: true, data: [] }),
     tab === "sales-assets" ? getWebsiteSamples() : Promise.resolve({ success: true, data: [] }),
     tab === "sales-assets" ? getWhatsAppTemplates() : Promise.resolve({ success: true, data: [] }),
     tab === "recently-deleted" || tab === "general" ? getRecentlyDeletedLeads() : Promise.resolve({ success: true, data: [] }),
+    tab === "export-reports" || tab === "general" ? fetchBusinessSummary().catch(() => null) : Promise.resolve(null),
   ]);
 
   return (
@@ -38,6 +40,7 @@ export default async function SettingsPage({
       initialSamples={samplesRes.success ? samplesRes.data : []}
       initialTemplates={templatesRes.success ? templatesRes.data : []}
       initialDeletedLeads={deletedRes.success && deletedRes.data ? deletedRes.data : []}
+      initialBusinessSummary={businessSummaryRes}
     />
   );
 }

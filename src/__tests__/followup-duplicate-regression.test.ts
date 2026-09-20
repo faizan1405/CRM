@@ -109,5 +109,18 @@ describe("follow-up concurrency / duplication", () => {
 
     const count = await db.followUp.count({ where: { leadId: testLeadId2 } });
     expect(count).toBe(2);
+
+    // Primary product rule: exactly ONE active PENDING follow-up per lead, previous is CANCELLED
+    const pendingCount = await db.followUp.count({ where: { leadId: testLeadId2, status: "PENDING" } });
+    expect(pendingCount).toBe(1);
+
+    const cancelledCount = await db.followUp.count({ where: { leadId: testLeadId2, status: "CANCELLED" } });
+    expect(cancelledCount).toBe(1);
+
+    const oldRow = await db.followUp.findUnique({ where: { id: id1 } });
+    expect(oldRow?.status).toBe("CANCELLED");
+
+    const newRow = await db.followUp.findUnique({ where: { id: id2 } });
+    expect(newRow?.status).toBe("PENDING");
   });
 });

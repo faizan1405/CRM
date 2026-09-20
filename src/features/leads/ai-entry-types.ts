@@ -33,10 +33,15 @@ export type DuplicateLeadCandidate = {
   id: string;
   name: string;
   phone: string;
+  email?: string | null;
   business?: string | null;
   status?: string | null;
   confidence?: "high" | "review" | null;
   reason?: string | null;
+  matchedBy?: "phone" | "email" | "phone_and_email";
+  isDeleted?: boolean;
+  lastActivityText?: string | null;
+  createdAt?: string | null;
 };
 
 export type StructuredLeadResult = {

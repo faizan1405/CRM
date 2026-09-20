@@ -40,7 +40,12 @@ export function WhatsAppLeadComposer({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialId);
   const [customMessage, setCustomMessage] = useState<string>(() => {
     const tpl = activeTemplates.find((t) => t.id === initialId);
-    return tpl && lead ? interpolatePlaceholders(tpl.body, lead, false) : "";
+    return tpl && lead
+      ? interpolatePlaceholders(tpl.body, lead, false, undefined, {
+          title: tpl.title,
+          category: tpl.category,
+        })
+      : "";
   });
   const [isPersonalizing, setIsPersonalizing] = useState(false);
   const [aiPreview, setAiPreview] = useState<{
@@ -52,7 +57,12 @@ export function WhatsAppLeadComposer({
     setSelectedTemplateId(newTemplateId);
     const tpl = activeTemplates.find((t) => t.id === newTemplateId);
     if (tpl && lead) {
-      setCustomMessage(interpolatePlaceholders(tpl.body, lead, false));
+      setCustomMessage(
+        interpolatePlaceholders(tpl.body, lead, false, undefined, {
+          title: tpl.title,
+          category: tpl.category,
+        })
+      );
     }
     setAiPreview(null);
   };

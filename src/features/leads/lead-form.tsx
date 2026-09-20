@@ -1,13 +1,15 @@
 "use client";
 
 import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
-
-import { Keyboard, Sparkles, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { CopyPlus, Keyboard, Sparkles, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { AILeadEntry } from "@/features/leads/ai-lead-entry";
 import type { DuplicateLeadCandidate, StructuredLeadDraft } from "@/features/leads/ai-entry-types";
 import type { BulkStructureLeadCallback } from "./bulk-review-types";
-import { leadStatuses, type Lead } from "@/features/leads/types";
+import { leadStatuses, type Lead, type LeadStatus } from "@/features/leads/types";
+import { checkLeadDuplicate } from "@/app/actions/leads";
+import { DuplicateLeadWarning } from "./duplicate-lead-warning";
+import { MergeLeadsModal } from "./merge-leads-modal";
 
 type LeadFormProps = {
   open: boolean;
@@ -20,6 +22,7 @@ type LeadFormProps = {
   onBusyChange?: (busy: boolean) => void;
   onOpenDuplicate?: (candidate: DuplicateLeadCandidate) => void;
   onUpdateDuplicate?: (candidate: DuplicateLeadCandidate, draft: StructuredLeadDraft) => void;
+  onLeadEnriched?: (updatedLead: Lead) => void;
 };
 
 const inputClass =
@@ -30,143 +33,288 @@ function ManualLeadEntry({
   saving,
   onClose,
   onSubmit,
-}: Pick<LeadFormProps, "lead" | "saving" | "onClose" | "onSubmit">) {
+  onOpenDuplicate,
+  onLeadEnriched,
+}: Pick<LeadFormProps, "lead" | "saving" | "onClose" | "onSubmit" | "onOpenDuplicate" | "onLeadEnriched">) {
+  const formRef = useRef<HTMLFormElement>(null);
+  const [name, setName] = useState(lead?.name ?? "");
+  const [phone, setPhone] = useState(lead?.phone ?? "");
+  const [email, setEmail] = useState(lead?.email ?? "");
+  const [business, setBusiness] = useState(lead?.business ?? "");
+  const [industry, setIndustry] = useState(lead?.industry ?? "");
+  const [quotedAmount, setQuotedAmount] = useState(lead?.quotedAmount ? String(lead.quotedAmount) : "");
+  const [status, setStatus] = useState<LeadStatus>(lead?.status ?? "New");
+  const [notes, setNotes] = useState(lead?.notes ?? "");
+
+  const [duplicateCandidate, setDuplicateCandidate] = useState<DuplicateLeadCandidate | null>(null);
+  const [showCreateAnywayModal, setShowCreateAnywayModal] = useState(false);
+  const [enrichModalOpen, setEnrichModalOpen] = useState(false);
+  const duplicateTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounced duplicate detection on phone or email change
+  useEffect(() => {
+    // Only check duplicates if we're adding a new lead or editing phone/email
+    if (duplicateTimer.current) clearTimeout(duplicateTimer.current);
+
+    const trimmedPhone = phone.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedPhone && !trimmedEmail) {
+      setDuplicateCandidate(null);
+      return;
+    }
+
+    duplicateTimer.current = setTimeout(async () => {
+      try {
+        const candidate = await checkLeadDuplicate(lead?.id, trimmedPhone, trimmedEmail || null);
+        setDuplicateCandidate(candidate);
+      } catch {
+        // Safe in network errors
+      }
+    }, 450);
+
+    return () => {
+      if (duplicateTimer.current) clearTimeout(duplicateTimer.current);
+    };
+  }, [phone, email, lead?.id]);
+
+  function handleFormSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (duplicateCandidate && !duplicateCandidate.isDeleted) {
+      // Prompt user explicitly before creating duplicate
+      setShowCreateAnywayModal(true);
+      return;
+    }
+
+    const formData = new FormData(e.currentTarget);
+    void onSubmit(formData);
+  }
+
+  function handleConfirmCreateAnyway() {
+    setShowCreateAnywayModal(false);
+    if (!formRef.current) return;
+    const formData = new FormData(formRef.current);
+    formData.set("allowDuplicate", "true");
+    void onSubmit(formData);
+  }
+
   return (
-    <form action={onSubmit} className="min-w-0">
-      <div className="mx-auto max-w-2xl">
-        <input type="hidden" name="budget" value={lead?.budget ?? ""} />
-        <input type="hidden" name="source" value={lead?.source ?? ""} />
-        <div className="grid gap-5 px-5 py-5 sm:grid-cols-2 sm:px-6">
-          <label className="text-sm font-medium text-slate-700">
-            Name <span className="text-rose-600">*</span>
-            <input
-              className={inputClass}
-              name="name"
-              required
-              maxLength={120}
-              autoComplete="name"
-              placeholder="Lead name"
-              defaultValue={lead?.name ?? ""}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Phone <span className="text-rose-600">*</span>
-            <input
-              className={inputClass}
-              name="phone"
-              type="tel"
-              required
-              maxLength={40}
-              autoComplete="tel"
-              placeholder="Phone number"
-              defaultValue={lead?.phone ?? ""}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Email
-            <input
-              className={inputClass}
-              name="email"
-              type="email"
-              maxLength={254}
-              autoComplete="email"
-              placeholder="Email address"
-              defaultValue={lead?.email ?? ""}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Business / Company
-            <input
-              className={inputClass}
-              name="business"
-              maxLength={160}
-              autoComplete="organization"
-              placeholder="Business name"
-              defaultValue={lead?.business ?? ""}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Industry / Requirement
-            <input
-              className={inputClass}
-              name="industry"
-              maxLength={100}
-              placeholder="Industry or website requirement"
-              defaultValue={lead?.industry ?? ""}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Status
-            <select className={inputClass} name="status" defaultValue={lead?.status ?? "New"}>
-              {leadStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Quoted amount
-            <input
-              className={inputClass}
-              name="quotedAmount"
-              type="number"
-              min="0"
-              max="9999999999.99"
-              step="0.01"
-              inputMode="decimal"
-              placeholder="Quoted amount"
-              defaultValue={lead?.quotedAmount ?? ""}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Last contact date
-            <input
-              className={inputClass}
-              name="lastContactDate"
-              type="date"
-              defaultValue={lead?.lastContactDate ?? ""}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700">
-            Next follow-up date
-            <input
-              className={inputClass}
-              name="nextFollowUpDate"
-              type="date"
-              defaultValue={lead?.nextFollowUpDate ?? ""}
-            />
-          </label>
-          <label className="text-sm font-medium text-slate-700 sm:col-span-2">
-            Notes
-            <textarea
-              className={`${inputClass} min-h-28 resize-y py-3`}
-              name="notes"
-              maxLength={5000}
-              placeholder="Context, requirements or next steps"
-              defaultValue={lead?.notes ?? ""}
-            />
-          </label>
+    <>
+      <form ref={formRef} onSubmit={handleFormSubmit} className="min-w-0">
+        <div className="mx-auto max-w-2xl">
+          <input type="hidden" name="budget" value={lead?.budget ?? ""} />
+          <input type="hidden" name="source" value={lead?.source ?? ""} />
+
+          {duplicateCandidate && (
+            <div className="px-5 pt-5 sm:px-6">
+              <DuplicateLeadWarning
+                candidate={duplicateCandidate}
+                onOpenExisting={() => onOpenDuplicate?.(duplicateCandidate)}
+                onUpdateExisting={() => setEnrichModalOpen(true)}
+                onCreateAnyway={() => setShowCreateAnywayModal(true)}
+                onCancel={() => setDuplicateCandidate(null)}
+              />
+            </div>
+          )}
+
+          <div className="grid gap-5 px-5 py-5 sm:grid-cols-2 sm:px-6">
+            <label className="text-sm font-medium text-slate-700">
+              Name <span className="text-rose-600">*</span>
+              <input
+                className={inputClass}
+                name="name"
+                required
+                maxLength={120}
+                autoComplete="name"
+                placeholder="Lead name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Phone <span className="text-rose-600">*</span>
+              <input
+                className={inputClass}
+                name="phone"
+                type="tel"
+                required
+                maxLength={40}
+                autoComplete="tel"
+                placeholder="Phone number"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Email
+              <input
+                className={inputClass}
+                name="email"
+                type="email"
+                maxLength={254}
+                autoComplete="email"
+                placeholder="Email address"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Business / Company
+              <input
+                className={inputClass}
+                name="business"
+                maxLength={160}
+                autoComplete="organization"
+                placeholder="Business name"
+                value={business}
+                onChange={(e) => setBusiness(e.target.value)}
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Industry / Requirement
+              <input
+                className={inputClass}
+                name="industry"
+                maxLength={100}
+                placeholder="Industry or website requirement"
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Status
+              <select
+                className={inputClass}
+                name="status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as LeadStatus)}
+              >
+                {leadStatuses.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Quoted amount
+              <input
+                className={inputClass}
+                name="quotedAmount"
+                type="number"
+                min="0"
+                max="9999999999.99"
+                step="0.01"
+                inputMode="decimal"
+                placeholder="Quoted amount"
+                value={quotedAmount}
+                onChange={(e) => setQuotedAmount(e.target.value)}
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Last contact date
+              <input
+                className={inputClass}
+                name="lastContactDate"
+                type="date"
+                defaultValue={lead?.lastContactDate ?? ""}
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700 sm:col-span-2">
+              Next follow-up date
+              <input
+                className={inputClass}
+                name="nextFollowUpDate"
+                type="date"
+                defaultValue={lead?.nextFollowUpDate ?? ""}
+              />
+            </label>
+            <label className="text-sm font-medium text-slate-700 sm:col-span-2">
+              Notes
+              <textarea
+                className={`${inputClass} min-h-28 resize-y py-3`}
+                name="notes"
+                maxLength={5000}
+                placeholder="Context, requirements or next steps"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </label>
+          </div>
+          <footer className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:px-6 sm:pb-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-700 transition-colors hover:bg-slate-100 active:bg-slate-200 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="min-h-11 rounded-xl bg-blue-600 px-5 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 active:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
+            >
+              {saving ? "Saving…" : lead ? "Save changes" : "Add lead"}
+            </button>
+          </footer>
         </div>
-        <footer className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:px-6 sm:pb-4">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={saving}
-            className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-[15px] font-semibold text-slate-700 transition-colors hover:bg-slate-100 active:bg-slate-200 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="min-h-11 rounded-xl bg-blue-600 px-5 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 active:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
-          >
-            {saving ? "Saving…" : lead ? "Save changes" : "Add lead"}
-          </button>
-        </footer>
-      </div>
-    </form>
+      </form>
+
+      {/* Explicit Create Anyway confirmation dialog */}
+      {showCreateAnywayModal && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-slate-900">Create Duplicate Record?</h3>
+            <p className="text-sm text-slate-600">
+              Another lead already uses this phone number or email address.
+              Are you sure you want to create a separate lead anyway?
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCreateAnywayModal(false)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCreateAnyway}
+                className="rounded-xl bg-amber-800 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-900"
+              >
+                Create Separate Lead
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enrich Existing Lead Modal */}
+      {enrichModalOpen && duplicateCandidate && (
+        <MergeLeadsModal
+          mode="enrich"
+          isOpen={enrichModalOpen}
+          existingCandidate={duplicateCandidate}
+          enteredLead={{
+            name,
+            phone,
+            email: email || undefined,
+            business: business || undefined,
+            industry: industry || undefined,
+            quotedAmount: quotedAmount ? Number(quotedAmount) : undefined,
+            status,
+            notes: notes || undefined,
+          }}
+          onClose={() => setEnrichModalOpen(false)}
+          onSuccess={(enrichedLead) => {
+            setEnrichModalOpen(false);
+            onClose();
+            onLeadEnriched?.(enrichedLead);
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -179,6 +327,7 @@ function NewLeadEntry({
   onUpdateDuplicate,
   onBulkSaved,
   onBusyChange,
+  onLeadEnriched,
 }: Omit<LeadFormProps, "open" | "lead">) {
   const [mode, setMode] = useState<"ai" | "manual">("ai");
   return (
@@ -228,7 +377,14 @@ function NewLeadEntry({
           />
         </div>
         <div hidden={mode !== "manual"}>
-          <ManualLeadEntry lead={null} saving={saving} onClose={onClose} onSubmit={onSubmit} />
+          <ManualLeadEntry
+            lead={null}
+            saving={saving}
+            onClose={onClose}
+            onSubmit={onSubmit}
+            onOpenDuplicate={onOpenDuplicate}
+            onLeadEnriched={onLeadEnriched}
+          />
         </div>
       </div>
     </>
@@ -246,6 +402,7 @@ export function LeadForm({
   onUpdateDuplicate,
   onBulkSaved,
   onBusyChange,
+  onLeadEnriched,
 }: LeadFormProps) {
   const [entryBusy, setEntryBusy] = useState(false);
   const modalSaving = saving || entryBusy;
@@ -293,7 +450,14 @@ export function LeadForm({
         </header>
         {lead ? (
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <ManualLeadEntry lead={lead} saving={modalSaving} onClose={onClose} onSubmit={onSubmit} />
+            <ManualLeadEntry
+              lead={lead}
+              saving={modalSaving}
+              onClose={onClose}
+              onSubmit={onSubmit}
+              onOpenDuplicate={onOpenDuplicate}
+              onLeadEnriched={onLeadEnriched}
+            />
           </div>
         ) : (
           <NewLeadEntry
@@ -304,7 +468,11 @@ export function LeadForm({
             onOpenDuplicate={onOpenDuplicate}
             onUpdateDuplicate={onUpdateDuplicate}
             onBulkSaved={onBulkSaved}
-            onBusyChange={value => { setEntryBusy(value); onBusyChange?.(value); }}
+            onBusyChange={(value) => {
+              setEntryBusy(value);
+              onBusyChange?.(value);
+            }}
+            onLeadEnriched={onLeadEnriched}
           />
         )}
       </section>

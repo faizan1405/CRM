@@ -19,9 +19,127 @@ import {
   formatPackageListForMessage,
   formatSinglePackageForMessage,
 } from "@/features/sales-assets/packages-sync";
+import {
+  formatPaymentTermsSentence,
+  isPaymentTermsRelevant,
+  hasPaymentTerms,
+} from "@/lib/payment-terms";
 
 let cachedSamples: WebsiteSample[] | null = null;
 let cachedTemplates: WhatsAppTemplate[] | null = null;
+
+export function setCachedSamples(s: WebsiteSample[] | null) {
+  cachedSamples = s;
+}
+
+export function setCachedTemplates(t: WhatsAppTemplate[] | null) {
+  cachedTemplates = t;
+}
+
+export function interpolateWhatsAppMessage({
+  template,
+  lead,
+  packages = [],
+  selectedPackageIds = new Set(),
+  samples = [],
+  selectedSampleIds = new Set(),
+  config,
+  sampleCategory = "",
+  sampleType = "ALL",
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  template: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  lead: any;
+  packages?: WebsitePackage[];
+  selectedPackageIds?: Set<string>;
+  samples?: WebsiteSample[];
+  selectedSampleIds?: Set<string>;
+  config?: WhatsAppConfig;
+  sampleCategory?: string;
+  sampleType?: string;
+}): string {
+  let msg = template?.message || template?.body || "";
+
+  // Replace standard variables safely (supporting both {{variable}} and {variable})
+  msg = msg.replace(/{{leadName}}|\{name\}/g, lead?.name || "{{leadName}}");
+  msg = msg.replace(/{{phone}}|\{phone\}/g, lead?.phone || "{{phone}}");
+  msg = msg.replace(/\{business\}/g, lead?.business || "your business");
+  msg = msg.replace(/\{requirement\}/g, lead?.requirement || lead?.notes || "your requirement");
+  const budgetVal = lead?.budget ?? lead?.quotedAmount;
+  const budgetFormatted = budgetVal ? `₹${Number(budgetVal).toLocaleString("en-IN")}` : "";
+  msg = msg.replace(/{{quotedAmount}}/g, budgetFormatted || "{{quotedAmount}}");
+  msg = msg.replace(/\{budget\}/g, budgetFormatted || "{budget}");
+  msg = msg.replace(/{{status}}|\{status\}/g, lead?.status || "{{status}}");
+  msg = msg.replace(/{{followUpDate}}|\{followUpDate\}/g, lead?.followUpDate || "{{followUpDate}}");
+  msg = msg.replace(/\{followUpTime\}/g, lead?.followUpTime || "{{followUpTime}}");
+
+  if (template?.title === "Website Samples") {
+    const selectedSamples = samples.filter(
+      (s) => selectedSampleIds.has(s.id) && s.isActive
+    );
+
+    if (config?.sampleId && selectedSamples.length === 1 && selectedSamples[0].id === config.sampleId) {
+      // Direct single sample sharing
+      const s = selectedSamples[0];
+      msg = `What's up from you?\n\nSharing an ${s.category} website sample:\n\n${s.label || s.url}\n${s.url}\n\nPlease check it and let me know if you like this style.`;
+    } else if (config?.category && (!config?.sampleId || selectedSamples.length !== 1)) {
+      const links = selectedSamples.map((s) => `• ${s.label ? s.label + " - " : ""}${s.url}`).join("\n");
+      msg = `What's up from you?\n\nSharing some ${config.category} website samples:\n\n${links || "(No samples selected)"}\n\nPlease check them and let me know if you like this style.`;
+    } else {
+      const links = selectedSamples.map((s) => `• ${s.label ? s.label + " - " : ""}${s.url}`).join("\n");
+      msg = msg.replace(/{{selectedSampleLinks}}/g, links || "(No samples selected)");
+    }
+  }
+
+  if (template?.title === "Packages / Pricing") {
+    const activePkgs = packages.filter((p) => p.isActive);
+    const selectedPkgs = activePkgs.filter((p) => selectedPackageIds.has(p.id));
+
+    if (config?.packageId && (selectedPackageIds.has(config.packageId) || selectedPkgs.length === 1)) {
+      // Direct package sharing with single package canonical format
+      const p = packages.find((pkg) => pkg.id === config.packageId) || selectedPkgs[0];
+      if (p) {
+        msg = formatSinglePackageForMessage(p);
+      } else {
+        msg = msg.replace(/{{packagePricingLinks}}/g, formatPackageListForMessage(selectedPkgs));
+      }
+    } else {
+      const pkgsToFormat = selectedPkgs.length > 0 ? selectedPkgs : [];
+      msg = msg.replace(/{{packagePricingLinks}}/g, formatPackageListForMessage(pkgsToFormat));
+    }
+  }
+
+  // Replace explicit payment terms placeholders if present
+  const termsSentence = formatPaymentTermsSentence();
+  msg = msg.replace(/\{\{paymentTerms\}\}/g, termsSentence);
+  msg = msg.replace(/\{paymentTerms\}/g, termsSentence);
+
+  // For relevant business messages, ensure payment terms appear if not already present
+  if (
+    isPaymentTermsRelevant({
+      title: template?.title,
+      category: template?.category || template?.rawCategory,
+      content: msg,
+    }) &&
+    !hasPaymentTerms(msg)
+  ) {
+    if (template?.title === "Packages / Pricing") {
+      if (msg.includes("I can recommend the right option")) {
+        msg = msg.replace(
+          "I can recommend the right option",
+          `${termsSentence}\n\nI can recommend the right option`
+        );
+      } else {
+        msg = `${msg.trim()}\n\n${termsSentence}`;
+      }
+    } else {
+      msg = `${msg.trim()}\n\n${termsSentence}`;
+    }
+  }
+
+  return msg;
+}
 
 export function WhatsAppTemplatePicker({
   isOpen,
@@ -37,25 +155,75 @@ export function WhatsAppTemplatePicker({
 }) {
   const [loading, setLoading] = useState(false);
   const [packages, setPackages] = useState<WebsitePackage[]>(() => getCachedPackages() || []);
-  const [samples, setSamples] = useState<WebsiteSample[]>([]);
-  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [samples, setSamples] = useState<WebsiteSample[]>(() => cachedSamples || []);
+  const [templates, setTemplates] = useState<WhatsAppTemplate[]>(() => cachedTemplates || []);
 
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
-  const [customMessage, setCustomMessage] = useState<string>("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(() => {
+    if (config?.templateTitle && cachedTemplates) {
+      return cachedTemplates.find((t) => t.title === config.templateTitle)?.id || "";
+    }
+    if (!config?.templateTitle && cachedTemplates && cachedTemplates.length > 0) {
+      return cachedTemplates.find((t) => t.title === "Introduction")?.id || cachedTemplates[0]?.id || "";
+    }
+    return "";
+  });
+
+  // Sub-selections
+  const [sampleCategory, setSampleCategory] = useState<string>(() => config?.category || "");
+  const [sampleType, setSampleType] = useState<string>("ALL"); // LIVE, DEMO, ALL
+  const [selectedSampleIds, setSelectedSampleIds] = useState<Set<string>>(() => {
+    if (config?.sampleId) {
+      return new Set([config.sampleId]);
+    }
+    return new Set();
+  });
+  const [selectedPackageIds, setSelectedPackageIds] = useState<Set<string>>(() => {
+    if (config?.packageId) {
+      return new Set([config.packageId]);
+    }
+    return new Set();
+  });
+
+  const [customMessage, setCustomMessage] = useState<string>(() => {
+    if (cachedTemplates && cachedTemplates.length > 0) {
+      const initialTplId = config?.templateTitle
+        ? cachedTemplates.find((t) => t.title === config.templateTitle)?.id || ""
+        : cachedTemplates.find((t) => t.title === "Introduction")?.id || cachedTemplates[0]?.id || "";
+      const tpl = cachedTemplates.find((t) => t.id === initialTplId);
+      if (tpl) {
+        const initSampleIds = config?.sampleId ? new Set([config.sampleId]) : new Set<string>();
+        const initPkgIds = config?.packageId
+          ? new Set([config.packageId])
+          : tpl.title === "Packages / Pricing"
+          ? new Set((getCachedPackages() || []).filter((p) => p.isActive).map((p) => p.id))
+          : new Set<string>();
+        return interpolateWhatsAppMessage({
+          template: tpl,
+          lead,
+          packages: getCachedPackages() || [],
+          selectedPackageIds: initPkgIds,
+          samples: cachedSamples || [],
+          selectedSampleIds: initSampleIds,
+          config,
+          sampleCategory: config?.category || "",
+          sampleType: "ALL",
+        });
+      }
+    }
+    return "";
+  });
   const [isImproving, setIsImproving] = useState(false);
   const [lastOriginalDraft, setLastOriginalDraft] = useState<string | null>(null);
   const [improveError, setImproveError] = useState<string | null>(null);
-
-  // Sub-selections
-  const [sampleCategory, setSampleCategory] = useState<string>("");
-  const [sampleType, setSampleType] = useState<string>("ALL"); // LIVE, DEMO, ALL
-  const [selectedPackageIds, setSelectedPackageIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!isOpen) {
       setLastOriginalDraft(null);
       setImproveError(null);
       setIsImproving(false);
+      setSelectedSampleIds(new Set());
+      setSampleCategory("");
+      setSampleType("ALL");
     }
   }, [isOpen]);
 
@@ -111,67 +279,28 @@ export function WhatsAppTemplatePicker({
     tpl: any,
     currentPackages: WebsitePackage[] = packages,
     currentSelectedPkgIds: Set<string> = selectedPackageIds,
-    currentSamples: WebsiteSample[] = samples
+    currentSamples: WebsiteSample[] = samples,
+    currentSelectedSampleIds: Set<string> = selectedSampleIds
   ) => {
-    let msg = tpl?.message || tpl?.body || "";
-    
-    // Replace standard variables safely
-    msg = msg.replace(/{{leadName}}/g, lead?.name || "{{leadName}}");
-    msg = msg.replace(/{{phone}}/g, lead?.phone || "{{phone}}");
-    msg = msg.replace(/{{quotedAmount}}/g, lead?.quotedAmount ? `₹${Number(lead.quotedAmount).toLocaleString('en-IN')}` : "{{quotedAmount}}");
-    msg = msg.replace(/{{status}}/g, lead?.status || "{{status}}");
-    msg = msg.replace(/{{followUpDate}}/g, lead?.followUpDate || "{{followUpDate}}");
-
-    if (tpl?.title === "Website Samples") {
-      const filteredSamples = currentSamples.filter(s => 
-        (sampleCategory ? s.category === sampleCategory : true) &&
-        (sampleType === "ALL" ? true : s.type === sampleType) &&
-        s.isActive
-      );
-      
-      if (config?.sampleId || config?.category) {
-        // Use exact requested format for direct sample sharing
-        if (config.sampleId) {
-          const s = currentSamples.find(s => s.id === config.sampleId);
-          if (s) {
-            msg = `What's up from you?\n\nSharing an ${s.category} website sample:\n\n${s.label || s.url}\n${s.url}\n\nPlease check it and let me know if you like this style.`;
-          }
-        } else if (config.category) {
-          const links = filteredSamples.map(s => `• ${s.label ? s.label + " - " : ""}${s.url}`).join("\n");
-          msg = `What's up from you?\n\nSharing some ${config.category} website samples:\n\n${links}\n\nPlease check them and let me know if you like this style.`;
-        }
-      } else {
-        const links = filteredSamples.map(s => `• ${s.label ? s.label + " - " : ""}${s.url}`).join("\n");
-        msg = msg.replace(/{{selectedSampleLinks}}/g, links || "(No samples selected)");
-      }
-    }
-
-    if (tpl?.title === "Packages / Pricing") {
-      const activePkgs = currentPackages.filter((p) => p.isActive);
-      const selectedPkgs = activePkgs.filter((p) => currentSelectedPkgIds.has(p.id));
-      
-      if (config?.packageId && (currentSelectedPkgIds.has(config.packageId) || selectedPkgs.length === 1)) {
-        // Direct package sharing with single package canonical format
-        const p = currentPackages.find((pkg) => pkg.id === config.packageId) || selectedPkgs[0];
-        if (p) {
-          msg = formatSinglePackageForMessage(p);
-        } else {
-          msg = msg.replace(/{{packagePricingLinks}}/g, formatPackageListForMessage(selectedPkgs));
-        }
-      } else {
-        const pkgsToFormat = selectedPkgs.length > 0 ? selectedPkgs : [];
-        msg = msg.replace(/{{packagePricingLinks}}/g, formatPackageListForMessage(pkgsToFormat));
-      }
-    }
-
-    return msg;
+    return interpolateWhatsAppMessage({
+      template: tpl,
+      lead,
+      packages: currentPackages,
+      selectedPackageIds: currentSelectedPkgIds,
+      samples: currentSamples,
+      selectedSampleIds: currentSelectedSampleIds,
+      config,
+      sampleCategory,
+      sampleType,
+    });
   };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleSelectTemplate = (
     tpl: any,
     overridePkgIds?: Set<string>,
-    overridePackages?: WebsitePackage[]
+    overridePackages?: WebsitePackage[],
+    overrideSampleIds?: Set<string>
   ) => {
     setSelectedTemplateId(tpl.id);
     const pkgsToUse = overridePackages || packages;
@@ -180,7 +309,12 @@ export function WhatsAppTemplatePicker({
       pkgIds = new Set(pkgsToUse.filter((p) => p.isActive).map((p) => p.id));
       setSelectedPackageIds(pkgIds);
     }
-    setCustomMessage(interpolateMessage(tpl, pkgsToUse, pkgIds, samples));
+    let sampleIds = overrideSampleIds !== undefined ? overrideSampleIds : selectedSampleIds;
+    if (tpl?.title === "Website Samples" && overrideSampleIds === undefined && !config?.sampleId) {
+      sampleIds = new Set();
+      setSelectedSampleIds(sampleIds);
+    }
+    setCustomMessage(interpolateMessage(tpl, pkgsToUse, pkgIds, samples, sampleIds));
     setLastOriginalDraft(null);
     setImproveError(null);
   };
@@ -226,6 +360,7 @@ export function WhatsAppTemplatePicker({
       if (config?.templateTitle) {
         const tpl = templates.find(t => t.title === config.templateTitle) || templates[0];
         let nextPkgIds = selectedPackageIds;
+        let nextSampleIds = new Set<string>();
         if (config.packageId) {
           nextPkgIds = new Set([config.packageId]);
           // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -237,30 +372,36 @@ export function WhatsAppTemplatePicker({
             setSampleCategory(s.category);
             // eslint-disable-next-line react-hooks/set-state-in-effect
             setSampleType(s.type);
+            nextSampleIds = new Set([config.sampleId]);
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setSelectedSampleIds(nextSampleIds);
           }
         } else if (config.category) {
           // eslint-disable-next-line react-hooks/set-state-in-effect
           setSampleCategory(config.category);
           // eslint-disable-next-line react-hooks/set-state-in-effect
           setSampleType("ALL");
+          nextSampleIds = new Set();
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setSelectedSampleIds(nextSampleIds);
         }
-        handleSelectTemplate(tpl, nextPkgIds, packages);
+        handleSelectTemplate(tpl, nextPkgIds, packages, nextSampleIds);
       } else if (!selectedTemplateId) {
         const defaultTpl = templates.find(t => t.title === "Introduction") || templates[0];
-        handleSelectTemplate(defaultTpl, undefined, packages);
+        handleSelectTemplate(defaultTpl, undefined, packages, new Set());
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, templates, config]);
+  }, [isOpen, templates, config, samples]);
 
   // Re-generate message if sub-selections or packages change
   useEffect(() => {
     const tpl = templates.find(t => t.id === selectedTemplateId);
     if (!tpl) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCustomMessage(interpolateMessage(tpl, packages, selectedPackageIds, samples));
+    setCustomMessage(interpolateMessage(tpl, packages, selectedPackageIds, samples, selectedSampleIds));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sampleCategory, sampleType, selectedPackageIds, packages, samples, selectedTemplateId]);
+  }, [sampleCategory, sampleType, selectedPackageIds, selectedSampleIds, packages, samples, selectedTemplateId]);
 
 
   const handleOpenWhatsApp = () => {
@@ -284,6 +425,19 @@ export function WhatsAppTemplatePicker({
 
   const activeTemplate = templates.find(t => t.id === selectedTemplateId);
   const sampleCategories = Array.from(new Set(samples.filter(s => s.isActive).map(s => s.category)));
+  const displayedSamples = samples.filter(
+    (s) =>
+      (sampleCategory ? s.category === sampleCategory : true) &&
+      (sampleType === "ALL" ? true : s.type === sampleType) &&
+      s.isActive
+  );
+
+  const handleSelectAllSamples = () => {
+    const targets = displayedSamples.length > 0 ? displayedSamples : samples.filter((s) => s.isActive);
+    const next = new Set(selectedSampleIds);
+    targets.forEach((s) => next.add(s.id));
+    setSelectedSampleIds(next);
+  };
 
   return (
     <BottomSheet
@@ -341,21 +495,98 @@ export function WhatsAppTemplatePicker({
 
         {/* Sub-selections based on Template */}
         {activeTemplate?.title === "Website Samples" && (
-          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-2">
-            <p className="text-[13px] font-bold text-slate-700 mb-1">Select Sample Category</p>
-            <div className="flex flex-wrap gap-1.5">
-              {sampleCategories.map(cat => (
-                <button key={cat} onClick={() => setSampleCategory(cat === sampleCategory ? "" : cat)} className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${sampleCategory === cat ? "bg-slate-800 text-white border-slate-800" : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100 active:bg-slate-200"}`}>
-                  {cat}
-                </button>
-              ))}
+          <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 space-y-2.5">
+            <div>
+              <p className="text-[13px] font-bold text-slate-700 mb-1">Select Sample Category</p>
+              <div className="flex flex-wrap gap-1.5">
+                {sampleCategories.map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSampleCategory(cat === sampleCategory ? "" : cat)}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                      sampleCategory === cat
+                        ? "bg-slate-800 text-white border-slate-800"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100 active:bg-slate-200"
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-1.5 mt-2">
+                {["LIVE", "DEMO", "ALL"].map(type => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setSampleType(type)}
+                    className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${
+                      sampleType === type
+                        ? "bg-emerald-100 text-emerald-800 border-emerald-200"
+                        : "bg-white text-slate-500 border-slate-200 hover:bg-slate-100 active:bg-slate-200"
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex gap-1.5 mt-2">
-              {["LIVE", "DEMO", "ALL"].map(type => (
-                <button key={type} onClick={() => setSampleType(type)} className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-colors ${sampleType === type ? "bg-emerald-100 text-emerald-800 border-emerald-200" : "bg-white text-slate-500 border-slate-200 hover:bg-slate-100 active:bg-slate-200"}`}>
-                  {type}
-                </button>
-              ))}
+
+            <div className="pt-2 border-t border-slate-200/60">
+              <div className="flex justify-between items-center mb-1.5">
+                <p className="text-[13px] font-bold text-slate-700">
+                  Select Samples ({selectedSampleIds.size} selected)
+                </p>
+                <div className="flex items-center gap-2">
+                  {selectedSampleIds.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSampleIds(new Set())}
+                      className="text-[11px] font-semibold text-slate-500 hover:text-slate-700 hover:underline"
+                    >
+                      Deselect All
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSelectAllSamples}
+                    className="text-[11px] font-semibold text-emerald-600 hover:underline"
+                  >
+                    Select All
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1 max-h-48 overflow-y-auto pr-1">
+                {displayedSamples.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-2 text-center">No samples found for this filter.</p>
+                ) : (
+                  displayedSamples.map((sample) => (
+                    <label
+                      key={sample.id}
+                      className="flex items-center gap-2 text-[13px] font-medium text-slate-700 cursor-pointer p-1.5 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedSampleIds.has(sample.id)}
+                        onChange={(e) => {
+                          const newSet = new Set(selectedSampleIds);
+                          if (e.target.checked) newSet.add(sample.id);
+                          else newSet.delete(sample.id);
+                          setSelectedSampleIds(newSet);
+                        }}
+                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-600"
+                      />
+                      <div className="flex flex-1 items-center justify-between min-w-0">
+                        <span className="truncate">{sample.label || sample.url}</span>
+                        <span className="text-[10px] text-slate-400 font-normal ml-2 shrink-0">
+                          {sample.category} • {sample.type}
+                        </span>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         )}

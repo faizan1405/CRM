@@ -1,6 +1,6 @@
 import { ActionCard } from "@/components/action-card";
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
-import { Building2, Phone, MessageCircle, CalendarPlus, GripVertical } from "lucide-react";
+import { Building2, Phone, MessageCircle, CalendarPlus, GripVertical, Star, Clock } from "lucide-react";
 import type { Lead } from "@/features/leads/types";
 import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
 import { QuickStatusChip } from "@/features/leads/quick-status-chip";
@@ -11,10 +11,12 @@ import { CopyContactButton } from "@/components/copy-contact-button";
 export function PipelineCard({
   lead,
   onClick,
+  onTogglePin,
   dragHandleProps,
 }: {
   lead: Lead;
   onClick: () => void;
+  onTogglePin?: (lead: Lead) => void;
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
 }) {
   const ai = lead.aiAttention || deriveAIAttention(lead);
@@ -44,11 +46,42 @@ export function PipelineCard({
             <CopyContactButton name={lead.name} phone={lead.phone} />
           </div>
         </div>
-        <div className="flex flex-col items-end shrink-0 gap-1.5">
-          <span className="text-[10px] font-bold text-slate-400 bg-slate-100/80 px-1.5 py-0.5 rounded-md">
-            Age {formatLeadAge(lead.createdAt)}
-          </span>
-          <QuickStatusChip quickStatus={lead.quickStatus} leadStatus={lead.status} readOnly size="sm" />
+        <div className="flex flex-col items-end shrink-0 gap-1">
+          <div className="flex items-center gap-1">
+            {onTogglePin && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTogglePin(lead);
+                }}
+                aria-label={lead.isPinned ? `Unpin ${lead.name}` : `Pin ${lead.name}`}
+                title={lead.isPinned ? "Unpin lead" : "Pin lead"}
+                className="p-1 rounded hover:bg-amber-50 active:scale-95 transition-all min-h-[32px] min-w-[32px] flex items-center justify-center cursor-pointer"
+              >
+                <Star
+                  size={15}
+                  className={lead.isPinned ? "fill-amber-400 text-amber-500" : "text-slate-300 hover:text-amber-500"}
+                />
+              </button>
+            )}
+            <span className="text-[10px] font-bold text-slate-400 bg-slate-100/80 px-1.5 py-0.5 rounded-md">
+              Age {formatLeadAge(lead.createdAt)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            {lead.staleInfo?.isStale && (
+              <span
+                role="status"
+                title={lead.staleInfo.staleLabel}
+                className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+              >
+                <Clock size={10} className="text-amber-600 shrink-0" />
+                <span>{lead.staleInfo.staleLabel}</span>
+              </span>
+            )}
+            <QuickStatusChip quickStatus={lead.quickStatus} leadStatus={lead.status} readOnly size="sm" />
+          </div>
         </div>
       </div>
 

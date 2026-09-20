@@ -13,6 +13,7 @@
     "@hello-pangea/dnd": "^18.0.1",
     "bcryptjs": "^3.0.3",
     "date-fns": "^4.4.0",
+    "exceljs": "^4.4.0",
     "groq-sdk": "^1.6.0",
     "jose": "^6.2.12",
     "lucide-react": "^1.46.0",

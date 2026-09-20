@@ -12,6 +12,7 @@ import { FollowUpEmptyState } from "./empty-state";
 import { PageHeader } from "@/components/page-header";
 import type { FollowUp, NewFollowUpInput } from "./types";
 import { scheduleLeadFollowUp, markFollowUpComplete, cancelFollowUp } from "@/app/actions/follow-ups";
+import { togglePinLead } from "@/app/actions/leads";
 import {
   getFollowUpStatusInfo,
   isFollowUpToday,
@@ -106,6 +107,41 @@ export function FollowUpsWorkspace({
     },
     []
   );
+
+  const handleTogglePin = async (followUp: FollowUp) => {
+    if (!followUp.lead) return;
+    const currentPinned = Boolean(followUp.lead.isPinned);
+    const nextPinned = !currentPinned;
+    setFollowUps((prev) =>
+      prev.map((f) =>
+        f.leadId === followUp.leadId && f.lead
+          ? { ...f, lead: { ...f.lead, isPinned: nextPinned } }
+          : f
+      )
+    );
+    try {
+      const result = await togglePinLead(followUp.leadId, nextPinned);
+      if (!result.success) {
+        setFollowUps((prev) =>
+          prev.map((f) =>
+            f.leadId === followUp.leadId && f.lead
+              ? { ...f, lead: { ...f.lead, isPinned: currentPinned } }
+              : f
+          )
+        );
+        showToast(result.error, "error");
+      }
+    } catch {
+      setFollowUps((prev) =>
+        prev.map((f) =>
+          f.leadId === followUp.leadId && f.lead
+            ? { ...f, lead: { ...f.lead, isPinned: currentPinned } }
+            : f
+        )
+      );
+      showToast("Failed to update pin state.", "error");
+    }
+  };
 
   const leadsList = useMemo(() => {
     if (editingFollowUp?.lead && !leads.some((l) => l.id === editingFollowUp.leadId)) {
@@ -322,6 +358,7 @@ export function FollowUpsWorkspace({
                   }}
                   onCancel={() => handleCancel(followUp)}
                   onOpenLead={() => navigation?.openLead(followUp.leadId, "followups")}
+                  onTogglePin={() => handleTogglePin(followUp)}
                 />
               );
             })}

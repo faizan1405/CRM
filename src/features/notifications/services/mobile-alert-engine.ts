@@ -102,14 +102,24 @@ export async function evaluateMobileAlerts(
   const alerts: MobileAlertItem[] = [];
 
   // Fetch pending follow-ups with lead information
-  const pendingFollowUps = await db.followUp.findMany({
+  const rawPendingFollowUps = await db.followUp.findMany({
     where: {
       status: "PENDING",
       lead: { isWaste: false, status: { notIn: ["WON", "LOST"] } },
     },
     include: { lead: true },
-    orderBy: { scheduledAt: "asc" },
+    orderBy: { updatedAt: "desc" },
   });
+
+  // Enforce single canonical active follow-up per lead
+  const pendingFollowUps: typeof rawPendingFollowUps = [];
+  const seenLeadIds = new Set<string>();
+  for (const f of rawPendingFollowUps) {
+    if (!seenLeadIds.has(f.leadId)) {
+      seenLeadIds.add(f.leadId);
+      pendingFollowUps.push(f);
+    }
+  }
 
   for (const f of pendingFollowUps) {
     if (!f.lead) continue;

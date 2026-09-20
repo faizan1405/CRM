@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { changeLeadStatus, deleteLead, getLead, updateLead } from "@/app/actions/leads";
+import { changeLeadStatus, deleteLead, getLead, togglePinLead, updateLead } from "@/app/actions/leads";
 import { scheduleLeadFollowUp } from "@/app/actions/follow-ups";
 import { useLeadActivities } from "@/features/activity/use-activities";
 import type { Lead, LeadStatus } from "./types";
@@ -39,6 +39,7 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [followUpLead, setFollowUpLead] = useState<Lead | { id: string; name: string } | null>(null);
+  const [followUpSuggestion, setFollowUpSuggestion] = useState<import("@/lib/follow-up-suggestions").FollowUpSuggestion | null>(null);
   const activity = useLeadActivities(lead?.id);
   const { showToast } = useToast();
 
@@ -55,7 +56,7 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
     } catch { if (current === requestId.current) setError("Could not load this lead. Please try again."); }
     finally { if (current === requestId.current) setLoadingId(null); }
   }, []);
-  const openFollowUp = useCallback((value: { id: string; name: string }) => { setError(null); setFollowUpLead(value); }, []);
+  const openFollowUp = useCallback((value: { id: string; name: string }) => { setError(null); setFollowUpSuggestion(null); setFollowUpLead(value); }, []);
   const navigation = useMemo(() => ({ openLead: (id: string, initialAction?: DetailAction) => { void openLead(id, initialAction); }, openFollowUp }), [openLead, openFollowUp]);
   const statusChange = async (status: LeadStatus, reason?: LostReasonSubmission) => {
     if (!lead) return;
@@ -66,7 +67,11 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
       const result = await changeLeadStatus(lead.id, status, reason?.reason, reason?.notes);
       if (result.success) { 
         setLead(result.data); setLost(false); await activity.refresh(); router.refresh(); 
-        if (status !== "Lost" && status !== "Won") {
+        if (status === "Proposal Sent") {
+          const { getFollowUpSuggestion } = await import("@/lib/follow-up-suggestions");
+          setFollowUpSuggestion(getFollowUpSuggestion("PROPOSAL_SENT"));
+          setFollowUpLead(result.data);
+        } else if (status !== "Lost" && status !== "Won") {
           showToast(`Status changed to ${status}`, "success", {
             label: "Undo",
             onClick: async () => {
@@ -79,20 +84,23 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
             }
           });
         }
-      }
-      else setError(result.error);
+      } else setError(result.error);
     } catch { setError("Could not update this lead. Please try again."); }
     finally { setSaving(false); }
   };
-  const saveFollowUp = async (data: NewFollowUpInput) => {
+  const saveFollowUp = async (data: NewFollowUpInput & { mode?: "reschedule" | "create" }) => {
     setSaving(true); setError(null);
     const form = new FormData();
-    if (data.id) form.set("id", data.id);
-    else if (followUpLead && "activeFollowUp" in followUpLead && followUpLead.activeFollowUp?.id) {
+    if (data.mode === "create") {
+      form.set("mode", "create");
+    } else if (data.id) {
+      form.set("id", data.id);
+    } else if (followUpLead && "activeFollowUp" in followUpLead && followUpLead.activeFollowUp?.id) {
       form.set("id", followUpLead.activeFollowUp.id);
     }
+    if (data.mode) form.set("mode", data.mode);
     for (const [key, value] of Object.entries(data)) {
-      if (value !== undefined) form.set(key, value);
+      if (value !== undefined && key !== "mode") form.set(key, value);
     }
     try {
       const result = await scheduleLeadFollowUp(form);
@@ -167,6 +175,26 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const togglePin = async () => {
+      if (!lead) return;
+      const nextPinned = !lead.isPinned;
+      setLead({ ...lead, isPinned: nextPinned });
+      try {
+        const result = await togglePinLead(lead.id, nextPinned);
+        if (result.success) {
+          setLead(result.data);
+          router.refresh();
+          showToast(nextPinned ? "Lead pinned to shortlist" : "Lead removed from shortlist", "success");
+        } else {
+          setLead({ ...lead, isPinned: !nextPinned });
+          setError(result.error);
+        }
+      } catch {
+        setLead({ ...lead, isPinned: !nextPinned });
+        setError("Could not update pin state.");
+      }
+    };
+
     return <NavigationContext.Provider value={navigation}>
     {children}
     {(loadingId || (!lead && error && !followUpLead)) && <div className="fixed inset-0 z-50 bg-slate-950/45" onClick={close}>
@@ -177,11 +205,13 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
     </div>}
     {lead && !editing && <LeadDetailPanel key={lead.id} lead={lead} saving={saving} onClose={close} onEdit={() => setEditing(true)}
       onStatusChange={statusChange} onDelete={async () => setDeleteTarget(lead)}
+      onLeadUpdated={(updated) => { setLead(updated); router.refresh(); }}
       activities={activity.activities} activityFilter={activity.filter} onActivityFilterChange={activity.setFilter}
       onAddNote={activity.handleAddNote} onRefreshActivities={activity.refresh} onEditNote={activity.handleEditNote} onDeleteNote={activity.handleDeleteNote}
       onAddFollowUp={() => setFollowUpLead(lead)} initialAction={action} 
       onMarkWaste={!lead.isWaste ? () => toggleWaste(true) : undefined}
       onRestoreWaste={lead.isWaste ? () => toggleWaste(false) : undefined}
+      onTogglePin={togglePin}
       />}
     <DeleteLeadDialog lead={deleteTarget} saving={saving} onCancel={() => { if (!saving) setDeleteTarget(null); }} onDelete={async () => {
         if (!deleteTarget || saving) return;
@@ -194,7 +224,23 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
       try { const result = await updateLead(lead.id, form); if (result.success) { setLead(result.data); setEditing(false); router.refresh(); } else setError(result.error); }
       catch { setError("Could not save this lead."); } finally { setSaving(false); }
     }} />}
-    {followUpLead && <FollowUpForm isOpen followUp={"activeFollowUp" in followUpLead ? (followUpLead.activeFollowUp ?? undefined) : undefined} defaultLeadId={followUpLead.id} leads={[{ id: followUpLead.id, name: followUpLead.name }]} saving={saving} onClose={() => { if (!saving) setFollowUpLead(null); }} onSubmit={saveFollowUp} />}
+    {followUpLead && (
+      <FollowUpForm
+        isOpen
+        followUp={"activeFollowUp" in followUpLead ? (followUpLead.activeFollowUp ?? undefined) : undefined}
+        defaultLeadId={followUpLead.id}
+        leads={[{ id: followUpLead.id, name: followUpLead.name }]}
+        saving={saving}
+        suggestion={followUpSuggestion}
+        onClose={() => {
+          if (!saving) {
+            setFollowUpLead(null);
+            setFollowUpSuggestion(null);
+          }
+        }}
+        onSubmit={saveFollowUp}
+      />
+    )}
     {lost && lead && <LostReasonDialog isOpen leadId={lead.id} leadName={lead.name} isSubmitting={saving} onCancel={() => { if (!saving) setLost(false); }} onConfirm={reason => statusChange("Lost", reason)} />}
     {error && (lead || followUpLead) && <div role="alert" className="fixed left-3 right-3 top-3 z-[70] mx-auto flex max-w-lg items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}<button type="button" onClick={() => setError(null)}>Dismiss</button></div>}
   </NavigationContext.Provider>;

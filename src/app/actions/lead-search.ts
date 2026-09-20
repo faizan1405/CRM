@@ -14,6 +14,7 @@ export async function searchLeadsForWhatsApp(query: string) {
     const leads = await db.lead.findMany({
       where: {
         deletedAt: null,
+        mergedIntoLeadId: null,
         OR: [
           { name: { contains: safeQuery, mode: "insensitive" } },
           { phone: { contains: safeQuery } }
@@ -49,6 +50,7 @@ export async function globalQuickSearch(query: string) {
     const leads = await db.lead.findMany({
       where: {
         deletedAt: null,
+        mergedIntoLeadId: null,
         OR: [
           { name: { contains: safeQuery, mode: "insensitive" } },
           { phone: { contains: safeQuery } }
@@ -60,13 +62,31 @@ export async function globalQuickSearch(query: string) {
         phone: true,
         status: true,
         nextFollowUpDate: true,
-        notes: true
+        notes: true,
+        followUps: {
+          where: { status: "PENDING" },
+          orderBy: { updatedAt: "desc" },
+          take: 1,
+          select: {
+            scheduledAt: true,
+          },
+        },
       },
       take: 15,
       orderBy: { updatedAt: "desc" }
     });
 
-    const mapped = leads.map(l => ({ ...l, status: statusFromDatabase[l.status] }));
+    const mapped = leads.map(l => {
+      const activeFollowUp = l.followUps?.[0]?.scheduledAt;
+      return {
+        id: l.id,
+        name: l.name,
+        phone: l.phone,
+        status: statusFromDatabase[l.status],
+        nextFollowUpDate: activeFollowUp ? activeFollowUp.toISOString() : (l.nextFollowUpDate ? l.nextFollowUpDate.toISOString() : null),
+        notes: l.notes,
+      };
+    });
     return { success: true, data: mapped };
   } catch (error) {
     console.error("Global search failed:", error);

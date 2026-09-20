@@ -29,10 +29,10 @@ function mapBackendActivity(ba: LeadActivity): Activity {
     case "LEAD_CREATED":
       return { ...base, type: "LEAD_CREATED" };
     case "LEAD_UPDATED":
-      return { ...base, type: "LEAD_UPDATED", changes: [] };
+      return { ...base, type: "LEAD_UPDATED", changes: Array.isArray(meta.changes) ? (meta.changes as string[]) : [] };
     default:
       // Fallback for any unknown types, mapping to LEAD_UPDATED just to satisfy type
-      return { ...base, type: "LEAD_UPDATED", changes: [] };
+      return { ...base, type: "LEAD_UPDATED", changes: Array.isArray(meta.changes) ? (meta.changes as string[]) : [] };
   }
 }
 

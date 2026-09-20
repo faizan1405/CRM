@@ -10,6 +10,7 @@ import {
   rewritePersonalNoteClearly as rewriteService,
   summarizePersonalNote as summarizeService,
   transformPersonalNote as transformService,
+  improvePersonalNoteService,
 } from "@/features/personal-notes/services/notes-ai-transformer";
 
 class UserFacingError extends Error {}
@@ -328,3 +329,34 @@ export async function transformPersonalNoteAction(
     return { success: false, error: cleanError(error) };
   }
 }
+
+/**
+ * Narrow server-side action to lightly rewrite a personal CRM note for clarity and readability.
+ * Preserves all facts, numbers, amounts, dates, names, URLs, and natural language style without inventing anything.
+ * Does NOT auto-save the note.
+ */
+export async function improvePersonalNote(
+  input: string | { text?: string; content?: string }
+): Promise<PersonalNoteActionResult<string> & { improvedText?: string }> {
+  try {
+    await requireAuthenticatedUser();
+
+    const rawText = typeof input === "string" ? input : (input?.text ?? input?.content ?? "");
+    const trimmed = (rawText ?? "").trim();
+    if (!trimmed) {
+      return { success: false, error: "Note content cannot be empty." };
+    }
+
+    const improved = await improvePersonalNoteService(trimmed);
+    return {
+      success: true,
+      data: improved,
+      improvedText: improved,
+    };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+export const improvePersonalNoteAction = improvePersonalNote;
+

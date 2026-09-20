@@ -1,5 +1,5 @@
 /**
- * Phase 6 – Analytics Data Layer Types
+ * Phase 6 Â– Analytics Data Layer Types
  *
  * All types here are plain-JSON-safe (no Prisma Decimal, no Date objects,
  * no raw Prisma models). Safe to pass from Server Actions to Client Components.
@@ -27,7 +27,7 @@ export type FunnelStage = {
   /** Number of leads that have reached (or passed through) this stage */
   reached: number;
   /**
-   * Conversion rate from the previous stage, expressed as 0–1.
+   * Conversion rate from the previous stage, expressed as 0Â–1.
    * null means the data is unreliable (e.g., predates activity tracking)
    * or the previous stage count is 0.
    */
@@ -74,7 +74,7 @@ export type FollowUpBreakdown = {
   type: "CALL" | "WHATSAPP" | "EMAIL" | "OTHER" | string;
   /** Total follow-ups of this type (all statuses) */
   total: number;
-  /** Alias for total — used by Agent B components */
+  /** Alias for total Â— used by Agent B components */
   created: number;
   completed: number;
   pending: number;
@@ -127,7 +127,7 @@ export type PipelineHealthData = {
 
 /**
  * Derived win/loss summary used by Agent B's WinLossCard component.
- * winRate is expressed as a PERCENTAGE (0–100) to match the component's
+ * winRate is expressed as a PERCENTAGE (0Â–100) to match the component's
  * `data.winRate.toFixed(1) + "%"` rendering.
  */
 export type WinLossData = {
@@ -181,10 +181,12 @@ export type CoreMetrics = {
   wonLeads: number;
   /** Leads currently in LOST status, within the date range */
   lostLeads: number;
+  /** Leads currently in CONTACTED status, within the date range */
+  contactedLeads?: number;
 
   /**
    * Win Rate = Won / (Won + Lost)
-   * Uses ONLY WON and LOST leads — not total leads —
+   * Uses ONLY WON and LOST leads Â— not total leads Â—
    * because many leads are still open/active.
    * Returns 0 when denominator is 0.
    */
@@ -202,7 +204,7 @@ export type CoreMetrics = {
   /**
    * Sum of quotedAmount for leads in active statuses (current snapshot).
    * Active = NEW | CONTACTED | QUALIFIED | PROPOSAL_SENT.
-   * NOT date-filtered — reflects the current live pipeline.
+   * NOT date-filtered Â— reflects the current live pipeline.
    */
   openPipelineValue: number;
 
@@ -231,7 +233,7 @@ export type AnalyticsData = {
   };
   /** Core metrics. Also available as `kpis` for Agent B compatibility. */
   coreMetrics: CoreMetrics;
-  /** Alias for coreMetrics — used by Agent B's AnalyticsKpis component */
+  /** Alias for coreMetrics Â— used by Agent B's AnalyticsKpis component */
   kpis: CoreMetrics;
   funnel: FunnelStage[];
   revenueTrend: TrendPoint[];
@@ -239,7 +241,7 @@ export type AnalyticsData = {
   followUpPerformance: FollowUpPerformance;
   /**
    * Derived win/loss summary for Agent B's WinLossCard.
-   * winRate / lostRate are expressed as PERCENTAGES (0–100).
+   * winRate / lostRate are expressed as PERCENTAGES (0Â–100).
    */
   winLoss: WinLossData;
   pipelineHealth: PipelineHealthData;

@@ -14,8 +14,11 @@ import type {
  * Checks: 1. Phone number, 2. Email, 3. Name + Business.
  */
 export async function findPossibleDuplicateLead(
-  draft: StructuredLeadDraft
+  draft: StructuredLeadDraft,
+  options?: { excludeLeadId?: string }
 ): Promise<DuplicateLeadCandidate | null> {
+  const excludeWhere = options?.excludeLeadId ? { id: { not: options.excludeLeadId } } : {};
+
   // 1. Primary signal: Normalized phone number
   if (draft.phone) {
     const normalized = normalizePhone(draft.phone);
@@ -25,6 +28,8 @@ export async function findPossibleDuplicateLead(
       // Query database for matching phone numbers (matching last 5 or first 5 digits to handle formatted spaces)
       const candidates = await db.lead.findMany({
         where: {
+          ...excludeWhere,
+          deletedAt: null,
           OR: [
             { phone: { contains: targetDigits } },
             { phone: { contains: targetDigits.slice(-5) } },
@@ -71,6 +76,8 @@ export async function findPossibleDuplicateLead(
     const normalizedEmail = draft.email.trim().toLowerCase();
     const matched = await db.lead.findFirst({
       where: {
+        ...excludeWhere,
+        deletedAt: null,
         email: {
           equals: normalizedEmail,
           mode: "insensitive",
@@ -102,6 +109,8 @@ export async function findPossibleDuplicateLead(
   if (draft.name && draft.business && draft.name.trim() && draft.business.trim()) {
     const matched = await db.lead.findFirst({
       where: {
+        ...excludeWhere,
+        deletedAt: null,
         name: {
           equals: draft.name.trim(),
           mode: "insensitive",

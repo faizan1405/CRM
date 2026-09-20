@@ -8,11 +8,13 @@ import { NotificationsWorkspace } from "@/features/notifications";
 import { SalesAssetsWorkspace } from "@/features/sales-assets/components/sales-assets-workspace";
 import { GuideWorkspace } from "@/features/guide/guide-workspace";
 import { RecentlyDeletedWorkspace } from "@/features/recently-deleted/recently-deleted-workspace";
+import { ExportCenterWorkspace } from "@/features/export";
 import { 
   markNotificationRead, 
   markNotificationResolved, 
   dismissNotification 
 } from "@/app/actions/notifications";
+import { PAYMENT_TERMS } from "@/lib/payment-terms";
 import { 
   Server, 
   Sparkles, 
@@ -25,7 +27,8 @@ import {
   Briefcase,
   BookOpen,
   Trash2,
-  ChevronRight
+  ChevronRight,
+  FileSpreadsheet
 } from "lucide-react";
 
 export function SettingsWorkspace({
@@ -35,6 +38,7 @@ export function SettingsWorkspace({
   initialSamples = [],
   initialTemplates = [],
   initialDeletedLeads = [],
+  initialBusinessSummary = null,
   onCreateDemoLeads,
   onClearDemoLeads,
 }: SettingsWorkspaceProps) {
@@ -67,6 +71,7 @@ export function SettingsWorkspace({
       icon: Trash2,
       count: initialDeletedLeads.length || undefined
     },
+    { id: "export-reports", label: "Export & Reports", icon: FileSpreadsheet },
   ];
 
   return (
@@ -121,7 +126,7 @@ export function SettingsWorkspace({
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
               Secondary Hubs &amp; Tools
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
               <button
                 type="button"
                 onClick={() => handleTabChange("notifications")}
@@ -187,6 +192,23 @@ export function SettingsWorkspace({
                 <h3 className="mt-3 text-sm font-bold text-slate-900">Recently Deleted</h3>
                 <p className="mt-1 text-xs text-slate-500 line-clamp-2">
                   Inspect soft-deleted leads with one-click restore or permanent delete.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleTabChange("export-reports")}
+                className="flex flex-col text-left p-4 rounded-xl border border-slate-200 bg-white hover:border-blue-300 hover:shadow-sm transition-all group cursor-pointer"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+                    <FileSpreadsheet size={18} />
+                  </div>
+                  <ChevronRight size={16} className="text-slate-400 group-hover:text-indigo-600 transition-colors" />
+                </div>
+                <h3 className="mt-3 text-sm font-bold text-slate-900">Export &amp; Reports</h3>
+                <p className="mt-1 text-xs text-slate-500 line-clamp-2">
+                  Download CSV / Excel backups of leads, deals, payments, and summary.
                 </p>
               </button>
             </div>
@@ -270,6 +292,17 @@ export function SettingsWorkspace({
                     <span className="font-medium text-slate-700">Attention Signals &amp; Stale Alerts</span>
                     <span className="inline-flex items-center gap-1 font-semibold text-emerald-600">
                       <CheckCircle2 className="h-3.5 w-3.5" /> Operational
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-100">
+                    <div>
+                      <span className="font-medium text-slate-700">Commercial Payment Terms</span>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {PAYMENT_TERMS.advancePercent}% advance / {PAYMENT_TERMS.finalPercent}% {PAYMENT_TERMS.finalTiming}
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center gap-1 font-semibold text-emerald-600">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Canonical
                     </span>
                   </div>
                 </div>
@@ -373,6 +406,13 @@ export function SettingsWorkspace({
       {currentTab === "recently-deleted" && (
         <div className="space-y-4">
           <RecentlyDeletedWorkspace initialLeads={initialDeletedLeads} />
+        </div>
+      )}
+
+      {/* TAB CONTENT: Export & Reports */}
+      {currentTab === "export-reports" && (
+        <div className="space-y-4">
+          <ExportCenterWorkspace initialSummary={initialBusinessSummary} />
         </div>
       )}
     </div>

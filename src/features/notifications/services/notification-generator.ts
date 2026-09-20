@@ -49,7 +49,7 @@ export async function generateSmartNotifications(): Promise<{
   const candidates: NotificationCandidate[] = [];
 
   // 1. Fetch Active Leads and Pending Follow-Ups
-  const [activeLeads, pendingFollowUps] = await Promise.all([
+  const [activeLeads, rawPendingFollowUps] = await Promise.all([
     db.lead.findMany({
       where: { isWaste: false,  status: { notIn: ["WON", "LOST"] } },
       include: {
@@ -60,16 +60,26 @@ export async function generateSmartNotifications(): Promise<{
         },
         followUps: {
           where: { status: "PENDING" },
-          orderBy: { scheduledAt: "asc" },
+          orderBy: { updatedAt: "desc" },
         },
       },
     }),
     db.followUp.findMany({
       where: { status: "PENDING", lead: { isWaste: false } },
       include: { lead: true },
-      orderBy: { scheduledAt: "asc" },
+      orderBy: { updatedAt: "desc" },
     }),
   ]);
+
+  // Enforce single canonical active follow-up per lead
+  const pendingFollowUps: typeof rawPendingFollowUps = [];
+  const seenLeadIds = new Set<string>();
+  for (const f of rawPendingFollowUps) {
+    if (!seenLeadIds.has(f.leadId)) {
+      seenLeadIds.add(f.leadId);
+      pendingFollowUps.push(f);
+    }
+  }
 
   // Rule A: Overdue Follow-ups (CRITICAL)
   for (const f of pendingFollowUps) {
