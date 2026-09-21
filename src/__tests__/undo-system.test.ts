@@ -5,6 +5,8 @@ import { scheduleLeadFollowUp, markFollowUpComplete, cancelFollowUp } from "@/ap
 import { addLeadNote, updateLeadNote, deleteLeadNote } from "@/app/actions/activities";
 import { upsertLeadDeal, createOtherClientDeal, deleteDeal, addDealPayment, deleteDealPayment } from "@/app/actions/deals";
 import { createPersonalNote, updatePersonalNote, deletePersonalNote } from "@/app/actions/personal-notes";
+import { createBulkLeadsAction } from "@/app/actions/ai-lead-entry";
+import type { BulkCreateLeadItem } from "@/features/leads/ai-entry-types";
 import { performUndo } from "@/app/actions/undo";
 import { executeUndo } from "@/features/undo/services/undo-engine";
 
@@ -440,5 +442,283 @@ describe("Global Undo System", () => {
     const restoredNote = await db.personalNote.findUnique({ where: { id: noteId } });
     expect(restoredNote?.title).toBe("Strategic Objectives Q4");
     expect(restoredNote?.content).toBe("Finalize pipeline conversion metrics and audit undo capabilities.");
+  });
+
+  // =========================================================================
+  // 9. Follow-up Cancellation Undo & Single Active Invariant Safety
+  // =========================================================================
+  describe("9. Follow-up Cancellation Undo & Invariant Guards", () => {
+    it("should cancel follow-up, return undoId, and restore same FollowUp row with original scheduledAt, note, type, and nextFollowUpDate", async () => {
+      const phone = `+9198${Date.now().toString().slice(-6)}11`;
+      const formData = new FormData();
+      formData.set("name", "Followup Cancel Lead");
+      formData.set("phone", phone);
+      const createRes = await createLead(formData);
+      expect(createRes.success).toBe(true);
+      if (!createRes.success) return;
+      const leadId = createRes.data.id;
+      createdLeadIds.push(leadId);
+
+      // Schedule follow-up
+      const originalScheduledAt = "2026-11-15T10:00:00.000Z";
+      const fuForm = new FormData();
+      fuForm.set("leadId", leadId);
+      fuForm.set("scheduledAt", originalScheduledAt);
+      fuForm.set("type", "Call");
+      fuForm.set("note", "Original follow-up note for cancel test");
+
+      const schedRes = await scheduleLeadFollowUp(fuForm);
+      expect(schedRes.success).toBe(true);
+      if (!schedRes.success) return;
+      const fuId = schedRes.data.id;
+
+      // Verify lead.nextFollowUpDate is set
+      const leadBeforeCancel = await db.lead.findUnique({ where: { id: leadId } });
+      expect(leadBeforeCancel?.nextFollowUpDate).not.toBeNull();
+
+      // 1. cancel returns undoId
+      const cancelRes = await cancelFollowUp(fuId);
+      expect(cancelRes.success).toBe(true);
+      expect(cancelRes.undoId).toBeDefined();
+
+      // Verify followUp is CANCELLED (not deleted!) and Lead.nextFollowUpDate is cleared
+      const afterCancelFu = await db.followUp.findUnique({ where: { id: fuId } });
+      expect(afterCancelFu?.status).toBe("CANCELLED");
+      const leadAfterCancel = await db.lead.findUnique({ where: { id: leadId } });
+      expect(leadAfterCancel?.nextFollowUpDate).toBeNull();
+
+      // 2. Undo restores same FollowUp row
+      const undoRes = await performUndo(cancelRes.undoId!);
+      expect(undoRes.success).toBe(true);
+
+      const restoredFu = await db.followUp.findUnique({ where: { id: fuId } });
+      expect(restoredFu?.id).toBe(fuId); // Same FollowUp row preserved!
+      expect(restoredFu?.status).toBe("PENDING");
+
+      // 3. original scheduledAt, note, type restored
+      expect(new Date(restoredFu!.scheduledAt).toISOString()).toBe(originalScheduledAt);
+      expect(restoredFu?.note).toBe("Original follow-up note for cancel test");
+      expect(restoredFu?.type).toBe("CALL");
+
+      // 4. nextFollowUpDate restored
+      const restoredLead = await db.lead.findUnique({ where: { id: leadId } });
+      expect(restoredLead?.nextFollowUpDate).not.toBeNull();
+
+      // 5. no duplicate PENDING follow-up
+      const pendingFus = await db.followUp.findMany({
+        where: { leadId, status: "PENDING" },
+      });
+      expect(pendingFus.length).toBe(1);
+    });
+
+    it("should safely reject restore if another pending follow-up exists on the lead", async () => {
+      const phone = `+9198${Date.now().toString().slice(-6)}12`;
+      const formData = new FormData();
+      formData.set("name", "Followup Conflict Lead");
+      formData.set("phone", phone);
+      const createRes = await createLead(formData);
+      expect(createRes.success).toBe(true);
+      if (!createRes.success) return;
+      const leadId = createRes.data.id;
+      createdLeadIds.push(leadId);
+
+      // Follow-up 1
+      const fu1Form = new FormData();
+      fu1Form.set("leadId", leadId);
+      fu1Form.set("scheduledAt", "2026-11-20T10:00:00.000Z");
+      fu1Form.set("type", "Call");
+      fu1Form.set("note", "First follow-up");
+      const fu1Res = await scheduleLeadFollowUp(fu1Form);
+      expect(fu1Res.success).toBe(true);
+      if (!fu1Res.success) return;
+      const fu1Id = fu1Res.data.id;
+
+      // Cancel Follow-up 1
+      const cancel1 = await cancelFollowUp(fu1Id);
+      expect(cancel1.success).toBe(true);
+      expect(cancel1.undoId).toBeDefined();
+
+      // Schedule another follow-up 2 (now active PENDING)
+      const fu2Form = new FormData();
+      fu2Form.set("leadId", leadId);
+      fu2Form.set("scheduledAt", "2026-11-25T14:00:00.000Z");
+      fu2Form.set("type", "WhatsApp");
+      fu2Form.set("note", "Second follow-up created while first was cancelled");
+      const fu2Res = await scheduleLeadFollowUp(fu2Form);
+      expect(fu2Res.success).toBe(true);
+      if (!fu2Res.success) return;
+
+      // Attempt to undo cancellation of follow-up 1 while follow-up 2 is active PENDING
+      // Must reject safely with the existing concurrency/invariant message
+      const undoCancel1 = await performUndo(cancel1.undoId!);
+      expect(undoCancel1.success).toBe(false);
+      expect(undoCancel1.error).toContain("Unable to undo because this record was changed afterward");
+
+      // Verify no duplicate pending follow-ups exist: exactly 1 remains
+      const pendingFus = await db.followUp.findMany({
+        where: { leadId, status: "PENDING" },
+      });
+      expect(pendingFus.length).toBe(1);
+      expect(pendingFus[0].id).toBe(fu2Res.data.id);
+
+      // Follow-up 1 remains CANCELLED
+      const checkFu1 = await db.followUp.findUnique({ where: { id: fu1Id } });
+      expect(checkFu1?.status).toBe("CANCELLED");
+    });
+  });
+
+  // =========================================================================
+  // 10. Bulk AI Import Batch Undo & Financial/Modification Safety Guards
+  // =========================================================================
+  describe("10. Bulk AI Import Batch Undo", () => {
+    it("should import 3 new leads with ONE batch undoId and reverse all safe created rows without touching unrelated leads", async () => {
+      // 0. Pre-existing unrelated lead
+      const unrelatedPhone = `+9198${Date.now().toString().slice(-6)}19`;
+      const unrelatedForm = new FormData();
+      unrelatedForm.set("name", "Unrelated Existing Lead");
+      unrelatedForm.set("phone", unrelatedPhone);
+      const unrelatedRes = await createLead(unrelatedForm);
+      expect(unrelatedRes.success).toBe(true);
+      if (!unrelatedRes.success) return;
+      const unrelatedId = unrelatedRes.data.id;
+      createdLeadIds.push(unrelatedId);
+
+      // 1. 3 new leads imported -> one batch undoId
+      const phone1 = `+9198${Date.now().toString().slice(-6)}21`;
+      const phone2 = `+9198${Date.now().toString().slice(-6)}22`;
+      const phone3 = `+9198${Date.now().toString().slice(-6)}23`;
+
+      const items: BulkCreateLeadItem[] = [
+        {
+          draft: { name: "Batch Lead 1", phone: phone1, status: "New", notes: "Note 1" },
+          action: "CREATE",
+        },
+        {
+          draft: { name: "Batch Lead 2", phone: phone2, status: "Contacted", notes: "Note 2" },
+          action: "CREATE",
+        },
+        {
+          draft: { name: "Batch Lead 3", phone: phone3, status: "Qualified", notes: "Note 3" },
+          action: "CREATE",
+        },
+      ];
+
+      const bulkRes = await createBulkLeadsAction(items);
+      expect(bulkRes.success).toBe(true);
+      expect(bulkRes.summary.created).toBe(3);
+      expect(bulkRes.undoId).toBeDefined();
+
+      const batchUndoId = bulkRes.undoId!;
+      const batchLeadIds: string[] = [];
+      for (const r of bulkRes.results) {
+        if (r.leadId) {
+          batchLeadIds.push(r.leadId);
+          createdLeadIds.push(r.leadId);
+        }
+      }
+      expect(batchLeadIds.length).toBe(3);
+
+      // 2. Undo reverses all safe created rows
+      const undoRes = await performUndo(batchUndoId);
+      expect(undoRes.success).toBe(true);
+
+      for (const id of batchLeadIds) {
+        const lead = await db.lead.findUnique({ where: { id } });
+        expect(lead?.deletedAt).not.toBeNull();
+      }
+
+      // 3. unrelated leads untouched
+      const unrelatedAfter = await db.lead.findUnique({ where: { id: unrelatedId } });
+      expect(unrelatedAfter?.deletedAt).toBeNull();
+      expect(unrelatedAfter?.name).toBe("Unrelated Existing Lead");
+    });
+
+    it("should protect leads with subsequent modifications and financial records while reversing safe rows", async () => {
+      const phoneA = `+9198${Date.now().toString().slice(-6)}31`;
+      const phoneB = `+9198${Date.now().toString().slice(-6)}32`;
+      const phoneC = `+9198${Date.now().toString().slice(-6)}33`;
+
+      const items: BulkCreateLeadItem[] = [
+        {
+          draft: { name: "Safe Batch Lead", phone: phoneA, status: "New" },
+          action: "CREATE",
+        },
+        {
+          draft: { name: "Modified Batch Lead", phone: phoneB, status: "New" },
+          action: "CREATE",
+        },
+        {
+          draft: { name: "Financial Batch Lead", phone: phoneC, status: "New" },
+          action: "CREATE",
+        },
+      ];
+
+      const bulkRes = await createBulkLeadsAction(items);
+      expect(bulkRes.success).toBe(true);
+      expect(bulkRes.summary.created).toBe(3);
+      expect(bulkRes.undoId).toBeDefined();
+
+      const safeId = bulkRes.results[0].leadId!;
+      const modifiedId = bulkRes.results[1].leadId!;
+      const financialId = bulkRes.results[2].leadId!;
+      createdLeadIds.push(safeId, modifiedId, financialId);
+
+      // 1. Subsequent modification on Lead B
+      await new Promise(r => setTimeout(r, 50));
+      await db.lead.update({
+        where: { id: modifiedId },
+        data: {
+          name: "Materially Edited Lead Name",
+          status: "QUALIFIED",
+          updatedAt: new Date(Date.now() + 5000),
+        },
+      });
+
+      // 2. Financial record (Deal + Payment) on Lead C
+      const deal = await db.deal.create({
+        data: {
+          leadId: financialId,
+          clientNameSnapshot: "Financial Batch Lead",
+          finalAmount: 75000,
+          currency: "INR",
+          status: "CONFIRMED",
+        },
+      });
+      createdDealIds.push(deal.id);
+
+      const payment = await db.payment.create({
+        data: {
+          dealId: deal.id,
+          amount: 25000,
+          type: "PARTIAL",
+          method: "UPI",
+        },
+      });
+
+      // 3. Execute Undo on the batch
+      const undoRes = await performUndo(bulkRes.undoId!);
+      expect(undoRes.success).toBe(true);
+
+      // Check Lead A (safe): reversed / deleted
+      const checkA = await db.lead.findUnique({ where: { id: safeId } });
+      expect(checkA?.deletedAt).not.toBeNull();
+
+      // Check Lead B (subsequently modified): NOT deleted!
+      const checkB = await db.lead.findUnique({ where: { id: modifiedId } });
+      expect(checkB?.deletedAt).toBeNull();
+      expect(checkB?.name).toBe("Materially Edited Lead Name");
+      expect(checkB?.status).toBe("QUALIFIED");
+
+      // Check Lead C (has financial records): NOT deleted, Deal and Payment intact!
+      const checkC = await db.lead.findUnique({ where: { id: financialId } });
+      expect(checkC?.deletedAt).toBeNull();
+
+      const checkDeal = await db.deal.findUnique({ where: { id: deal.id } });
+      expect(checkDeal).not.toBeNull();
+
+      const checkPayment = await db.payment.findUnique({ where: { id: payment.id } });
+      expect(checkPayment).not.toBeNull();
+      expect(Number(checkPayment?.amount)).toBe(25000);
+    });
   });
 });

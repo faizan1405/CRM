@@ -5,7 +5,9 @@ export type UndoActionType =
   | "LEAD_DELETE"
   | "LEAD_RESTORE"
   | "LEAD_WASTE"
+  | "LEAD_WASTE_RESTORE"
   | "LEAD_PIN"
+  | "LEAD_QUICK_STATUS"
   | "FOLLOWUP_CREATE"
   | "FOLLOWUP_RESCHEDULE"
   | "FOLLOWUP_CANCEL"
@@ -34,7 +36,8 @@ export type UndoActionType =
   | "TEMPLATE_CREATE"
   | "TEMPLATE_UPDATE"
   | "TEMPLATE_DELETE"
-  | "TEMPLATE_TOGGLE";
+  | "TEMPLATE_TOGGLE"
+  | "BULK_LEAD_IMPORT";
 
 export type UndoEntityType =
   | "LEAD"
@@ -46,7 +49,8 @@ export type UndoEntityType =
   | "PERSONAL_NOTE"
   | "PACKAGE"
   | "SAMPLE"
-  | "TEMPLATE";
+  | "TEMPLATE"
+  | "BULK_IMPORT";
 
 export interface RecordUndoParams {
   actionType: UndoActionType;

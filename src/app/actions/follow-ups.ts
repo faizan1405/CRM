@@ -612,18 +612,39 @@ export async function cancelFollowUp(id: string): Promise<FollowUpActionResult<F
       await markLeadAIInsightNeedsRefresh(updatedFollowUp.leadId, tx);
       await touchCrmSync(tx);
 
-      return updatedFollowUp;
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "FOLLOWUP_CANCEL",
+        entityType: "FOLLOWUP",
+        entityId: id,
+        leadId: updatedFollowUp.leadId,
+        beforeSnapshot: {
+          status: existing.status,
+          scheduledAt: existing.scheduledAt.toISOString(),
+          type: existing.type,
+          note: existing.note,
+          completedAt: existing.completedAt ? existing.completedAt.toISOString() : null,
+        },
+        afterSnapshot: { status: "CANCELLED" },
+        expectedUpdatedAt: updatedFollowUp.updatedAt,
+        description: "Follow-up cancelled",
+        createdByUserId: validUserId,
+      });
+
+      return { followUp: updatedFollowUp, undoId: undoRecord.id };
+    }, {
+      timeout: 30000,
+      maxWait: 15000,
     });
 
-    await syncNextFollowUpDate(followUp.leadId);
+    await syncNextFollowUpDate(followUp.followUp.leadId);
 
     safeRevalidatePath("/dashboard");
     safeRevalidatePath("/leads");
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath("/pipeline");
     safeRevalidatePath("/analytics");
-    safeRevalidatePath(`/leads/${followUp.leadId}`);
-    return { success: true, data: serializeFollowUp(followUp) };
+    safeRevalidatePath(`/leads/${followUp.followUp.leadId}`);
+    return { success: true, data: serializeFollowUp(followUp.followUp), undoId: followUp.undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
