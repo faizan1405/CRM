@@ -23,6 +23,8 @@ import {
   derivePaymentStatus,
   calculateDealMetrics,
 } from "@/features/deals/calculations";
+import { touchCrmSync } from "@/lib/crm-sync";
+import { recordUndoAction } from "@/features/undo/services/undo-engine";
 
 class UserFacingError extends Error {}
 
@@ -228,7 +230,7 @@ export async function getDealById(dealId: string): Promise<DealActionResult<Seri
  */
 export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealActionResult<SerializedDeal>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
 
     if (!input.leadId && !input.dealId) throw new UserFacingError("Lead ID or Deal ID is required.");
     const finalAmount = Number(input.finalAmount) || 0;
@@ -308,9 +310,29 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
         },
       });
 
+      let undoId: string | undefined;
+      try {
+        const undo = await recordUndoAction({
+          actionType: "DEAL_UPDATE",
+          entityType: "DEAL",
+          entityId: deal.id,
+          leadId: deal.leadId,
+          beforeSnapshot: existingDeal,
+          afterSnapshot: deal,
+          expectedUpdatedAt: existingDeal.updatedAt,
+          description: `Update deal for ${deal.lead?.name || deal.clientNameSnapshot || "Client"}`,
+          userId: session.id as string,
+        });
+        undoId = undo.id;
+      } catch (e) {
+        console.error("[Undo] Failed to record undo for update deal:", e);
+      }
+
+      await touchCrmSync();
+
       revalidatePath("/deals");
       revalidatePath("/leads");
-      return { success: true, data: serializeDeal(deal) };
+      return { success: true, data: serializeDeal(deal), undoId };
     }
 
     // Otherwise, create or update by leadId
@@ -318,6 +340,11 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
     const lead = await db.lead.findUnique({
       where: { id: leadId },
       select: { id: true, name: true, business: true, phone: true, email: true },
+    });
+
+    const existingLeadDeal = await db.deal.findUnique({
+      where: { leadId },
+      include: { payments: true },
     });
 
     const data: Prisma.DealCreateInput = {
@@ -379,9 +406,43 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
       },
     });
 
+    let undoId: string | undefined;
+    try {
+      if (existingLeadDeal) {
+        const undo = await recordUndoAction({
+          actionType: "DEAL_UPDATE",
+          entityType: "DEAL",
+          entityId: deal.id,
+          leadId: deal.leadId,
+          beforeSnapshot: existingLeadDeal,
+          afterSnapshot: deal,
+          expectedUpdatedAt: existingLeadDeal.updatedAt,
+          description: `Update deal for ${deal.lead?.name || deal.clientNameSnapshot || "Lead"}`,
+          userId: session.id as string,
+        });
+        undoId = undo.id;
+      } else {
+        const undo = await recordUndoAction({
+          actionType: "DEAL_CREATE",
+          entityType: "DEAL",
+          entityId: deal.id,
+          leadId: deal.leadId,
+          beforeSnapshot: null,
+          afterSnapshot: deal,
+          description: `Create deal for ${deal.lead?.name || deal.clientNameSnapshot || "Lead"}`,
+          userId: session.id as string,
+        });
+        undoId = undo.id;
+      }
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for upsert lead deal:", e);
+    }
+
+    await touchCrmSync();
+
     revalidatePath("/deals");
     revalidatePath("/leads");
-    return { success: true, data: serializeDeal(deal) };
+    return { success: true, data: serializeDeal(deal), undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -394,7 +455,7 @@ export async function createOtherClientDeal(
   input: CreateOtherClientDealInput
 ): Promise<DealActionResult<SerializedDeal>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
 
     const clientName = input.clientName ? input.clientName.trim() : "";
     if (!clientName) {
@@ -454,8 +515,27 @@ export async function createOtherClientDeal(
       },
     });
 
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "DEAL_CREATE",
+        entityType: "DEAL",
+        entityId: deal.id,
+        leadId: null,
+        beforeSnapshot: null,
+        afterSnapshot: deal,
+        description: `Create deal for ${deal.clientNameSnapshot || "Client"}`,
+        userId: session.id as string,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for other client deal:", e);
+    }
+
+    await touchCrmSync();
+
     revalidatePath("/deals");
-    return { success: true, data: serializeDeal(deal) };
+    return { success: true, data: serializeDeal(deal), undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -466,7 +546,7 @@ export async function createOtherClientDeal(
  */
 export async function addDealPayment(input: RecordPaymentInput): Promise<DealActionResult<SerializedPayment>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
 
     if (!input.dealId) throw new UserFacingError("Deal ID is required.");
     const amount = Number(input.amount);
@@ -491,11 +571,35 @@ export async function addDealPayment(input: RecordPaymentInput): Promise<DealAct
         note: input.note ? input.note.trim() : null,
         reference: input.reference ? input.reference.trim() : null,
       },
+      include: {
+        deal: {
+          select: { leadId: true, clientNameSnapshot: true },
+        },
+      },
     });
+
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "PAYMENT_CREATE",
+        entityType: "PAYMENT",
+        entityId: payment.id,
+        leadId: payment.deal?.leadId || null,
+        beforeSnapshot: null,
+        afterSnapshot: payment,
+        description: `Record payment of ₹${payment.amount} for ${payment.deal?.clientNameSnapshot || "Deal"}`,
+        userId: session.id as string,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for add payment:", e);
+    }
+
+    await touchCrmSync();
 
     revalidatePath("/deals");
     revalidatePath("/leads");
-    return { success: true, data: serializePayment(payment) };
+    return { success: true, data: serializePayment(payment), undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -509,9 +613,19 @@ export async function updateDealPayment(
   input: Partial<RecordPaymentInput>
 ): Promise<DealActionResult<SerializedPayment>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
 
     if (!paymentId) throw new UserFacingError("Payment ID is required.");
+
+    const existingPayment = await db.payment.findUnique({
+      where: { id: paymentId },
+      include: {
+        deal: {
+          select: { leadId: true, clientNameSnapshot: true },
+        },
+      },
+    });
+    if (!existingPayment) throw new UserFacingError("Payment not found.");
 
     const updateData: Prisma.PaymentUpdateInput = {};
 
@@ -547,11 +661,36 @@ export async function updateDealPayment(
     const updated = await db.payment.update({
       where: { id: paymentId },
       data: updateData,
+      include: {
+        deal: {
+          select: { leadId: true, clientNameSnapshot: true },
+        },
+      },
     });
+
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "PAYMENT_UPDATE",
+        entityType: "PAYMENT",
+        entityId: updated.id,
+        leadId: updated.deal?.leadId || null,
+        beforeSnapshot: existingPayment,
+        afterSnapshot: updated,
+        expectedUpdatedAt: existingPayment.updatedAt,
+        description: `Update payment of ₹${updated.amount}`,
+        userId: session.id as string,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for update payment:", e);
+    }
+
+    await touchCrmSync();
 
     revalidatePath("/deals");
     revalidatePath("/leads");
-    return { success: true, data: serializePayment(updated) };
+    return { success: true, data: serializePayment(updated), undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -562,16 +701,46 @@ export async function updateDealPayment(
  */
 export async function deleteDealPayment(paymentId: string): Promise<DealActionResult<{ deletedId: string }>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
     if (!paymentId) throw new UserFacingError("Payment ID is required.");
+
+    const existingPayment = await db.payment.findUnique({
+      where: { id: paymentId },
+      include: {
+        deal: {
+          select: { leadId: true, clientNameSnapshot: true },
+        },
+      },
+    });
+    if (!existingPayment) throw new UserFacingError("Payment not found.");
 
     await db.payment.delete({
       where: { id: paymentId },
     });
 
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "PAYMENT_DELETE",
+        entityType: "PAYMENT",
+        entityId: existingPayment.id,
+        leadId: existingPayment.deal?.leadId || null,
+        beforeSnapshot: existingPayment,
+        afterSnapshot: null,
+        expectedUpdatedAt: existingPayment.updatedAt,
+        description: `Delete payment of ₹${existingPayment.amount}`,
+        userId: session.id as string,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for delete payment:", e);
+    }
+
+    await touchCrmSync();
+
     revalidatePath("/deals");
     revalidatePath("/leads");
-    return { success: true, data: { deletedId: paymentId } };
+    return { success: true, data: { deletedId: paymentId }, undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -582,16 +751,42 @@ export async function deleteDealPayment(paymentId: string): Promise<DealActionRe
  */
 export async function deleteDeal(dealId: string): Promise<DealActionResult<{ deletedId: string }>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
     if (!dealId) throw new UserFacingError("Deal ID is required.");
+
+    const existingDeal = await db.deal.findUnique({
+      where: { id: dealId },
+      include: { payments: true, lead: { select: { id: true, name: true } } },
+    });
+    if (!existingDeal) throw new UserFacingError("Deal not found.");
 
     // Delete associated payments first (or handled via DB cascade)
     await db.payment.deleteMany({ where: { dealId } });
     await db.deal.delete({ where: { id: dealId } });
 
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "DEAL_DELETE",
+        entityType: "DEAL",
+        entityId: existingDeal.id,
+        leadId: existingDeal.leadId,
+        beforeSnapshot: existingDeal,
+        afterSnapshot: null,
+        expectedUpdatedAt: existingDeal.updatedAt,
+        description: `Delete deal for ${existingDeal.lead?.name || existingDeal.clientNameSnapshot || "Client"}`,
+        userId: session.id as string,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for delete deal:", e);
+    }
+
+    await touchCrmSync();
+
     revalidatePath("/deals");
     revalidatePath("/leads");
-    return { success: true, data: { deletedId: dealId } };
+    return { success: true, data: { deletedId: dealId }, undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }

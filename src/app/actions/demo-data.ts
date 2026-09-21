@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { seedDemoLeads, clearDemoLeads } from "@/features/demo-data/demo-seed";
+import { touchCrmSync } from "@/lib/crm-sync";
 
 class UserFacingError extends Error {}
 
@@ -22,6 +23,8 @@ export async function populateDemoDataAction(): Promise<{
   try {
     const session = await requireAuthenticatedUser();
     const result = await seedDemoLeads(session.id as string);
+
+    await touchCrmSync();
 
     try {
       revalidatePath("/leads");
@@ -50,6 +53,8 @@ export async function clearDemoDataAction(): Promise<{
   try {
     await requireAuthenticatedUser();
     const result = await clearDemoLeads();
+
+    await touchCrmSync();
 
     try {
       revalidatePath("/leads");

@@ -4,6 +4,7 @@ import { LeadStatus as PrismaLeadStatus, QuickStatus as PrismaQuickStatus, Prism
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { recordUndoAction } from "@/features/undo/services/undo-engine";
 import {
   statusFromDatabase,
   statusToDatabase,
@@ -33,6 +34,17 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 class UserFacingError extends Error {}
+
+function cleanError(error: unknown): string {
+  if (error instanceof UserFacingError) return error.message;
+  if (error instanceof Error) {
+    console.error("[Leads Action Error]:", error.message);
+    if (error.message.includes("Foreign key") || error.message.includes("Unique constraint")) {
+      return error.message;
+    }
+  }
+  return "We could not save that change. Please try again.";
+}
 
 async function requireAuthenticatedUser() {
   const session = await getSession();
@@ -177,7 +189,8 @@ function serializeLead(lead: {
 }): Lead {
   const latestNoteActivity = lead.activities?.find(a => a.type === ActivityType.NOTE_ADDED);
 
-  const pendingFollowUp = lead.followUps?.find((f) => f.status === "PENDING" || f.status === "Pending");
+  const isLeadLost = lead.status === PrismaLeadStatus.LOST;
+  const pendingFollowUp = isLeadLost ? null : lead.followUps?.find((f) => f.status === "PENDING" || f.status === "Pending");
   let activeFollowUp: import("@/features/followups/types").FollowUp | null = null;
   if (pendingFollowUp) {
     const rawType = pendingFollowUp.type ? typeToDatabase[pendingFollowUp.type] : undefined;
@@ -212,7 +225,7 @@ function serializeLead(lead: {
     latestNote: latestNoteActivity?.message || lead.activities?.[0]?.message || lead.notes || "",
     quotedAmount: lead.quotedAmount === null ? null : Number(lead.quotedAmount),
     lastContactDate: lead.lastContactDate?.toISOString().slice(0, 10) ?? null,
-    nextFollowUpDate: activeFollowUp ? activeFollowUp.scheduledAt : (lead.nextFollowUpDate ? lead.nextFollowUpDate.toISOString() : null),
+    nextFollowUpDate: isLeadLost ? null : (activeFollowUp ? activeFollowUp.scheduledAt : (lead.nextFollowUpDate ? lead.nextFollowUpDate.toISOString() : null)),
     notes: lead.notes ?? "",
     createdAt: lead.createdAt.toISOString().slice(0, 10),
     updatedAt: lead.updatedAt.toISOString(),
@@ -275,16 +288,6 @@ function serializeLead(lead: {
   };
 }
 
-function cleanError(error: unknown) {
-  if (error instanceof UserFacingError) return error.message;
-  if (error instanceof Error) {
-    console.error("[Leads Action Error]:", error.message);
-    if (error.message.includes("Foreign key") || error.message.includes("Unique constraint")) {
-      return error.message;
-    }
-  }
-  return "We could not save that change. Please try again.";
-}
 
 export async function getLeads(filter?: import('@/features/leads/types').LeadOperationalState): Promise<LeadActionResult<Lead[]>> {
   try {
@@ -400,14 +403,26 @@ export async function createLead(formData: FormData): Promise<LeadActionResult<L
         where: { id: newLead.id },
         include: leadIncludeStandard,
       });
-      return fullLead || newLead;
+
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "LEAD_CREATE",
+        entityType: "LEAD",
+        entityId: newLead.id,
+        leadId: newLead.id,
+        beforeSnapshot: null,
+        afterSnapshot: newLead,
+        description: `Create lead ${newLead.name}`,
+        createdByUserId: validUserId,
+      });
+
+      return { lead: fullLead || newLead, undoId: undoRecord.id };
     }, {
       maxWait: 10000,
       timeout: 20000,
     });
 
-    safeRevalidateLeadPaths(lead.id);
-    return { success: true, data: serializeLead(lead) };
+    safeRevalidateLeadPaths(lead.lead.id);
+    return { success: true, data: serializeLead(lead.lead), undoId: lead.undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -505,6 +520,57 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
       if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
 
       const data = parseLeadUpdateData(formData, oldLead);
+
+      if (data.status === PrismaLeadStatus.LOST && oldLead.status !== PrismaLeadStatus.LOST) {
+        data.nextFollowUpDate = null;
+        const pendingFollowUps = await tx.followUp.findMany({
+          where: { leadId, status: "PENDING" },
+        });
+        if (pendingFollowUps.length > 0) {
+          await tx.followUp.updateMany({
+            where: { leadId, status: "PENDING" },
+            data: { status: "CANCELLED" },
+          });
+          for (const fu of pendingFollowUps) {
+            await tx.leadActivity.create({
+              data: {
+                leadId,
+                type: ActivityType.FOLLOWUP_CANCELLED,
+                message: `Cancelled ${fu.type} follow-up (Lead status changed to Lost)`,
+                metadata: { type: fu.type, followUpId: fu.id, reason: "LEAD_STATUS_LOST" },
+                createdByUserId: validUserId,
+              },
+            });
+          }
+        }
+      } else if (oldLead.status === PrismaLeadStatus.LOST && data.status && data.status !== PrismaLeadStatus.LOST) {
+        if (!formData.has("nextFollowUpDate")) {
+          const existingPending = await tx.followUp.count({ where: { leadId, status: "PENDING" } });
+          if (existingPending === 0) {
+            const lastCancelled = await tx.followUp.findFirst({
+              where: { leadId, status: "CANCELLED" },
+              orderBy: { updatedAt: "desc" },
+            });
+            if (lastCancelled) {
+              await tx.followUp.update({
+                where: { id: lastCancelled.id },
+                data: { status: "PENDING" },
+              });
+              data.nextFollowUpDate = lastCancelled.scheduledAt;
+              await tx.leadActivity.create({
+                data: {
+                  leadId,
+                  type: ActivityType.FOLLOWUP_CREATED,
+                  message: `Restored ${lastCancelled.type} follow-up upon reopening lead`,
+                  metadata: { followUpId: lastCancelled.id, type: lastCancelled.type, scheduledAt: lastCancelled.scheduledAt },
+                  createdByUserId: validUserId,
+                },
+              });
+            }
+          }
+        }
+      }
+
       const updatedLead = await tx.lead.update({
         where: { id: leadId },
         data,
@@ -544,14 +610,27 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
         });
         await markLeadAIInsightNeedsRefresh(leadId, tx);
       }
-      return updatedLead;
+
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "LEAD_UPDATE",
+        entityType: "LEAD",
+        entityId: leadId,
+        leadId,
+        beforeSnapshot: oldLead,
+        afterSnapshot: updatedLead,
+        expectedUpdatedAt: updatedLead.updatedAt,
+        description: `Lead details updated for ${updatedLead.name}`,
+        createdByUserId: validUserId,
+      });
+
+      return { lead: updatedLead, undoId: undoRecord.id };
     }, {
       maxWait: 10000,
       timeout: 20000,
     });
 
     safeRevalidateLeadPaths(leadId);
-    return { success: true, data: serializeLead(lead) };
+    return { success: true, data: serializeLead(lead.lead), undoId: lead.undoId };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return { success: false, error: "Lead not found." };
     return { success: false, error: cleanError(error) };
@@ -583,9 +662,59 @@ export async function changeLeadStatus(
       const oldLead = await tx.lead.findUnique({ where: { id: leadId } });
       if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
 
+      const updatePayload: Prisma.LeadUpdateInput = { status: databaseStatus };
+
+      if (databaseStatus === PrismaLeadStatus.LOST) {
+        updatePayload.nextFollowUpDate = null;
+        const pendingFollowUps = await tx.followUp.findMany({
+          where: { leadId, status: "PENDING" },
+        });
+        if (pendingFollowUps.length > 0) {
+          await tx.followUp.updateMany({
+            where: { leadId, status: "PENDING" },
+            data: { status: "CANCELLED" },
+          });
+          for (const fu of pendingFollowUps) {
+            await tx.leadActivity.create({
+              data: {
+                leadId,
+                type: ActivityType.FOLLOWUP_CANCELLED,
+                message: `Cancelled ${fu.type} follow-up (Lead marked Lost)`,
+                metadata: { type: fu.type, followUpId: fu.id, reason: "LEAD_MARKED_LOST" },
+                createdByUserId: validUserId,
+              },
+            });
+          }
+        }
+      } else if ((oldLead.status as string) === PrismaLeadStatus.LOST) {
+        const existingPending = await tx.followUp.count({ where: { leadId, status: "PENDING" } });
+        if (existingPending === 0) {
+          const lastCancelled = await tx.followUp.findFirst({
+            where: { leadId, status: "CANCELLED" },
+            orderBy: { updatedAt: "desc" },
+          });
+          if (lastCancelled) {
+            await tx.followUp.update({
+              where: { id: lastCancelled.id },
+              data: { status: "PENDING" },
+            });
+            updatePayload.nextFollowUpDate = lastCancelled.scheduledAt;
+            await tx.leadActivity.create({
+              data: {
+                leadId,
+                type: ActivityType.FOLLOWUP_CREATED,
+                message: `Restored ${lastCancelled.type} follow-up upon reopening lead`,
+                metadata: { followUpId: lastCancelled.id, type: lastCancelled.type, scheduledAt: lastCancelled.scheduledAt },
+                createdByUserId: validUserId,
+              },
+            });
+          }
+        }
+      }
+
       const updatedLead = await tx.lead.update({
         where: { id: leadId },
-        data: { status: databaseStatus },
+        data: updatePayload,
         include: leadIncludeStandard,
       });
       
@@ -605,14 +734,27 @@ export async function changeLeadStatus(
         });
         await markLeadAIInsightNeedsRefresh(leadId, tx);
       }
-      return updatedLead;
+
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "LEAD_STATUS_CHANGE",
+        entityType: "LEAD",
+        entityId: leadId,
+        leadId,
+        beforeSnapshot: { status: oldLead.status, quickStatus: oldLead.quickStatus },
+        afterSnapshot: { status: databaseStatus, quickStatus: updatedLead.quickStatus },
+        expectedUpdatedAt: updatedLead.updatedAt,
+        description: `Status changed to ${status}`,
+        createdByUserId: validUserId,
+      });
+
+      return { lead: updatedLead, undoId: undoRecord.id };
     }, {
       maxWait: 10000,
       timeout: 20000,
     });
 
     safeRevalidateLeadPaths(leadId);
-    return { success: true, data: serializeLead(lead) };
+    return { success: true, data: serializeLead(lead.lead), undoId: lead.undoId };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") return { success: false, error: "Lead not found." };
     return { success: false, error: cleanError(error) };
@@ -697,26 +839,44 @@ export async function refreshLeadAI(id: string): Promise<LeadActionResult<Lead>>
 
 export async function deleteLead(id: string): Promise<LeadActionResult<{ id: string }>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
     const leadId = readLeadId(id);
-    const lead = await db.lead.findUnique({ where: { id: leadId }, select: { id: true, deletedAt: true } });
+    const validUserId = await resolveValidUserId(session.id);
+    const lead = await db.lead.findUnique({ where: { id: leadId }, select: { id: true, name: true, deletedAt: true } });
     if (!lead) return { success: false, error: "Lead not found." };
     if (lead.deletedAt) return { success: false, error: "Lead is already deleted." };
 
-    const updated = await db.lead.update({ where: { id: leadId }, data: { deletedAt: new Date() }, select: { id: true } });
+    const result = await db.$transaction(async (tx) => {
+      const updated = await tx.lead.update({
+        where: { id: leadId },
+        data: { deletedAt: new Date() },
+        select: { id: true },
+      });
+
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "LEAD_DELETE",
+        entityType: "LEAD",
+        entityId: leadId,
+        leadId,
+        beforeSnapshot: { deletedAt: null },
+        afterSnapshot: { deletedAt: new Date() },
+        description: `Deleted lead ${lead.name}`,
+        createdByUserId: validUserId,
+      });
+
+      return { updated, undoId: undoRecord.id };
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
+    });
+
+    safeRevalidateLeadPaths(leadId);
     try {
-      revalidatePath("/", "layout");
-      revalidatePath("/leads");
-      revalidatePath(`/leads/${leadId}`);
-      revalidatePath("/pipeline");
-      revalidatePath("/dashboard");
-      revalidatePath("/analytics");
-      revalidatePath("/follow-ups");
       revalidatePath("/recently-deleted");
     } catch {
       // safe in test execution
     }
-    return { success: true, data: updated };
+    return { success: true, data: result.updated, undoId: result.undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -724,26 +884,44 @@ export async function deleteLead(id: string): Promise<LeadActionResult<{ id: str
 
 export async function restoreLead(id: string): Promise<LeadActionResult<{ id: string }>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
     const leadId = readLeadId(id);
-    const lead = await db.lead.findUnique({ where: { id: leadId }, select: { id: true, deletedAt: true } });
+    const validUserId = await resolveValidUserId(session.id);
+    const lead = await db.lead.findUnique({ where: { id: leadId }, select: { id: true, name: true, deletedAt: true } });
     if (!lead) return { success: false, error: "Lead not found." };
     if (!lead.deletedAt) return { success: false, error: "Lead is not deleted." };
 
-    const updated = await db.lead.update({ where: { id: leadId }, data: { deletedAt: null }, select: { id: true } });
+    const result = await db.$transaction(async (tx) => {
+      const updated = await tx.lead.update({
+        where: { id: leadId },
+        data: { deletedAt: null },
+        select: { id: true },
+      });
+
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "LEAD_RESTORE",
+        entityType: "LEAD",
+        entityId: leadId,
+        leadId,
+        beforeSnapshot: { deletedAt: lead.deletedAt },
+        afterSnapshot: { deletedAt: null },
+        description: `Restored lead ${lead.name}`,
+        createdByUserId: validUserId,
+      });
+
+      return { updated, undoId: undoRecord.id };
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
+    });
+
+    safeRevalidateLeadPaths(leadId);
     try {
-      revalidatePath("/", "layout");
-      revalidatePath("/leads");
-      revalidatePath(`/leads/${leadId}`);
-      revalidatePath("/pipeline");
-      revalidatePath("/dashboard");
-      revalidatePath("/analytics");
-      revalidatePath("/follow-ups");
       revalidatePath("/recently-deleted");
     } catch {
       // safe in test execution
     }
-    return { success: true, data: updated };
+    return { success: true, data: result.updated, undoId: result.undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -996,12 +1174,13 @@ export async function togglePinLead(
   explicitPinned?: boolean
 ): Promise<LeadActionResult<Lead>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
     const id = readLeadId(leadId);
+    const validUserId = await resolveValidUserId(session.id);
 
     const existing = await db.lead.findUnique({
       where: { id, deletedAt: null },
-      select: { id: true, isPinned: true },
+      select: { id: true, isPinned: true, name: true },
     });
     if (!existing) {
       return { success: false, error: "Lead not found." };
@@ -1009,15 +1188,34 @@ export async function togglePinLead(
 
     const nextPinned = explicitPinned !== undefined ? explicitPinned : !existing.isPinned;
 
-    const lead = await db.lead.update({
-      where: { id },
-      data: { isPinned: nextPinned },
-      include: leadIncludeStandard,
+    const result = await db.$transaction(async (tx) => {
+      const lead = await tx.lead.update({
+        where: { id },
+        data: { isPinned: nextPinned },
+        include: leadIncludeStandard,
+      });
+
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "LEAD_PIN",
+        entityType: "LEAD",
+        entityId: id,
+        leadId: id,
+        beforeSnapshot: { isPinned: existing.isPinned },
+        afterSnapshot: { isPinned: nextPinned },
+        expectedUpdatedAt: lead.updatedAt,
+        description: nextPinned ? `Pinned lead ${existing.name}` : `Unpinned lead ${existing.name}`,
+        createdByUserId: validUserId,
+      });
+
+      return { lead, undoId: undoRecord.id };
+    }, {
+      timeout: 30000,
+      maxWait: 15000,
     });
 
     safeRevalidateLeadPaths(id);
 
-    return { success: true, data: serializeLead(lead) };
+    return { success: true, data: serializeLead(result.lead), undoId: result.undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }

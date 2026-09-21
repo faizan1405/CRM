@@ -22,6 +22,8 @@ import { requestGroqJson, AIConfigError, AIServiceError } from "@/lib/ai/groq-cl
 import { z } from "zod";
 import type { WhatsAppTemplateCategory as PrismaWhatsAppTemplateCategory } from "@prisma/client";
 import { improveWhatsAppSalesMessage } from "@/features/whatsapp-templates/services/whatsapp-ai-improver";
+import { touchCrmSync } from "@/lib/crm-sync";
+import { recordUndoAction } from "@/features/undo/services/undo-engine";
 
 class UserFacingError extends Error {}
 
@@ -147,14 +149,32 @@ export async function createWhatsAppTemplate(input: {
       },
     });
 
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "TEMPLATE_CREATE",
+        entityType: "TEMPLATE",
+        entityId: created.id,
+        leadId: null,
+        beforeSnapshot: null,
+        afterSnapshot: created,
+        description: `Create WhatsApp template "${created.title}"`,
+        userId: session.id as string,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for createWhatsAppTemplate:", e);
+    }
+
+    await touchCrmSync();
+
     try {
       revalidatePath("/whatsapp-templates");
     } catch {
       // safe fallback for test execution
     }
 
-    return { success: true, data: serializeTemplate(created) };
-    return { success: true, data: serializeTemplate(created) };
+    return { success: true, data: serializeTemplate(created), undoId };
   } catch (error) {
     console.error("CREATE WHATSAPP TEMPLATE ERROR", error);
     return { success: false, error: cleanError(error) };
@@ -174,7 +194,7 @@ export async function updateWhatsAppTemplate(
   }>
 ): Promise<TemplateActionResult<WhatsAppTemplate>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
 
     const existing = await db.whatsAppTemplate.findUnique({ where: { id } });
     if (!existing) throw new UserFacingError("Template not found.");
@@ -216,13 +236,33 @@ export async function updateWhatsAppTemplate(
       data,
     });
 
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "TEMPLATE_UPDATE",
+        entityType: "TEMPLATE",
+        entityId: updated.id,
+        leadId: null,
+        beforeSnapshot: existing,
+        afterSnapshot: updated,
+        expectedUpdatedAt: existing.updatedAt,
+        description: `Update WhatsApp template "${updated.title}"`,
+        userId: session.id as string,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for updateWhatsAppTemplate:", e);
+    }
+
+    await touchCrmSync();
+
     try {
       revalidatePath("/whatsapp-templates");
     } catch {
       // safe in tests
     }
 
-    return { success: true, data: serializeTemplate(updated) };
+    return { success: true, data: serializeTemplate(updated), undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -259,13 +299,32 @@ export async function duplicateWhatsAppTemplate(
       },
     });
 
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "TEMPLATE_CREATE",
+        entityType: "TEMPLATE",
+        entityId: duplicated.id,
+        leadId: null,
+        beforeSnapshot: null,
+        afterSnapshot: duplicated,
+        description: `Duplicate WhatsApp template to "${duplicated.title}"`,
+        userId: session.id as string,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for duplicateWhatsAppTemplate:", e);
+    }
+
+    await touchCrmSync();
+
     try {
       revalidatePath("/whatsapp-templates");
     } catch {
       // safe in tests
     }
 
-    return { success: true, data: serializeTemplate(duplicated) };
+    return { success: true, data: serializeTemplate(duplicated), undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -278,8 +337,31 @@ export async function deleteWhatsAppTemplate(
   id: string
 ): Promise<TemplateActionResult<{ id: string }>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
+    const existing = await db.whatsAppTemplate.findUnique({ where: { id } });
+    if (!existing) throw new UserFacingError("Template not found.");
+
     await db.whatsAppTemplate.delete({ where: { id } });
+
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "TEMPLATE_DELETE",
+        entityType: "TEMPLATE",
+        entityId: existing.id,
+        leadId: null,
+        beforeSnapshot: existing,
+        afterSnapshot: null,
+        expectedUpdatedAt: existing.updatedAt,
+        description: `Delete WhatsApp template "${existing.title}"`,
+        userId: session.id as string,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for deleteWhatsAppTemplate:", e);
+    }
+
+    await touchCrmSync();
 
     try {
       revalidatePath("/whatsapp-templates");
@@ -287,7 +369,7 @@ export async function deleteWhatsAppTemplate(
       // safe in tests
     }
 
-    return { success: true, data: { id } };
+    return { success: true, data: { id }, undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }

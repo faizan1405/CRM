@@ -42,7 +42,7 @@ export function FollowUpsWorkspace({
   const navigation = useLeadNavigation();
   const { openWhatsApp } = useWhatsApp();
   const { openCallModal } = useCall();
-  const { showToast } = useToast();
+  const { showToast, showUndoToast } = useToast();
   const filterParam = searchParams.get("filter");
   const newParam = searchParams.get("new");
   const leadParam = searchParams.get("leadId");
@@ -187,28 +187,12 @@ export function FollowUpsWorkspace({
         setFormOpen(false);
         setEditingFollowUp(null);
 
-        showToast(isRescheduled ? "Follow-up rescheduled" : "Follow-up scheduled", "success", {
-          label: "Undo",
-          onClick: async () => {
-            if (isRescheduled && prevScheduledAt && prevType) {
-              const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoRescheduleFollowUp(
-                saved.id,
-                prevScheduledAt,
-                prevType
-              ));
-              if (undoRes.success) {
-                showToast("Follow-up reschedule undone", "info");
-                setFollowUps((prev) => prev.map((f) => (f.id === saved.id ? undoRes.data : f)));
-              }
-            } else {
-              const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoCreateFollowUp(saved.id));
-              if (undoRes.success) {
-                showToast("Follow-up creation undone", "info");
-                setFollowUps((prev) => prev.filter((f) => f.id !== saved.id));
-              }
-            }
-          }
-        });
+        const msg = isRescheduled ? "Follow-up rescheduled" : "Follow-up scheduled";
+        if (result.undoId) {
+          showUndoToast(msg, result.undoId);
+        } else {
+          showToast(msg, "success");
+        }
       }
     } catch {
       alert("Failed to save follow-up. Please retry.");
@@ -223,6 +207,12 @@ export function FollowUpsWorkspace({
     if (!result.success) {
       localUpdateFollowUp(followUp.id, { status: "Pending" });
       alert(result.error || "Failed to complete follow-up.");
+    } else {
+      if (result.undoId) {
+        showUndoToast("Follow-up completed", result.undoId);
+      } else {
+        showToast("Follow-up completed", "success");
+      }
     }
   };
 
@@ -232,6 +222,12 @@ export function FollowUpsWorkspace({
     if (!result.success) {
       localUpdateFollowUp(followUp.id, { status: "Pending" });
       alert(result.error || "Failed to cancel follow-up.");
+    } else {
+      if (result.undoId) {
+        showUndoToast("Follow-up cancelled", result.undoId);
+      } else {
+        showToast("Follow-up cancelled", "success");
+      }
     }
   };
 

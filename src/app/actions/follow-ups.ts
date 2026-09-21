@@ -12,6 +12,8 @@ import {
 } from "@/features/followups/types";
 import { ActivityType } from "@prisma/client";
 import { markLeadAIInsightNeedsRefresh } from "@/features/ai-attention/services/attention-engine";
+import { recordUndoAction } from "@/features/undo/services/undo-engine";
+import { touchCrmSync } from "@/lib/crm-sync";
 
 class UserFacingError extends Error {}
 
@@ -86,6 +88,22 @@ function serializeFollowUp(
 }
 
 async function syncNextFollowUpDate(leadId: string) {
+  const lead = await db.lead.findUnique({
+    where: { id: leadId },
+    select: { status: true },
+  });
+  if (lead?.status === "LOST") {
+    try {
+      await db.lead.update({
+        where: { id: leadId },
+        data: { nextFollowUpDate: null },
+      });
+    } catch {
+      // safe
+    }
+    return;
+  }
+
   const active = await db.followUp.findFirst({
     where: { leadId, status: "PENDING" },
     orderBy: { updatedAt: "desc" },
@@ -148,19 +166,22 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
 
     const validUserId = await resolveValidUserId(session.id);
 
-    const followUp = await db.$transaction(async (tx) => {
+    const followUp: { followUp: any; undoId?: string } = await db.$transaction(async (tx) => {
       if (submissionId) {
         const idempExisting = await tx.followUp.findFirst({
           where: { submissionId },
           include: { lead: true },
         });
         if (idempExisting) {
-          return idempExisting;
+          return { followUp: idempExisting, undoId: undefined };
         }
       }
 
       // Invariant: ONE Lead -> maximum ONE active PENDING follow-up
       // Safely supersede any existing PENDING follow-ups for this lead
+      const existingPending = await tx.followUp.findFirst({
+        where: { leadId, status: "PENDING" },
+      });
       await tx.followUp.updateMany({
         where: {
           leadId,
@@ -243,11 +264,24 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
       }
 
       await markLeadAIInsightNeedsRefresh(leadId, tx);
+      await touchCrmSync(tx);
 
-      return newFollowUp;
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "FOLLOWUP_CREATE",
+        entityType: "FOLLOWUP",
+        entityId: newFollowUp.id,
+        leadId,
+        beforeSnapshot: { supersededFollowUpId: existingPending?.id },
+        afterSnapshot: { scheduledAt: newFollowUp.scheduledAt.toISOString(), type: newFollowUp.type },
+        expectedUpdatedAt: newFollowUp.updatedAt,
+        description: `Scheduled ${newFollowUp.type} follow-up`,
+        createdByUserId: validUserId,
+      });
+
+      return { followUp: newFollowUp, undoId: undoRecord.id };
     }, {
-      timeout: 15000,
-      maxWait: 10000,
+      timeout: 30000,
+      maxWait: 15000,
     });
 
     await syncNextFollowUpDate(leadId);
@@ -258,7 +292,7 @@ export async function createFollowUp(formData: FormData): Promise<FollowUpAction
     safeRevalidatePath("/pipeline");
     safeRevalidatePath("/analytics");
     safeRevalidatePath(`/leads/${leadId}`);
-    return { success: true, data: serializeFollowUp(followUp) };
+    return { success: true, data: serializeFollowUp(followUp.followUp), undoId: followUp.undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -310,7 +344,7 @@ export async function getFollowUps(): Promise<FollowUpActionResult<{
 
     for (const raw of followUps) {
       const item = serializeFollowUp(raw);
-      if (item.status === "Completed" || item.status === "Cancelled") {
+      if (item.status === "Completed" || item.status === "Cancelled" || raw.lead?.status === "LOST") {
         result.completed.push(item);
         continue;
       }
@@ -438,19 +472,43 @@ export async function updateFollowUp(
       }
 
       await markLeadAIInsightNeedsRefresh(updatedFollowUp.leadId, tx);
+      await touchCrmSync(tx);
 
-      return updatedFollowUp;
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "FOLLOWUP_RESCHEDULE",
+        entityType: "FOLLOWUP",
+        entityId: id,
+        leadId: updatedFollowUp.leadId,
+        beforeSnapshot: {
+          scheduledAt: existing.scheduledAt.toISOString(),
+          type: existing.type,
+          note: existing.note,
+        },
+        afterSnapshot: {
+          scheduledAt: updatedFollowUp.scheduledAt.toISOString(),
+          type: updatedFollowUp.type,
+          note: updatedFollowUp.note,
+        },
+        expectedUpdatedAt: updatedFollowUp.updatedAt,
+        description: "Follow-up rescheduled",
+        createdByUserId: validUserId,
+      });
+
+      return { followUp: updatedFollowUp, undoId: undoRecord.id };
+    }, {
+      timeout: 30000,
+      maxWait: 15000,
     });
 
-    await syncNextFollowUpDate(followUp.leadId);
+    await syncNextFollowUpDate(followUp.followUp.leadId);
 
     safeRevalidatePath("/dashboard");
     safeRevalidatePath("/leads");
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath("/pipeline");
     safeRevalidatePath("/analytics");
-    safeRevalidatePath(`/leads/${followUp.leadId}`);
-    return { success: true, data: serializeFollowUp(followUp) };
+    safeRevalidatePath(`/leads/${followUp.followUp.leadId}`);
+    return { success: true, data: serializeFollowUp(followUp.followUp), undoId: followUp.undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -487,19 +545,35 @@ export async function markFollowUpComplete(id: string): Promise<FollowUpActionRe
       }
 
       await markLeadAIInsightNeedsRefresh(updatedFollowUp.leadId, tx);
+      await touchCrmSync(tx);
 
-      return updatedFollowUp;
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "FOLLOWUP_COMPLETE",
+        entityType: "FOLLOWUP",
+        entityId: id,
+        leadId: updatedFollowUp.leadId,
+        beforeSnapshot: { status: "PENDING", completedAt: null },
+        afterSnapshot: { status: "COMPLETED" },
+        expectedUpdatedAt: updatedFollowUp.updatedAt,
+        description: "Follow-up completed",
+        createdByUserId: validUserId,
+      });
+
+      return { followUp: updatedFollowUp, undoId: undoRecord.id };
+    }, {
+      timeout: 30000,
+      maxWait: 15000,
     });
 
-    await syncNextFollowUpDate(followUp.leadId);
+    await syncNextFollowUpDate(followUp.followUp.leadId);
 
     safeRevalidatePath("/dashboard");
     safeRevalidatePath("/leads");
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath("/pipeline");
     safeRevalidatePath("/analytics");
-    safeRevalidatePath(`/leads/${followUp.leadId}`);
-    return { success: true, data: serializeFollowUp(followUp) };
+    safeRevalidatePath(`/leads/${followUp.followUp.leadId}`);
+    return { success: true, data: serializeFollowUp(followUp.followUp), undoId: followUp.undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -536,6 +610,7 @@ export async function cancelFollowUp(id: string): Promise<FollowUpActionResult<F
       }
 
       await markLeadAIInsightNeedsRefresh(updatedFollowUp.leadId, tx);
+      await touchCrmSync(tx);
 
       return updatedFollowUp;
     });
@@ -575,6 +650,7 @@ export async function undoCreateFollowUp(id: string): Promise<FollowUpActionResu
         }
       });
       await markLeadAIInsightNeedsRefresh(existing.leadId, tx);
+      await touchCrmSync(tx);
     });
 
     await syncNextFollowUpDate(existing.leadId);
@@ -621,6 +697,7 @@ export async function undoRescheduleFollowUp(
         }
       });
       await markLeadAIInsightNeedsRefresh(updated.leadId, tx);
+      await touchCrmSync(tx);
       return updated;
     });
 
@@ -765,7 +842,7 @@ export async function scheduleLeadFollowUp(
             include: { lead: true },
           });
           if (idempExisting) {
-            return idempExisting;
+            return { followUp: idempExisting, undoId: undefined };
           }
         }
 
@@ -820,7 +897,26 @@ export async function scheduleLeadFollowUp(
       });
 
       await markLeadAIInsightNeedsRefresh(leadId, tx);
-      return targetFollowUp;
+      await touchCrmSync(tx);
+
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: existing ? "FOLLOWUP_RESCHEDULE" : "FOLLOWUP_CREATE",
+        entityType: "FOLLOWUP",
+        entityId: targetFollowUp.id,
+        leadId,
+        beforeSnapshot: existing
+          ? { scheduledAt: existing.scheduledAt.toISOString(), type: existing.type, note: existing.note }
+          : {},
+        afterSnapshot: { scheduledAt: targetFollowUp.scheduledAt.toISOString(), type: targetFollowUp.type, note: targetFollowUp.note },
+        expectedUpdatedAt: targetFollowUp.updatedAt,
+        description: existing ? "Follow-up rescheduled" : "Follow-up scheduled",
+        createdByUserId: validUserId,
+      });
+
+      return { followUp: targetFollowUp, undoId: undoRecord.id };
+    }, {
+      timeout: 30000,
+      maxWait: 15000,
     });
 
     await syncNextFollowUpDate(leadId);
@@ -836,13 +932,14 @@ export async function scheduleLeadFollowUp(
     const { getLead } = await import("@/app/actions/leads");
     const leadResult = await getLead(leadId);
 
-    const serialized = serializeFollowUp(followUp);
+    const serialized = serializeFollowUp(followUp.followUp);
     return {
       success: true,
       data: {
         ...serialized,
         leadRecord: leadResult.success ? leadResult.data : undefined,
       },
+      undoId: followUp.undoId,
     };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -853,7 +950,15 @@ export async function getActiveFollowUp(leadId: string): Promise<FollowUpActionR
   try {
     await requireAuthenticatedUser();
     const existing = await db.followUp.findFirst({
-      where: { leadId, status: "PENDING" },
+      where: {
+        leadId,
+        status: "PENDING",
+        lead: {
+          status: { not: "LOST" },
+          deletedAt: null,
+          mergedIntoLeadId: null,
+        },
+      },
       orderBy: { updatedAt: "desc" },
       include: { lead: true },
     });

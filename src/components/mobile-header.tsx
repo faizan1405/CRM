@@ -5,6 +5,7 @@ import { GlobalSearch } from "@/components/global-search";
 import { CrmRefreshButton } from "@/components/crm-refresh-button";
 import { Bell } from "lucide-react";
 import Link from "next/link";
+import { SyncStatusIndicator } from "@/components/sync-status-indicator";
 import { crmNavigation } from "./crm-navigation";
 
 export function MobileHeader() {
@@ -21,11 +22,14 @@ export function MobileHeader() {
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur-sm lg:hidden pt-safe">
-      <h1 className="text-lg font-bold tracking-tight text-slate-900 truncate pr-4">
-        {title}
-      </h1>
+      <div className="flex items-center gap-2 min-w-0 pr-2">
+        <h1 className="text-lg font-bold tracking-tight text-slate-900 truncate">
+          {title}
+        </h1>
+        <SyncStatusIndicator variant="mobile" />
+      </div>
       
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 shrink-0">
         <CrmRefreshButton variant="mobile" />
         <GlobalSearch trigger="mobile" />
         <Link 

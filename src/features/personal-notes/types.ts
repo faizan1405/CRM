@@ -10,11 +10,19 @@ export interface PersonalNote {
   tags?: string[];
 }
 
-export interface PersonalNoteActionResult<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+export type PersonalNoteActionResult<T = unknown> =
+  | {
+      success: true;
+      data: T;
+      undoId?: string;
+      error?: undefined;
+    }
+  | {
+      success: false;
+      error: string;
+      data?: undefined;
+      undoId?: string;
+    };
 
 export type AITransformAction = "cleanup" | "organize" | "rewrite" | "summarize";
 

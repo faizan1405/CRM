@@ -79,7 +79,7 @@ export async function fetchLeadsForExport(): Promise<LeadExportRow[]> {
       followUps: lead.followUps,
     });
 
-    const activeFollowUp = lead.followUps[0];
+    const activeFollowUp = lead.status === PrismaLeadStatus.LOST ? undefined : lead.followUps[0];
     const nextFollowUpStr = activeFollowUp
       ? formatISTDateTime(activeFollowUp.scheduledAt)
       : "—";
@@ -282,6 +282,7 @@ export async function fetchFollowUpsForExport(): Promise<FollowUpExportRow[]> {
       status: "PENDING",
       lead: {
         deletedAt: null,
+        status: { not: PrismaLeadStatus.LOST },
       },
     },
     include: {

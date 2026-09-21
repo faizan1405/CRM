@@ -84,3 +84,19 @@ export function formatNextFollowUp(nextFollowUpDate: string | Date | null): stri
   return `${d.toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" })} • ${timeStr}`;
 }
 
+export function formatSyncISTTime(date: Date | string | number | null | undefined): string {
+  if (!date) return "";
+  const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
+  if (isNaN(d.getTime())) return "";
+
+  const formatted = new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).format(d);
+
+  return formatted.toUpperCase();
+}
+

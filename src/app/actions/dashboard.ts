@@ -115,15 +115,15 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
       db.lead.groupBy({ by: ["status"], _count: true, where: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
       db.lead.aggregate({ _sum: { quotedAmount: true }, _avg: { quotedAmount: true }, where: { status: LeadStatus.WON, isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
       db.lead.aggregate({ _sum: { quotedAmount: true }, where: { status: { in: [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED, LeadStatus.PROPOSAL_SENT] }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
-      db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } } }),
-      db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST }, lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } } }),
+      db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } } }),
+      db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } } }),
       db.followUp.findMany({
-        where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST }, lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } },
+        where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } },
         include: { lead: { select: { id: true, name: true, phone: true, business: true, status: true } } },
         orderBy: { scheduledAt: "asc" }
       }),
       db.followUp.findMany({
-        where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } },
+        where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } },
         include: { lead: { select: { id: true, name: true, phone: true, business: true, status: true } } },
         orderBy: { scheduledAt: "asc" },
         take: 5

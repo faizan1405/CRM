@@ -188,6 +188,7 @@ export interface LostReasonsAnalyticsData {
 export interface LostReasonActionResult<T> {
   success: boolean;
   data?: T;
+  undoId?: string;
   error?: string;
 }
 

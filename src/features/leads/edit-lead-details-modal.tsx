@@ -28,7 +28,7 @@ export function EditLeadDetailsModal({
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [duplicateCandidate, setDuplicateCandidate] = useState<DuplicateLeadCandidate | null>(null);
-  const { showToast } = useToast();
+  const { showToast, showUndoToast } = useToast();
 
   const [phone, setPhone] = useState(lead.phone || "");
   const [email, setEmail] = useState(lead.email || "");
@@ -125,7 +125,11 @@ export function EditLeadDetailsModal({
         return;
       }
 
-      showToast("Lead details updated", "success");
+      if (result.undoId) {
+        showUndoToast("Lead details updated", result.undoId);
+      } else {
+        showToast("Lead details updated", "success");
+      }
       onSaved(result.data);
       onClose();
     } catch {

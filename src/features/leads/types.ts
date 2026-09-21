@@ -50,8 +50,8 @@ export type NewLeadInput = Pick<
 >;
 
 export type LeadActionResult<T = undefined> =
-  | { success: true; data: T }
-  | { success: false; error: string; duplicateCandidate?: import("./ai-entry-types").DuplicateLeadCandidate | null };
+  | { success: true; data: T; undoId?: string; undoAction?: { id: string; description: string } }
+  | { success: false; error: string; data?: undefined; duplicateCandidate?: import("./ai-entry-types").DuplicateLeadCandidate | null; undoId?: string };
 
 export type MergeLeadsInput = {
   primaryLeadId: string;

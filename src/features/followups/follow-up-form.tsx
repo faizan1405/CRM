@@ -6,6 +6,7 @@ import type { FollowUp, FollowUpType, NewFollowUpInput } from "./types";
 import { followUpTypes } from "./types";
 import { getPresetDate, FOLLOW_UP_PRESETS, DEFAULT_TIME } from "@/lib/date-presets";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { AiNoteEditor } from "@/components/ui/ai-note-editor";
 import {
   formatFollowUpWarning,
   type FollowUpSuggestion,
@@ -408,20 +409,22 @@ export function FollowUpForm({
 
         {/* Note */}
         <div>
-          <label htmlFor={`${formId}-note`} className="mb-1.5 block text-[13px] font-semibold text-slate-700">
-            Note
-          </label>
-          <textarea
+          <AiNoteEditor
             id={`${formId}-note`}
             value={note}
-            onChange={(e) => setNote(e.target.value)}
+            onChange={(val) => setNote(val)}
             rows={3}
-            className={`${inputClass} h-auto resize-none py-3`}
             placeholder="Add a note about this follow-up..."
             disabled={saving}
+            label="Note"
+            labelClassName="mb-1.5 block text-[13px] font-semibold text-slate-700"
+            textareaClassName="h-auto resize-none py-3"
+            compact
           />
         </div>
       </form>
     </BottomSheet>
   );
 }
+
+export { FollowUpForm as FollowUpFormModal };

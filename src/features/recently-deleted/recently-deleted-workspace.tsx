@@ -28,7 +28,7 @@ export function RecentlyDeletedWorkspace({ initialLeads }: RecentlyDeletedWorksp
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [confirmLead, setConfirmLead] = useState<RecentlyDeletedLead | null>(null);
   const [permanentlyDeleting, setPermanentlyDeleting] = useState(false);
-  const { showToast } = useToast();
+  const { showToast, showUndoToast } = useToast();
 
   const handleRestore = async (lead: RecentlyDeletedLead) => {
     setRestoringId(lead.id);
@@ -36,12 +36,16 @@ export function RecentlyDeletedWorkspace({ initialLeads }: RecentlyDeletedWorksp
       const res = await restoreLead(lead.id);
       if (res.success) {
         setLeads((prev) => prev.filter((l) => l.id !== lead.id));
-        showToast("Lead restored successfully", "success", {
-          label: "View restored lead",
-          onClick: () => {
-            navigation?.openLead(lead.id);
-          },
-        });
+        if (res.undoId) {
+          showUndoToast("Lead restored successfully", res.undoId);
+        } else {
+          showToast("Lead restored successfully", "success", {
+            label: "View restored lead",
+            onClick: () => {
+              navigation?.openLead(lead.id);
+            },
+          });
+        }
         router.refresh();
       } else {
         showToast(res.error || "Failed to restore lead", "error");

@@ -104,7 +104,15 @@ export function serializeActiveFollowUp(
  */
 export async function getActiveFollowUpForLead(leadId: string): Promise<FollowUp | null> {
   const row = await db.followUp.findFirst({
-    where: { leadId, status: "PENDING" },
+    where: {
+      leadId,
+      status: "PENDING",
+      lead: {
+        status: { not: "LOST" },
+        deletedAt: null,
+        mergedIntoLeadId: null,
+      },
+    },
     orderBy: { updatedAt: "desc" },
     include: {
       lead: {

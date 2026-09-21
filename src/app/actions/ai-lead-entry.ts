@@ -29,6 +29,7 @@ import {
 } from "@/features/leads/types";
 import { AIConfigError, AIServiceError } from "@/lib/ai/groq-client";
 import { markLeadAIInsightNeedsRefresh } from "@/features/ai-attention/services/attention-engine";
+import { touchCrmSync } from "@/lib/crm-sync";
 
 class UserFacingError extends Error {}
 
@@ -286,6 +287,8 @@ export async function updateExistingLeadWithDraftAction(
         });
       }
 
+      await touchCrmSync(tx);
+
       return updatedLead;
     });
 
@@ -488,6 +491,10 @@ export async function createBulkLeadsAction(
         });
         failedCount++;
       }
+    }
+
+    if (createdCount > 0 || updatedCount > 0) {
+      await touchCrmSync();
     }
 
     try {

@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
 import { LOST_REASONS, LOST_REASON_LABELS, type LostReasonDialogProps, type PrismaLeadLossReason } from "./types";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { AiNoteEditor, type AiNoteEditorHandle } from "@/components/ui/ai-note-editor";
 
 function LostReasonDialogInner({ leadName = "Lead", leadId, initialReason, initialNotes = "", onConfirm, onCancel, isSubmitting = false }: LostReasonDialogProps) {
   const [other, setOther] = useState(initialReason === "OTHER");
@@ -12,7 +13,7 @@ function LostReasonDialogInner({ leadName = "Lead", leadId, initialReason, initi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const closeRef = useRef<HTMLButtonElement>(null);
-  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const notesRef = useRef<AiNoteEditorHandle>(null);
   const pending = busy || isSubmitting;
   useDialogAccessibility(true, onCancel, pending, closeRef);
 
@@ -58,19 +59,21 @@ function LostReasonDialogInner({ leadName = "Lead", leadId, initialReason, initi
       
       {other && (
         <form onSubmit={event => { event.preventDefault(); void save("OTHER"); }} className="space-y-3 mt-4">
-          <label className="block text-[13px] font-bold text-slate-700">
-            Explanation <span className="text-rose-600">*</span>
-            <textarea 
+          <div>
+            <AiNoteEditor 
               ref={notesRef} 
               required 
               maxLength={500} 
               disabled={pending} 
               value={notes} 
-              onChange={event => setNotes(event.target.value)} 
-              rows={3} 
-              className="mt-2 w-full rounded-xl border border-slate-200 p-3 text-base sm:text-sm focus:border-rose-500 focus:ring-1 focus:ring-rose-500 resize-y" 
+              onChange={val => setNotes(val)} 
+              rows={3}
+              label={<>Explanation <span className="text-rose-600">*</span></>}
+              labelClassName="block text-[13px] font-bold text-slate-700 mb-1"
+              placeholder="Explain why this lead was lost..."
+              compact
             />
-          </label>
+          </div>
           <button type="submit" disabled={pending || !notes.trim()} className="min-h-[44px] w-full rounded-xl bg-rose-600 px-4 text-[15px] font-bold text-white shadow-sm hover:bg-rose-700 active:bg-rose-800 disabled:opacity-50 transition-colors">
             {pending ? "Saving..." : "Save Lost"}
           </button>

@@ -5,6 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { useToast } from "@/components/toast-provider";
 import { refreshCrmAction } from "@/app/actions/refresh";
+import { useSyncStatus } from "@/components/sync-provider";
 
 interface CrmRefreshButtonProps {
   variant?: "desktop" | "mobile";
@@ -20,25 +21,30 @@ export function CrmRefreshButton({
   const { showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const { syncState, triggerSync } = useSyncStatus();
 
   const handleRefresh = async () => {
-    if (isRefreshing || isPending) return;
+    if (isRefreshing || isPending || syncState === "syncing") return;
 
     setIsRefreshing(true);
     const minSpinPromise = new Promise((resolve) => setTimeout(resolve, 600));
 
     try {
-      const res = await refreshCrmAction(pathname);
-      if (!res.success) {
-        throw new Error(res.error || "Failed to revalidate server cache");
-      }
+      const syncSuccess = await triggerSync({ forceRefresh: true, manual: true });
+      if (!syncSuccess) {
+        // Fallback directly to refreshCrmAction if triggerSync was intercepted
+        const res = await refreshCrmAction(pathname);
+        if (!res.success) {
+          throw new Error(res.error || "Failed to revalidate server cache");
+        }
 
-      await new Promise<void>((resolve) => {
-        startTransition(() => {
-          router.refresh();
-          resolve();
+        await new Promise<void>((resolve) => {
+          startTransition(() => {
+            router.refresh();
+            resolve();
+          });
         });
-      });
+      }
 
       await minSpinPromise;
       showToast("CRM refreshed", "success");

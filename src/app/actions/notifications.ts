@@ -16,6 +16,7 @@ import {
 } from "@/features/notifications/types";
 import { generateSmartNotifications } from "@/features/notifications/services/notification-generator";
 import { NotificationStatus, NotificationPriority, Prisma } from "@prisma/client";
+import { touchCrmSync } from "@/lib/crm-sync";
 
 class UserFacingError extends Error {}
 
@@ -165,6 +166,8 @@ export async function markNotificationRead(
       include: { lead: true },
     });
 
+    await touchCrmSync();
+
     try {
       revalidatePath("/notifications");
       revalidatePath("/dashboard");
@@ -195,6 +198,8 @@ export async function markNotificationResolved(
       include: { lead: true },
     });
 
+    await touchCrmSync();
+
     try {
       revalidatePath("/notifications");
       revalidatePath("/dashboard");
@@ -223,6 +228,8 @@ export async function dismissNotification(
       },
     });
 
+    await touchCrmSync();
+
     try {
       revalidatePath("/notifications");
       revalidatePath("/dashboard");
@@ -245,6 +252,9 @@ export async function refreshSmartNotifications(): Promise<
   try {
     await requireAuthenticatedUser();
     const result = await generateSmartNotifications();
+    if (result.created > 0) {
+      await touchCrmSync();
+    }
     return { success: true, data: result };
   } catch (error) {
     return { success: false, error: cleanError(error) };

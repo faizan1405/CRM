@@ -6,6 +6,8 @@ import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { ActivityActionResult, LeadActivity } from "@/features/activities/types";
 import { markLeadAIInsightNeedsRefresh } from "@/features/ai-attention/services/attention-engine";
+import { recordUndoAction } from "@/features/undo/services/undo-engine";
+import { touchCrmSync } from "@/lib/crm-sync";
 
 class UserFacingError extends Error {}
 
@@ -85,16 +87,32 @@ export async function addLeadNote(leadId: string, message: string): Promise<Acti
 
     const validUserId = await resolveValidUserId(session.id);
 
-    const activity = await db.leadActivity.create({
-      data: {
-        leadId,
-        type: ActivityType.NOTE_ADDED,
-        message: text,
-        createdByUserId: validUserId,
-      },
-    });
+    const result = await db.$transaction(async (tx) => {
+      const activity = await tx.leadActivity.create({
+        data: {
+          leadId,
+          type: ActivityType.NOTE_ADDED,
+          message: text,
+          createdByUserId: validUserId,
+        },
+      });
 
-    await markLeadAIInsightNeedsRefresh(leadId);
+      await markLeadAIInsightNeedsRefresh(leadId, tx);
+      await touchCrmSync(tx);
+
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "NOTE_ADD",
+        entityType: "NOTE",
+        entityId: activity.id,
+        leadId,
+        beforeSnapshot: { previousLeadNotes: lead.notes },
+        afterSnapshot: { message: text },
+        description: "Note added",
+        createdByUserId: validUserId,
+      });
+
+      return { activity, undoId: undoRecord.id };
+    });
 
     safeRevalidatePath("/dashboard");
     safeRevalidatePath("/leads");
@@ -102,7 +120,7 @@ export async function addLeadNote(leadId: string, message: string): Promise<Acti
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath(`/leads/${leadId}`);
 
-    return { success: true, data: serializeActivity(activity) };
+    return { success: true, data: serializeActivity(result.activity), undoId: result.undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -123,12 +141,30 @@ export async function updateLeadNote(activityId: string, message: string): Promi
       throw new UserFacingError("You can only edit your own notes.");
     }
 
-    const updated = await db.leadActivity.update({
-      where: { id: activityId },
-      data: { message: text },
-    });
+    const validUserId = await resolveValidUserId(session.id);
 
-    await markLeadAIInsightNeedsRefresh(activity.leadId);
+    const result = await db.$transaction(async (tx) => {
+      const updated = await tx.leadActivity.update({
+        where: { id: activityId },
+        data: { message: text },
+      });
+
+      await markLeadAIInsightNeedsRefresh(activity.leadId, tx);
+      await touchCrmSync(tx);
+
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "NOTE_UPDATE",
+        entityType: "NOTE",
+        entityId: activityId,
+        leadId: activity.leadId,
+        beforeSnapshot: { message: activity.message },
+        afterSnapshot: { message: text },
+        description: "Note updated",
+        createdByUserId: validUserId,
+      });
+
+      return { activity: updated, undoId: undoRecord.id };
+    });
 
     safeRevalidatePath("/dashboard");
     safeRevalidatePath("/leads");
@@ -136,7 +172,7 @@ export async function updateLeadNote(activityId: string, message: string): Promi
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath(`/leads/${activity.leadId}`);
 
-    return { success: true, data: serializeActivity(updated) };
+    return { success: true, data: serializeActivity(result.activity), undoId: result.undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -146,6 +182,7 @@ export async function deleteLeadNote(activityId: string): Promise<ActivityAction
   try {
     const session = await requireAuthenticatedUser();
     if (!activityId) throw new UserFacingError("Activity ID is required.");
+
     const activity = await db.leadActivity.findUnique({ where: { id: activityId } });
     if (!activity) throw new UserFacingError("Activity not found.");
     if (activity.type !== ActivityType.NOTE_ADDED) throw new UserFacingError("Only notes can be deleted.");
@@ -153,8 +190,26 @@ export async function deleteLeadNote(activityId: string): Promise<ActivityAction
       throw new UserFacingError("You can only delete your own notes.");
     }
 
-    await db.leadActivity.delete({ where: { id: activityId } });
-    await markLeadAIInsightNeedsRefresh(activity.leadId);
+    const validUserId = await resolveValidUserId(session.id);
+
+    const result = await db.$transaction(async (tx) => {
+      await tx.leadActivity.delete({ where: { id: activityId } });
+      await markLeadAIInsightNeedsRefresh(activity.leadId, tx);
+      await touchCrmSync(tx);
+
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "NOTE_DELETE",
+        entityType: "NOTE",
+        entityId: activityId,
+        leadId: activity.leadId,
+        beforeSnapshot: { message: activity.message, type: activity.type },
+        afterSnapshot: null,
+        description: "Note deleted",
+        createdByUserId: validUserId,
+      });
+
+      return { undoId: undoRecord.id };
+    });
 
     safeRevalidatePath("/dashboard");
     safeRevalidatePath("/leads");
@@ -162,7 +217,7 @@ export async function deleteLeadNote(activityId: string): Promise<ActivityAction
     safeRevalidatePath("/follow-ups");
     safeRevalidatePath(`/leads/${activity.leadId}`);
 
-    return { success: true, data: { id: activityId } };
+    return { success: true, data: { id: activityId }, undoId: result.undoId };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -194,6 +249,7 @@ export async function logActivity(leadId: string, type: ActivityType, message: s
     }
 
     await markLeadAIInsightNeedsRefresh(leadId);
+    await touchCrmSync();
     safeRevalidatePath("/dashboard");
     safeRevalidatePath("/pipeline");
     safeRevalidatePath("/leads");

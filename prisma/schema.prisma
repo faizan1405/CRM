@@ -457,3 +457,30 @@ model Payment {
   @@index([paymentDate])
 }
 
+model UndoAction {
+  id                String    @id @default(uuid())
+  actionType        String
+  entityType        String
+  entityId          String
+  leadId            String?
+  beforeSnapshot    Json
+  afterSnapshot     Json?
+  expectedUpdatedAt DateTime?
+  description       String
+  undoneAt          DateTime?
+  undoneByUserId    String?
+  createdByUserId   String?
+  createdAt         DateTime  @default(now())
+  expiresAt         DateTime
+
+  @@index([entityId])
+  @@index([leadId])
+  @@index([createdAt])
+  @@index([expiresAt])
+}
+
+model CrmSyncState {
+  id        String   @id @default("global")
+  version   BigInt   @default(1)
+  updatedAt DateTime @default(now()) @updatedAt
+}

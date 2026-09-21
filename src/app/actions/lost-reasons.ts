@@ -13,6 +13,8 @@ import {
   type LostReasonActionResult,
 } from "@/features/lost-reasons/types";
 import { markLeadAIInsightNeedsRefresh } from "@/features/ai-attention/services/attention-engine";
+import { recordUndoAction } from "@/features/undo/services/undo-engine";
+import { touchCrmSync } from "@/lib/crm-sync";
 
 class UserFacingError extends Error {}
 
@@ -83,7 +85,7 @@ export async function markLeadLost(
 
     const lead = await db.lead.findUnique({
       where: { id: leadId },
-      select: { id: true, status: true, name: true },
+      select: { id: true, status: true, name: true, nextFollowUpDate: true },
     });
 
     if (!lead) {
@@ -94,13 +96,52 @@ export async function markLeadLost(
     const reasonLabel = LOST_REASON_LABELS[prismaReason] || rawReason;
 
     const lossEvent = await db.$transaction(async (tx) => {
-      // 1. Update lead status to LOST
+      // 1. Update lead status to LOST and clear nextFollowUpDate
       await tx.lead.update({
         where: { id: leadId },
-        data: { status: LeadStatus.LOST },
+        data: {
+          status: LeadStatus.LOST,
+          nextFollowUpDate: null,
+        },
       });
 
-      // 2. Create persistent LeadLossEvent
+      // 2. Safely cancel any existing PENDING follow-up for this lead (preserving history)
+      const pendingFollowUps = await tx.followUp.findMany({
+        where: {
+          leadId,
+          status: "PENDING",
+        },
+      });
+
+      if (pendingFollowUps.length > 0) {
+        await tx.followUp.updateMany({
+          where: {
+            leadId,
+            status: "PENDING",
+          },
+          data: {
+            status: "CANCELLED",
+          },
+        });
+
+        for (const fu of pendingFollowUps) {
+          await tx.leadActivity.create({
+            data: {
+              leadId,
+              type: ActivityType.FOLLOWUP_CANCELLED,
+              message: `Cancelled ${fu.type} follow-up (Lead marked Lost)`,
+              metadata: {
+                type: fu.type,
+                followUpId: fu.id,
+                reason: "LEAD_MARKED_LOST",
+              },
+              createdByUserId: validUserId,
+            },
+          });
+        }
+      }
+
+      // 3. Create persistent LeadLossEvent
       const event = await tx.leadLossEvent.create({
         data: {
           leadId,
@@ -111,7 +152,7 @@ export async function markLeadLost(
         },
       });
 
-      // 3. Create STATUS_CHANGED activity with loss metadata
+      // 4. Create STATUS_CHANGED activity with loss metadata
       const activityMessage = `Status changed to Lost (Reason: ${reasonLabel}${note ? ` - ${note}` : ""})`;
       await tx.leadActivity.create({
         data: {
@@ -130,10 +171,28 @@ export async function markLeadLost(
         },
       });
 
-      // 4. Mark AI insight needs refresh
+      // 5. Mark AI insight needs refresh
       await markLeadAIInsightNeedsRefresh(leadId, tx);
 
-      return event;
+      const cancelledFollowUp = pendingFollowUps[0];
+      const undoRecord = await recordUndoAction(tx, {
+        actionType: "LEAD_STATUS_CHANGE",
+        entityType: "LEAD",
+        entityId: leadId,
+        leadId,
+        beforeSnapshot: {
+          status: oldStatus,
+          cancelledFollowUpId: cancelledFollowUp?.id,
+          nextFollowUpDate: lead.nextFollowUpDate ? lead.nextFollowUpDate.toISOString() : (cancelledFollowUp?.scheduledAt ? cancelledFollowUp.scheduledAt.toISOString() : null),
+        },
+        afterSnapshot: { status: LeadStatus.LOST, lossEventId: event.id },
+        description: `Lead marked as Lost (${reasonLabel})`,
+        createdByUserId: validUserId,
+      });
+
+      await touchCrmSync(tx);
+
+      return { event, undoId: undoRecord.id };
     });
 
     try {
@@ -151,8 +210,9 @@ export async function markLeadLost(
       success: true,
       data: {
         leadId,
-        lossEvent: serializeLossEvent(lossEvent),
+        lossEvent: serializeLossEvent(lossEvent.event),
       },
+      undoId: lossEvent.undoId,
     };
   } catch (error) {
     return { success: false, error: cleanError(error) };

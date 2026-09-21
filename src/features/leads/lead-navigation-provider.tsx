@@ -41,7 +41,7 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
   const [followUpLead, setFollowUpLead] = useState<Lead | { id: string; name: string } | null>(null);
   const [followUpSuggestion, setFollowUpSuggestion] = useState<import("@/lib/follow-up-suggestions").FollowUpSuggestion | null>(null);
   const activity = useLeadActivities(lead?.id);
-  const { showToast } = useToast();
+  const { showToast, showUndoToast } = useToast();
 
   const close = () => { requestId.current++; setLoadingId(null); setLead(null); setError(null); setEditing(false); setLost(false); };
   useDialogAccessibility(Boolean(loadingId || (!lead && error && !followUpLead)), close, false, shellCloseRef);
@@ -62,7 +62,6 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
     if (!lead) return;
     if (status === "Lost" && !reason) { setLost(true); return; }
     setSaving(true); setError(null);
-    const oldStatus = lead.status;
     try {
       const result = await changeLeadStatus(lead.id, status, reason?.reason, reason?.notes);
       if (result.success) { 
@@ -71,18 +70,13 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
           const { getFollowUpSuggestion } = await import("@/lib/follow-up-suggestions");
           setFollowUpSuggestion(getFollowUpSuggestion("PROPOSAL_SENT"));
           setFollowUpLead(result.data);
-        } else if (status !== "Lost" && status !== "Won") {
-          showToast(`Status changed to ${status}`, "success", {
-            label: "Undo",
-            onClick: async () => {
-              const undoRes = await changeLeadStatus(lead.id, oldStatus);
-              if (undoRes.success) {
-                setLead(undoRes.data);
-                await activity.refresh();
-                showToast("Status restored", "info");
-              }
-            }
+        }
+        if (result.undoId) {
+          showUndoToast(`Status changed to ${status}`, result.undoId, () => {
+            void openLead(lead.id);
           });
+        } else {
+          showToast(`Status changed to ${status}`, "success");
         }
       } else setError(result.error);
     } catch { setError("Could not update this lead. Please try again."); }
@@ -106,9 +100,6 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
       const result = await scheduleLeadFollowUp(form);
       if (result.success) { 
         const isRescheduled = Boolean((followUpLead && "activeFollowUp" in followUpLead && followUpLead.activeFollowUp) || data.id);
-        const prevFollowUp = followUpLead && "activeFollowUp" in followUpLead ? followUpLead.activeFollowUp : undefined;
-        const prevScheduledAt = prevFollowUp?.scheduledAt ? new Date(prevFollowUp.scheduledAt) : undefined;
-        const prevType = prevFollowUp?.type;
 
         setFollowUpLead(null);
         if (result.data.leadRecord) {
@@ -119,26 +110,14 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
         }
         await activity.refresh();
         router.refresh(); 
-        showToast(isRescheduled ? "Follow-up rescheduled" : "Follow-up scheduled", "success", {
-          label: "Undo",
-          onClick: async () => {
-            if (isRescheduled && prevScheduledAt && prevType) {
-              const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoRescheduleFollowUp(result.data.id, prevScheduledAt, prevType));
-              if (undoRes.success) {
-                showToast("Follow-up reschedule undone", "info");
-                await activity.refresh();
-                router.refresh();
-              }
-            } else {
-              const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoCreateFollowUp(result.data.id));
-              if (undoRes.success) {
-                showToast("Follow-up creation undone", "info");
-                await activity.refresh();
-                router.refresh();
-              }
-            }
-          }
-        });
+        const msg = isRescheduled ? "Follow-up rescheduled" : "Follow-up scheduled";
+        if (result.undoId) {
+          showUndoToast(msg, result.undoId, () => {
+            if (lead) void openLead(lead.id);
+          });
+        } else {
+          showToast(msg, "success");
+        }
       }
       else setError(result.error);
     } catch { setError("Could not save the follow-up. Your entered details are preserved."); }
@@ -154,17 +133,14 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
         if (result.success) {
           setLead(result.data);
           router.refresh();
-          showToast(markAsWaste ? "Lead marked as Waste" : "Lead restored", "success", {
-            label: "Undo",
-            onClick: async () => {
-              const undoRes = await import("@/app/actions/leads").then(m => m.undoWasteToggle(lead.id, !markAsWaste));
-              if (undoRes.success) {
-                showToast("Action undone", "info");
-                setLead(undoRes.data);
-                router.refresh();
-              }
-            }
-          });
+          const msg = markAsWaste ? "Lead marked as Waste" : "Lead restored";
+          if (result.undoId) {
+            showUndoToast(msg, result.undoId, () => {
+              void openLead(lead.id);
+            });
+          } else {
+            showToast(msg, "success");
+          }
         } else {
           setError(result.error);
         }
@@ -184,7 +160,14 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
         if (result.success) {
           setLead(result.data);
           router.refresh();
-          showToast(nextPinned ? "Lead pinned to shortlist" : "Lead removed from shortlist", "success");
+          const msg = nextPinned ? "Lead pinned to shortlist" : "Lead removed from shortlist";
+          if (result.undoId) {
+            showUndoToast(msg, result.undoId, () => {
+              void openLead(lead.id);
+            });
+          } else {
+            showToast(msg, "success");
+          }
         } else {
           setLead({ ...lead, isPinned: !nextPinned });
           setError(result.error);

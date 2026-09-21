@@ -66,10 +66,14 @@ export function formatFollowUpWarning(scheduledAt: string | Date): string {
  * Checks if a lead has an active (pending) future follow-up.
  */
 export function getActiveFutureFollowUp(lead: {
+  status?: string;
   activeFollowUp?: FollowUp | null;
   followUps?: Array<{ id?: string; scheduledAt: string | Date; status: string; type?: string }>;
 } | null | undefined): FollowUp | null {
   if (!lead) return null;
+  if (lead.status && (lead.status === "LOST" || lead.status === "Lost" || lead.status.toUpperCase() === "LOST")) {
+    return null;
+  }
   if (lead.activeFollowUp) {
     const status = String(lead.activeFollowUp.status).toUpperCase();
     if (status === "PENDING") {

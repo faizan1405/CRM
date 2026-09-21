@@ -12,6 +12,8 @@ import {
   transformPersonalNote as transformService,
   improvePersonalNoteService,
 } from "@/features/personal-notes/services/notes-ai-transformer";
+import { touchCrmSync } from "@/lib/crm-sync";
+import { recordUndoAction } from "@/features/undo/services/undo-engine";
 
 class UserFacingError extends Error {}
 
@@ -95,6 +97,25 @@ export async function createPersonalNote(input: {
       },
     });
 
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "PERSONAL_NOTE_CREATE",
+        entityType: "PERSONAL_NOTE",
+        entityId: note.id,
+        leadId: null,
+        beforeSnapshot: null,
+        afterSnapshot: note,
+        description: `Create personal note "${note.title || note.content.slice(0, 20)}"`,
+        userId: user.id,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for createPersonalNote:", e);
+    }
+
+    await touchCrmSync();
+
     try {
       revalidatePath("/personal-notes");
     } catch {
@@ -104,6 +125,7 @@ export async function createPersonalNote(input: {
     return {
       success: true,
       data: serializeNote(note),
+      undoId,
     };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -156,6 +178,26 @@ export async function updatePersonalNote(
       data: dataToUpdate,
     });
 
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "PERSONAL_NOTE_UPDATE",
+        entityType: "PERSONAL_NOTE",
+        entityId: updated.id,
+        leadId: null,
+        beforeSnapshot: existing,
+        afterSnapshot: updated,
+        expectedUpdatedAt: updated.updatedAt,
+        description: `Update personal note "${updated.title || updated.content.slice(0, 20)}"`,
+        userId: user.id,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for updatePersonalNote:", e);
+    }
+
+    await touchCrmSync();
+
     try {
       revalidatePath("/personal-notes");
     } catch {
@@ -165,6 +207,7 @@ export async function updatePersonalNote(
     return {
       success: true,
       data: serializeNote(updated),
+      undoId,
     };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -188,6 +231,26 @@ export async function deletePersonalNote(id: string): Promise<PersonalNoteAction
       where: { id },
     });
 
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "PERSONAL_NOTE_DELETE",
+        entityType: "PERSONAL_NOTE",
+        entityId: existing.id,
+        leadId: null,
+        beforeSnapshot: existing,
+        afterSnapshot: null,
+        expectedUpdatedAt: existing.updatedAt,
+        description: `Delete personal note "${existing.title || existing.content.slice(0, 20)}"`,
+        userId: user.id,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for deletePersonalNote:", e);
+    }
+
+    await touchCrmSync();
+
     try {
       revalidatePath("/personal-notes");
     } catch {
@@ -197,6 +260,7 @@ export async function deletePersonalNote(id: string): Promise<PersonalNoteAction
     return {
       success: true,
       data: { id },
+      undoId,
     };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -226,6 +290,26 @@ export async function togglePersonalNotePinned(
       data: { isPinned: nextPinned },
     });
 
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "PERSONAL_NOTE_PIN",
+        entityType: "PERSONAL_NOTE",
+        entityId: updated.id,
+        leadId: null,
+        beforeSnapshot: { isPinned: existing.isPinned },
+        afterSnapshot: { isPinned: nextPinned },
+        expectedUpdatedAt: updated.updatedAt,
+        description: nextPinned ? `Pinned note "${updated.title || ""}"` : `Unpinned note "${updated.title || ""}"`,
+        userId: user.id,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for togglePersonalNotePinned:", e);
+    }
+
+    await touchCrmSync();
+
     try {
       revalidatePath("/personal-notes");
     } catch {
@@ -235,6 +319,7 @@ export async function togglePersonalNotePinned(
     return {
       success: true,
       data: serializeNote(updated),
+      undoId,
     };
   } catch (error) {
     return { success: false, error: cleanError(error) };

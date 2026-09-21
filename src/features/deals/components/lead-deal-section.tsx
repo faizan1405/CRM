@@ -33,6 +33,7 @@ import {
   X,
   CreditCard
 } from "lucide-react";
+import { AiNoteEditor } from "@/components/ui/ai-note-editor";
 import { useToast } from "@/components/toast-provider";
 
 interface LeadDealSectionProps {
@@ -48,7 +49,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
   const [editingPayment, setEditingPayment] = useState<SerializedPayment | null>(null);
   const [deletingPayment, setDeletingPayment] = useState<SerializedPayment | null>(null);
   const [saving, setSaving] = useState(false);
-  const { showToast } = useToast();
+  const { showToast, showUndoToast } = useToast();
 
   // Load deal
   const loadDeal = async () => {
@@ -95,7 +96,13 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
     if (res.success) {
       setDeal(res.data);
       setDealModalOpen(false);
-      showToast("Deal details updated", "success");
+      if (res.undoId) {
+        showUndoToast("Deal details updated", res.undoId, () => {
+          void loadDeal();
+        });
+      } else {
+        showToast("Deal details updated", "success");
+      }
     } else {
       showToast(res.error || "Failed to update deal", "error");
     }
@@ -129,7 +136,13 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
         await loadDeal();
         setPaymentModalOpen(false);
         setEditingPayment(null);
-        showToast("Payment updated", "success");
+        if (res.undoId) {
+          showUndoToast("Payment updated", res.undoId, () => {
+            void loadDeal();
+          });
+        } else {
+          showToast("Payment updated", "success");
+        }
       } else {
         showToast(res.error || "Failed to update payment", "error");
       }
@@ -148,7 +161,13 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
       if (res.success) {
         await loadDeal();
         setPaymentModalOpen(false);
-        showToast("Payment recorded", "success");
+        if (res.undoId) {
+          showUndoToast("Payment recorded", res.undoId, () => {
+            void loadDeal();
+          });
+        } else {
+          showToast("Payment recorded", "success");
+        }
       } else {
         showToast(res.error || "Failed to record payment", "error");
       }
@@ -163,7 +182,13 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
     if (res.success) {
       await loadDeal();
       setDeletingPayment(null);
-      showToast("Payment removed", "info");
+      if (res.undoId) {
+        showUndoToast("Payment removed", res.undoId, () => {
+          void loadDeal();
+        });
+      } else {
+        showToast("Payment removed", "info");
+      }
     } else {
       showToast(res.error || "Failed to delete payment", "error");
     }
@@ -624,13 +649,15 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Payment Note</label>
-                <textarea
+                <AiNoteEditor
                   name="note"
-                  rows={2}
                   defaultValue={editingPayment?.note ?? ""}
+                  label="Payment Note"
+                  labelClassName="block font-semibold text-slate-700 mb-1"
+                  rows={2}
                   placeholder="e.g. Advance received for homepage and admin panel"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none resize-none"
+                  textareaClassName="px-3 py-2 text-base sm:text-sm resize-none"
+                  compact
                 />
               </div>
 

@@ -92,7 +92,7 @@ export interface DealSummaryMetrics {
 }
 
 export type DealActionResult<T = undefined> =
-  | { success: true; data: T }
+  | { success: true; data: T; undoId?: string }
   | { success: false; error: string };
 
 export interface CreateOtherClientDealInput {

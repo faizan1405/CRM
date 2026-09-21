@@ -77,13 +77,14 @@ export async function globalQuickSearch(query: string) {
     });
 
     const mapped = leads.map(l => {
-      const activeFollowUp = l.followUps?.[0]?.scheduledAt;
+      const isLost = l.status === "LOST";
+      const activeFollowUp = isLost ? null : l.followUps?.[0]?.scheduledAt;
       return {
         id: l.id,
         name: l.name,
         phone: l.phone,
         status: statusFromDatabase[l.status],
-        nextFollowUpDate: activeFollowUp ? activeFollowUp.toISOString() : (l.nextFollowUpDate ? l.nextFollowUpDate.toISOString() : null),
+        nextFollowUpDate: isLost ? null : (activeFollowUp ? activeFollowUp.toISOString() : (l.nextFollowUpDate ? l.nextFollowUpDate.toISOString() : null)),
         notes: l.notes,
       };
     });

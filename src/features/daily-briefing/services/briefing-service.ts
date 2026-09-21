@@ -57,7 +57,14 @@ export async function getDailySalesBriefingData(options?: {
       },
     }),
     db.followUp.findMany({
-      where: { status: "PENDING" },
+      where: {
+        status: "PENDING",
+        lead: {
+          status: { notIn: ["WON", "LOST"] },
+          deletedAt: null,
+          mergedIntoLeadId: null,
+        },
+      },
       include: { lead: true },
       orderBy: { scheduledAt: "asc" },
     }),

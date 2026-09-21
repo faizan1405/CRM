@@ -3,7 +3,7 @@ import type { LeadOperationalState } from "@/features/leads/types";
 export function deriveOperationalState(
   lead: { status: string; isWaste: boolean; nextFollowUpDate: string | null } & { followUps?: { scheduledAt: string; status: string }[] }
 ): LeadOperationalState {
-  if (lead.status === "LOST") return "LOST";
+  if (lead.status === "LOST" || lead.status === "Lost" || lead.status?.toUpperCase?.() === "LOST") return "LOST";
   if (lead.isWaste) return "WASTE";
 
   const getKolkataDateString = (date: Date) => {

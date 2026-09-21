@@ -8,6 +8,7 @@ import { crmNavigation } from "@/components/crm-navigation";
 import { LiveClock } from "@/components/live-clock";
 import { GlobalSearch } from "@/components/global-search";
 import { CrmRefreshButton } from "@/components/crm-refresh-button";
+import { SyncStatusIndicator } from "@/components/sync-status-indicator";
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -25,8 +26,9 @@ export function AppSidebar() {
           </Link>
           <CrmRefreshButton variant="desktop" />
         </div>
-        <div className="px-3">
+        <div className="px-3 flex flex-col gap-1">
           <LiveClock />
+          <SyncStatusIndicator variant="desktop" />
         </div>
         <div className="mt-1">
           <GlobalSearch trigger="desktop" />

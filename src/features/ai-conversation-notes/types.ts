@@ -46,6 +46,7 @@ export interface CallNotesActionResult<T> {
   success: boolean;
   data?: T;
   error?: string;
+  undoId?: string;
 }
 
 export interface ApplyCallNotesInput {

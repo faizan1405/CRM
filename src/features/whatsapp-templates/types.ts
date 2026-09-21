@@ -86,6 +86,7 @@ export interface AIPersonalizeResult {
 export interface TemplateActionResult<T> {
   success: boolean;
   data?: T;
+  undoId?: string;
   error?: string;
 }
 

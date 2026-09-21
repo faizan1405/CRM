@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { getLeadActivities, addLeadNote, updateLeadNote, deleteLeadNote } from "@/app/actions/activities";
 import type { Activity, ActivityFilter } from "@/features/activity/types";
 import type { LeadActivity } from "@/features/activities/types";
+import { useToast } from "@/components/toast-provider";
 
 function mapBackendActivity(ba: LeadActivity): Activity {
   const base = {
@@ -40,6 +41,7 @@ export function useLeadActivities(leadId: string | undefined) {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [filter, setFilter] = useState<ActivityFilter>("all");
   const [loading, setLoading] = useState(false);
+  const { showToast, showUndoToast } = useToast();
 
   const fetchActivities = useCallback(async () => {
     if (!leadId) {
@@ -64,6 +66,13 @@ export function useLeadActivities(leadId: string | undefined) {
     const result = await addLeadNote(leadId, text);
     if (result.success) {
       await fetchActivities();
+      if (result.undoId) {
+        showUndoToast("Note added", result.undoId, () => {
+          void fetchActivities();
+        });
+      } else {
+        showToast("Note added", "success");
+      }
       return { success: true };
     }
     return { success: false, error: result.error };
@@ -73,8 +82,15 @@ export function useLeadActivities(leadId: string | undefined) {
     const result = await updateLeadNote(id, noteText);
     if (result.success) {
       await fetchActivities();
+      if (result.undoId) {
+        showUndoToast("Note updated", result.undoId, () => {
+          void fetchActivities();
+        });
+      } else {
+        showToast("Note updated", "success");
+      }
     } else {
-      alert(result.error);
+      showToast(result.error || "Failed to update note", "error");
     }
   };
 
@@ -83,8 +99,15 @@ export function useLeadActivities(leadId: string | undefined) {
     const result = await deleteLeadNote(id);
     if (result.success) {
       await fetchActivities();
+      if (result.undoId) {
+        showUndoToast("Note deleted", result.undoId, () => {
+          void fetchActivities();
+        });
+      } else {
+        showToast("Note deleted", "info");
+      }
     } else {
-      alert(result.error);
+      showToast(result.error || "Failed to delete note", "error");
     }
   };
 

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { improveNoteText } from "@/app/actions/conversation-notes";
-import { Sparkles, RotateCcw } from "lucide-react";
+import { useState } from "react";
+import { AiNoteEditor } from "@/components/ui/ai-note-editor";
 
 type NoteComposerProps = {
   onAddNote: (text: string) => Promise<{ success: boolean; error?: string }>;
@@ -13,21 +12,12 @@ type NoteComposerProps = {
 
 export function NoteComposer({ onAddNote, disabled = false, autoFocus = false, id = "note-composer" }: NoteComposerProps) {
   const [text, setText] = useState("");
-  const [originalDraft, setOriginalDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [improving, setImproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const MAX_CHARS = 1000;
 
-  useEffect(() => {
-    if (autoFocus && !disabled && textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  }, [autoFocus, disabled]);
-
   const handleSubmit = async () => {
-    if (disabled || saving || improving) return;
+    if (disabled || saving) return;
     const trimmed = text.trim();
     if (!trimmed) return;
 
@@ -40,7 +30,6 @@ export function NoteComposer({ onAddNote, disabled = false, autoFocus = false, i
         setError(result.error || "Failed to add note.");
       } else {
         setText("");
-        setOriginalDraft(null);
         setError(null);
       }
     } catch {
@@ -50,79 +39,26 @@ export function NoteComposer({ onAddNote, disabled = false, autoFocus = false, i
     }
   };
 
-  const handleImprove = async () => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-
-    setError(null);
-    setImproving(true);
-    try {
-      const res = await improveNoteText(trimmed);
-      if (!res.success) {
-        setError(res.error || "Failed to improve note.");
-      } else if (res.data) {
-        setOriginalDraft(text);
-        setText(res.data);
-      }
-    } catch {
-      setError("Something went wrong improving the note.");
-    } finally {
-      setImproving(false);
-    }
-  };
-
-  const handleUndo = () => {
-    if (originalDraft !== null) {
-      setText(originalDraft);
-      setOriginalDraft(null);
-      setError(null);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-      if (e.nativeEvent.isComposing) return;
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
-  const remaining = MAX_CHARS - text.length;
-
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block text-sm font-semibold text-slate-700">
-        Add a note
-      </label>
-      <textarea
-        ref={textareaRef}
+      <AiNoteEditor
         id={id}
         value={text}
-        onKeyDown={handleKeyDown}
-        onChange={(e) => {
-          if (e.target.value.length <= MAX_CHARS) {
-            setText(e.target.value);
-            setError(null);
-          }
+        onChange={(val) => {
+          setText(val);
+          if (error) setError(null);
         }}
-        rows={4}
+        label="Add a note"
+        labelClassName="mb-1.5 block text-sm font-semibold text-slate-700"
         placeholder="What happened during this interaction?"
-        disabled={disabled || saving || improving}
-        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-base sm:text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50 resize-y whitespace-pre-wrap leading-relaxed"
-        aria-describedby={error ? "note-error" : "note-chars"}
+        rows={4}
+        maxLength={MAX_CHARS}
+        showCharCount
+        disabled={disabled || saving}
+        autoFocus={autoFocus}
+        onSubmitShortcut={handleSubmit}
+        textareaClassName="resize-y whitespace-pre-wrap leading-relaxed"
       />
-
-      <div className="mt-1.5 flex items-center justify-between">
-        <span id="note-chars" className="text-xs text-slate-400">
-          {remaining <= 50 ? (
-            <span className={remaining <= 10 ? "text-red-500 font-medium" : "text-slate-500"}>
-              {remaining} characters left
-            </span>
-          ) : (
-            <span className="text-slate-400">{remaining} characters left</span>
-          )}
-        </span>
-      </div>
 
       {error && (
         <p id="note-error" className="mt-1.5 text-xs text-red-600" role="alert">
@@ -130,46 +66,12 @@ export function NoteComposer({ onAddNote, disabled = false, autoFocus = false, i
         </p>
       )}
 
-      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleImprove}
-            disabled={disabled || saving || improving || !text.trim()}
-            className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 hover:text-blue-600 active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-          >
-            {improving ? (
-              <>
-                <span className="size-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" aria-hidden="true" />
-                Improving...
-              </>
-            ) : (
-              <>
-                <Sparkles className="size-4 text-blue-500" />
-                Improve with AI
-              </>
-            )}
-          </button>
-
-          {originalDraft !== null && (
-            <button
-              type="button"
-              onClick={handleUndo}
-              disabled={disabled || saving || improving}
-              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
-              aria-label="Undo improvement"
-            >
-              <RotateCcw className="size-3.5 text-slate-500" />
-              Undo
-            </button>
-          )}
-        </div>
-
+      <div className="mt-2.5 flex justify-end">
         <button
           type="button"
           onClick={handleSubmit}
-          disabled={disabled || saving || improving || !text.trim()}
-          className="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 transition-colors sm:flex-none"
+          disabled={disabled || saving || !text.trim()}
+          className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50 transition-colors sm:w-auto"
         >
           {saving ? (
             <>

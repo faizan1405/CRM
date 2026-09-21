@@ -1,12 +1,15 @@
 "use client";
 
 import { createContext, useContext, useCallback, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { performUndo } from "@/app/actions/undo";
 
 type ToastVariant = "success" | "error" | "info" | "warning";
 
 type ToastAction = {
   label: string;
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
+  disabled?: boolean;
 };
 
 type Toast = {
@@ -17,7 +20,8 @@ type Toast = {
 };
 
 type ToastContextValue = {
-  showToast: (message: string, variant?: ToastVariant, action?: ToastAction) => void;
+  showToast: (message: string, variant?: ToastVariant, action?: ToastAction) => string;
+  showUndoToast: (message: string, undoActionId: string, onUndone?: () => void) => string;
 };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -68,8 +72,10 @@ const variantStyles: Record<ToastVariant, { bg: string; text: string; icon: Reac
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pendingUndos = useRef<Set<string>>(new Set());
 
   const dismiss = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -85,8 +91,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       setToasts((prev) => [...prev, { id, message, variant, action }]);
 
-      // Increase time if there's an action (5-8 seconds window for undo)
-      const duration = action ? 6000 : 3200;
+      // Increase time if there's an action (7 seconds window for undo)
+      const duration = action ? 7000 : 3200;
       const timer = setTimeout(() => dismiss(id), duration);
       timers.current.set(id, timer);
 
@@ -95,8 +101,75 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [dismiss],
   );
 
+  const showUndoToast = useCallback(
+    (message: string, undoActionId: string, onUndone?: () => void) => {
+      if (!undoActionId) {
+        return showToast(message, "success");
+      }
+
+      const toastId = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+      const handleUndo = async () => {
+        if (pendingUndos.current.has(undoActionId)) return;
+        pendingUndos.current.add(undoActionId);
+
+        // Update toast action label to "Undoing..."
+        setToasts((prev) =>
+          prev.map((t) =>
+            t.id === toastId
+              ? {
+                  ...t,
+                  action: {
+                    label: "Undoing...",
+                    disabled: true,
+                    onClick: () => {},
+                  },
+                }
+              : t
+          )
+        );
+
+        try {
+          const res = await performUndo(undoActionId);
+          dismiss(toastId);
+
+          if (res.success) {
+            showToast(res.message || "Undo successful", "success");
+            try {
+              router.refresh();
+            } catch {}
+            if (onUndone) {
+              try {
+                onUndone();
+              } catch {}
+            }
+          } else {
+            showToast(res.error || "Unable to undo action.", "error");
+          }
+        } catch {
+          dismiss(toastId);
+          showToast("Failed to undo action.", "error");
+        } finally {
+          pendingUndos.current.delete(undoActionId);
+        }
+      };
+
+      const action: ToastAction = {
+        label: "Undo",
+        onClick: handleUndo,
+      };
+
+      setToasts((prev) => [...prev, { id: toastId, message, variant: "success", action }]);
+      const timer = setTimeout(() => dismiss(toastId), 7500);
+      timers.current.set(toastId, timer);
+
+      return toastId;
+    },
+    [dismiss, router, showToast]
+  );
+
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={{ showToast, showUndoToast }}>
       {children}
 
       {/* Toast container */}
@@ -115,11 +188,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <span className="flex-1 min-w-0 font-semibold">{toast.message}</span>
             {toast.action && (
               <button
-                onClick={() => {
-                  toast.action!.onClick();
-                  dismiss(toast.id);
+                type="button"
+                disabled={toast.action.disabled}
+                onClick={async () => {
+                  if (toast.action?.disabled) return;
+                  await toast.action!.onClick();
+                  if (!toast.action?.disabled) {
+                    dismiss(toast.id);
+                  }
                 }}
-                className="shrink-0 rounded-lg bg-white/50 px-3 min-h-[44px] flex items-center justify-center text-sm font-bold shadow-sm hover:bg-white/80 transition-colors active:scale-95"
+                className={`shrink-0 rounded-lg bg-white/60 px-3 min-h-[44px] flex items-center justify-center text-sm font-bold shadow-sm transition-colors ${
+                  toast.action.disabled
+                    ? "opacity-50 cursor-not-allowed"
+                    : "hover:bg-white/90 active:scale-95 cursor-pointer"
+                }`}
               >
                 {toast.action.label}
               </button>
@@ -142,10 +224,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 const defaultToastContext: ToastContextValue = {
-  showToast: () => {},
+  showToast: () => "",
+  showUndoToast: () => "",
 };
 
 export function useToast() {
   const ctx = useContext(ToastContext);
   return ctx || defaultToastContext;
 }
+

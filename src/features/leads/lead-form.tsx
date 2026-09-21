@@ -10,6 +10,7 @@ import { leadStatuses, type Lead, type LeadStatus } from "@/features/leads/types
 import { checkLeadDuplicate } from "@/app/actions/leads";
 import { DuplicateLeadWarning } from "./duplicate-lead-warning";
 import { MergeLeadsModal } from "./merge-leads-modal";
+import { AiNoteEditor } from "@/components/ui/ai-note-editor";
 
 type LeadFormProps = {
   open: boolean;
@@ -229,17 +230,20 @@ function ManualLeadEntry({
                 defaultValue={lead?.nextFollowUpDate ?? ""}
               />
             </label>
-            <label className="text-sm font-medium text-slate-700 sm:col-span-2">
-              Notes
-              <textarea
-                className={`${inputClass} min-h-28 resize-y py-3`}
+            <div className="sm:col-span-2">
+              <AiNoteEditor
+                label="Notes"
+                labelClassName="text-sm font-medium text-slate-700 block mb-1"
                 name="notes"
                 maxLength={5000}
                 placeholder="Context, requirements or next steps"
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(val) => setNotes(val)}
+                disabled={saving}
+                rows={4}
+                textareaClassName="min-h-28 resize-y py-3"
               />
-            </label>
+            </div>
           </div>
           <footer className="flex flex-col-reverse gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:px-6 sm:pb-4">
             <button
@@ -479,3 +483,5 @@ export function LeadForm({
     </div>
   );
 }
+
+export { LeadForm as LeadFormModal };

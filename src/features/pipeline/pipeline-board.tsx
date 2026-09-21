@@ -85,7 +85,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   const [followUpSuggestion, setFollowUpSuggestion] = useState<FollowUpSuggestion | null>(null);
   const [lostReasonLead, setLostReasonLead] = useState<Lead | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { showToast } = useToast();
+  const { showToast, showUndoToast } = useToast();
 
   const [scrollProgress, setScrollProgress] = useState({
     leftPercent: 0,
@@ -235,22 +235,13 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         setFollowUpSuggestion(getFollowUpSuggestion("PROPOSAL_SENT"));
         setFollowUpLead(res.data);
       }
-      if (destStatus !== "Won") {
-        showToast(`Status changed to ${destStatus}`, "success", {
-          label: "Undo",
-          onClick: async () => {
-            const undoRes = await changeLeadStatus(draggedLeadId, sourceStatus);
-            if (undoRes.success) {
-              replaceLead(undoRes.data);
-              showToast("Status restored", "info");
-            }
-          }
-        });
+      if (res.undoId) {
+        showUndoToast(`Status changed to ${destStatus}`, res.undoId);
       } else {
-        showToast(`Lead marked as ${destStatus}`, "success");
+        showToast(`Status changed to ${destStatus}`, "success");
       }
     }
-  }, [leads, replaceLead, showToast]);
+  }, [leads, replaceLead, showToast, showUndoToast]);
 
   const handleTogglePin = async (lead: Lead) => {
     const nextPinned = !lead.isPinned;
@@ -263,6 +254,10 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         showToast(result.error, "error");
       } else {
         replaceLead(result.data);
+        const msg = nextPinned ? "Lead pinned to shortlist" : "Lead removed from shortlist";
+        if (result.undoId) {
+          showUndoToast(msg, result.undoId);
+        }
       }
     } catch {
       replaceLead(lead);
@@ -284,7 +279,6 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       return;
     }
     setSaving(true);
-    const oldStatus = selectedLead.status;
     const result = await changeLeadStatus(selectedLead.id, nextStatus);
     setSaving(false);
     if (!result.success) {
@@ -297,18 +291,8 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       setFollowUpSuggestion(getFollowUpSuggestion("PROPOSAL_SENT"));
       setFollowUpLead(result.data);
     }
-    if (nextStatus !== "Won") {
-      showToast(`Status changed to ${nextStatus}`, "success", {
-        label: "Undo",
-        onClick: async () => {
-          const undoRes = await changeLeadStatus(selectedLead.id, oldStatus);
-          if (undoRes.success) {
-            replaceLead(undoRes.data);
-            await refreshActivities();
-            showToast("Status restored", "info");
-          }
-        }
-      });
+    if (result.undoId) {
+      showUndoToast(`Status changed to ${nextStatus}`, result.undoId);
     } else {
       showToast(`Status changed to ${nextStatus}`, "success");
     }
@@ -336,6 +320,11 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       block: "nearest",
       inline: "start",
     });
+    if (result.undoId) {
+      showUndoToast("Lead marked as Lost", result.undoId);
+    } else {
+      showToast("Lead marked as Lost", "success");
+    }
   };
 
   const handleRemoveLead = async () => {
@@ -351,6 +340,9 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     setSelectedLead(null);
     setDeleteTarget(null);
     setError(null);
+    if (result.undoId) {
+      showUndoToast("Lead moved to Recently Deleted", result.undoId);
+    }
     } catch { setError("Could not delete this lead. Please retry."); }
     finally { setSaving(false); }
   };
@@ -371,6 +363,12 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     
     setFormOpen(false);
     setEditingLead(null);
+    const msg = editingLead ? "Lead details updated" : "Lead created successfully";
+    if (result.undoId) {
+      showUndoToast(msg, result.undoId);
+    } else {
+      showToast(msg, "success");
+    }
   };
 
   const handleAddFollowUp = async (data: NewFollowUpInput & { mode?: "reschedule" | "create" }) => {
@@ -405,16 +403,12 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     setSelectedLead((current) => current?.id === data.leadId ? (updatedLead || { ...current, nextFollowUpDate: nextDate, activeFollowUp: result.data }) : current);
     if (selectedLead?.id === data.leadId) await refreshActivities();
     setFollowUpLead(null);
-    showToast(isRescheduled ? "Follow-up rescheduled" : "Follow-up scheduled", "success", {
-      label: "Undo",
-      onClick: async () => {
-        const undoRes = await import("@/app/actions/follow-ups").then(m => m.undoCreateFollowUp(result.data.id));
-        if (undoRes.success) {
-          showToast("Follow-up action undone", "info");
-          await refreshActivities();
-        }
-      }
-    });
+    const msg = isRescheduled ? "Follow-up rescheduled" : "Follow-up scheduled";
+    if (result.undoId) {
+      showUndoToast(msg, result.undoId);
+    } else {
+      showToast(msg, "success");
+    }
   };
 
   return (

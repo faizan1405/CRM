@@ -6,6 +6,7 @@ import type { UILeadDraft as StructuredLeadDraft } from "./bulk-review-types";
 import type { DuplicateLeadCandidate, StructuredLeadField } from "./ai-entry-types";
 import { DuplicateLeadWarning } from "./duplicate-lead-warning";
 import { FollowUpSuggestion } from "./follow-up-suggestion";
+import { AiNoteEditor } from "@/components/ui/ai-note-editor";
 
 type StructuredLeadPreviewProps = {
   idSuffix?: string;
@@ -212,18 +213,20 @@ export function StructuredLeadPreview({
             ))}
           </select>
         </label>
-        <label className="sm:col-span-2">
-          <FieldLabel label="Notes" field="notes" draft={draft} />
-          <textarea
+        <div className="sm:col-span-2">
+          <AiNoteEditor
+            label={<FieldLabel label="Notes" field="notes" draft={draft} />}
+            labelClassName="block text-sm font-semibold text-slate-700 mb-1"
             name="notes"
             maxLength={5000}
             rows={4}
             value={draft.notes ?? ""}
-            onChange={(event) => update("notes", event.target.value)}
+            onChange={(val) => update("notes", val)}
             placeholder="Not provided"
-            className={`${inputClass} h-auto min-h-24 resize-y py-3`}
+            disabled={saving}
+            textareaClassName="h-auto min-h-24 resize-y py-3"
           />
-        </label>
+        </div>
       </div>
 
       <FollowUpSuggestion

@@ -21,6 +21,8 @@ import {
   formatNumberedPoints,
   LEAD_NOTE_IMPROVE_SYSTEM_PROMPT,
 } from "@/lib/format-numbered-points";
+import { touchCrmSync } from "@/lib/crm-sync";
+import { recordUndoAction } from "@/features/undo/services/undo-engine";
 
 class UserFacingError extends Error {}
 
@@ -149,9 +151,27 @@ export async function applyCallNotes(
 
       // 3. Mark AI insight needs refresh
       await markLeadAIInsightNeedsRefresh(input.leadId, tx);
+      await touchCrmSync(tx);
 
       return activity;
     });
+
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "ACTIVITY_NOTE_CREATE",
+        entityType: "ACTIVITY_NOTE",
+        entityId: result.id,
+        leadId: input.leadId,
+        beforeSnapshot: null,
+        afterSnapshot: result,
+        description: `Add call note for ${lead.name}`,
+        userId: session.id as string,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for applyCallNotes:", e);
+    }
 
     try {
       revalidatePath("/leads");
@@ -168,6 +188,7 @@ export async function applyCallNotes(
         activityId: result.id,
         message: result.message,
       },
+      undoId,
     };
   } catch (error) {
     return { success: false, error: cleanError(error) };

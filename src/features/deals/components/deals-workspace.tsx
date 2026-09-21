@@ -37,6 +37,7 @@ import { useLeadNavigation } from "@/features/leads/lead-navigation-provider";
 import { useToast } from "@/components/toast-provider";
 import { PaymentAnalytics } from "./payment-analytics";
 import { DealDetailPanel } from "./deal-detail-panel";
+import { AiNoteEditor } from "@/components/ui/ai-note-editor";
 import { 
   Receipt, 
   Plus, 
@@ -65,8 +66,11 @@ import {
 } from "lucide-react";
 
 interface DealsWorkspaceProps {
-  initialDeals: SerializedDeal[];
-  initialMetrics: DealSummaryMetrics;
+  initialDeals?: SerializedDeal[];
+  initialMetrics?: Partial<DealSummaryMetrics>;
+  deals?: any[];
+  leads?: any[];
+  summary?: any;
 }
 
 function PaymentNote({ note }: { note: string }) {
@@ -94,10 +98,10 @@ function PaymentNote({ note }: { note: string }) {
   );
 }
 
-export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceProps) {
+export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorkspaceProps) {
   const router = useRouter();
   const leadNavigation = useLeadNavigation();
-  const { showToast } = useToast();
+  const { showToast, showUndoToast } = useToast();
 
   const [deals, setDeals] = useState<SerializedDeal[]>(initialDeals);
 
@@ -236,7 +240,11 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
 
     setSaving(false);
     if (res.success) {
-      showToast("Other Client deal created successfully", "success");
+      if (res.undoId) {
+        showUndoToast("Other Client deal created successfully", res.undoId);
+      } else {
+        showToast("Other Client deal created successfully", "success");
+      }
       setDeals((prev) => [res.data, ...prev]);
       setIsCreateOtherModalOpen(false);
       setShowMoreOptions(false);
@@ -272,7 +280,11 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
 
     setSaving(false);
     if (res.success) {
-      showToast("Payment recorded successfully", "success");
+      if (res.undoId) {
+        showUndoToast("Payment recorded successfully", res.undoId);
+      } else {
+        showToast("Payment recorded successfully", "success");
+      }
       const newPayment = res.data;
       setDeals((prev) =>
         prev.map((d) => {
@@ -333,7 +345,11 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
 
     setSaving(false);
     if (res.success) {
-      showToast("Payment updated successfully", "success");
+      if (res.undoId) {
+        showUndoToast("Payment updated successfully", res.undoId);
+      } else {
+        showToast("Payment updated successfully", "success");
+      }
       const updatedPayment = res.data;
       setDeals((prev) =>
         prev.map((d) => {
@@ -377,7 +393,11 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
     const res = await deleteDealPayment(payment.id);
     setSaving(false);
     if (res.success) {
-      showToast("Payment removed", "info");
+      if (res.undoId) {
+        showUndoToast("Payment removed", res.undoId);
+      } else {
+        showToast("Payment removed", "info");
+      }
       setDeals((prev) =>
         prev.map((d) => {
           if (d.id !== deal.id) return d;
@@ -455,7 +475,11 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
 
     setSaving(false);
     if (res.success) {
-      showToast("Deal updated successfully", "success");
+      if (res.undoId) {
+        showUndoToast("Deal updated successfully", res.undoId);
+      } else {
+        showToast("Deal updated successfully", "success");
+      }
       setDeals((prev) => prev.map((d) => (d.id === activeDealForEdit.id ? res.data : d)));
       if (selectedDealForDetail && selectedDealForDetail.id === activeDealForEdit.id) {
         setSelectedDealForDetail(res.data);
@@ -475,7 +499,11 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
     const res = await deleteDeal(dealId);
     setSaving(false);
     if (res.success) {
-      showToast("Financial record deleted successfully", "info");
+      if (res.undoId) {
+        showUndoToast("Financial record deleted successfully", res.undoId);
+      } else {
+        showToast("Financial record deleted successfully", "info");
+      }
       setDeals((prev) => prev.filter((d) => d.id !== dealId));
       setActiveDealForDelete(null);
       if (selectedDealForDetail && selectedDealForDetail.id === dealId) {
@@ -644,7 +672,7 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
             Collection Rate
           </span>
           <span className="mt-1 text-lg sm:text-2xl font-bold text-blue-700 block">
-            {metrics.collectionRate ?? (metrics.totalDealValue > 0 ? Math.round((metrics.totalReceived / metrics.totalDealValue) * 10000) / 100 : 0)}%
+            {metrics.collectionRate ?? ((metrics.totalDealValue ?? 0) > 0 ? Math.round(((metrics.totalReceived ?? 0) / (metrics.totalDealValue ?? 1)) * 10000) / 100 : 0)}%
           </span>
           <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
             <div
@@ -652,7 +680,7 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
               style={{
                 width: `${Math.min(
                   100,
-                  metrics.collectionRate ?? (metrics.totalDealValue > 0 ? (metrics.totalReceived / metrics.totalDealValue) * 100 : 0)
+                  metrics.collectionRate ?? ((metrics.totalDealValue ?? 0) > 0 ? ((metrics.totalReceived ?? 0) / (metrics.totalDealValue ?? 1)) * 100 : 0)
                 )}%`,
               }}
             />
@@ -664,7 +692,7 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
             Total Outstanding
           </span>
           <span className="mt-1 text-lg sm:text-2xl font-bold text-slate-900 block">
-            {formatCurrency(metrics.totalOutstanding)}
+            {formatCurrency(metrics.totalOutstanding ?? 0)}
           </span>
           <span className="mt-1 text-xs text-slate-400 block font-medium">
             Remaining client balances
@@ -672,24 +700,24 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
         </div>
 
         <div className={`rounded-2xl border p-4 shadow-sm ${
-          metrics.overdueAmount > 0 
+          (metrics.overdueAmount ?? 0) > 0 
             ? "border-rose-200 bg-rose-50/50" 
             : "border-slate-200 bg-white"
         }`}>
           <span className={`text-xs font-semibold uppercase tracking-wider block ${
-            metrics.overdueAmount > 0 ? "text-rose-600" : "text-slate-500"
+            (metrics.overdueAmount ?? 0) > 0 ? "text-rose-600" : "text-slate-500"
           }`}>
             Overdue Amount
           </span>
           <span className={`mt-1 text-lg sm:text-2xl font-bold block ${
-            metrics.overdueAmount > 0 ? "text-rose-700" : "text-slate-900"
+            (metrics.overdueAmount ?? 0) > 0 ? "text-rose-700" : "text-slate-900"
           }`}>
-            {formatCurrency(metrics.overdueAmount)}
+            {formatCurrency(metrics.overdueAmount ?? 0)}
           </span>
           <span className={`mt-1 text-xs block font-medium ${
-            metrics.overdueAmount > 0 ? "text-rose-600 font-semibold" : "text-slate-400"
+            (metrics.overdueAmount ?? 0) > 0 ? "text-rose-600 font-semibold" : "text-slate-400"
           }`}>
-            {metrics.overdueAmount > 0 ? "Pending overdue collections" : "Zero overdue payments"}
+            {(metrics.overdueAmount ?? 0) > 0 ? "Pending overdue collections" : "Zero overdue payments"}
           </span>
         </div>
       </div>
@@ -1332,12 +1360,14 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Internal Notes</label>
-                      <textarea
+                      <AiNoteEditor
                         name="notes"
+                        label="Internal Notes"
+                        labelClassName="block font-semibold text-slate-700 mb-1"
                         rows={2}
                         placeholder="Additional details about this deal or payment terms..."
-                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                        textareaClassName="bg-white px-3 py-2 text-sm"
+                        compact
                       />
                     </div>
                   </div>
@@ -1474,12 +1504,14 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Payment Note</label>
-                <textarea
+                <AiNoteEditor
                   name="note"
+                  label="Payment Note"
+                  labelClassName="block font-semibold text-slate-700 mb-1"
                   rows={2}
                   placeholder="e.g. Advance received for homepage and admin panel"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none resize-none"
+                  textareaClassName="px-3 py-2 text-sm resize-none"
+                  compact
                 />
               </div>
 
@@ -2029,13 +2061,15 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Payment Note</label>
-                <textarea
+                <AiNoteEditor
                   name="note"
-                  rows={2}
                   defaultValue={activePaymentForEdit.payment.note || ""}
+                  label="Payment Note"
+                  labelClassName="block font-semibold text-slate-700 mb-1"
+                  rows={2}
                   placeholder="e.g. Advance received for homepage and admin panel"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none resize-none"
+                  textareaClassName="px-3 py-2 text-sm resize-none"
+                  compact
                 />
               </div>
 
@@ -2346,19 +2380,17 @@ export function DealsWorkspace({ initialDeals, initialMetrics }: DealsWorkspaceP
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">
-                    Business / Deal Notes <span className="text-slate-400 font-normal">(Scope of work, terms)</span>
-                  </label>
-                  <textarea
+                  <AiNoteEditor
                     name="notes"
-                    rows={3}
                     defaultValue={activeDealForEdit.notes || ""}
+                    label={<>Business / Deal Notes <span className="text-slate-400 font-normal">(Scope of work, terms)</span></>}
+                    labelClassName="block font-semibold text-slate-700 mb-1"
+                    rows={3}
                     placeholder="e.g. Website + catalog + inquiry system"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    textareaClassName="bg-white px-3 py-2 text-sm"
+                    helperText="Permanent deal-level scope notes, kept separate from transaction payment notes."
+                    compact
                   />
-                  <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Permanent deal-level scope notes, kept separate from transaction payment notes.
-                  </span>
                 </div>
               </div>
 

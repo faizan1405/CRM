@@ -64,6 +64,7 @@ export type NewFollowUpInput = {
 export interface FollowUpActionSuccess<T> {
   success: true;
   data: T;
+  undoId?: string;
   error?: undefined;
 }
 
@@ -71,6 +72,7 @@ export interface FollowUpActionError {
   success: false;
   error: string;
   data?: undefined;
+  undoId?: string;
 }
 
 export type FollowUpActionResult<T = FollowUp> =
