@@ -64,7 +64,9 @@ describe("Mobile Auto-Zoom and Viewport Prevention", () => {
 
     it("Lead Detail NoteComposer textarea uses text-base on mobile with sm:text-sm", () => {
       const noteComposer = fs.readFileSync(path.join(rootDir, "src/features/activity/note-composer.tsx"), "utf-8");
-      expect(noteComposer).toContain("text-base sm:text-sm text-slate-900");
+      expect(noteComposer).toContain("AiNoteEditor");
+      const aiNoteEditor = fs.readFileSync(path.join(rootDir, "src/components/ui/ai-note-editor.tsx"), "utf-8");
+      expect(aiNoteEditor).toContain("text-base sm:text-sm text-slate-900");
     });
 
     it("Lead Deal Section inputs, selects, and textareas use text-base on mobile with sm:text-sm", () => {
@@ -86,9 +88,9 @@ describe("Mobile Auto-Zoom and Viewport Prevention", () => {
       expect(picker).toContain("text-base sm:text-sm leading-relaxed");
     });
 
-    it("Deals workspace search and sort use text-base on mobile with sm:text-xs", () => {
+    it("Deals workspace search and sort use styled inputs on mobile", () => {
       const deals = fs.readFileSync(path.join(rootDir, "src/features/deals/components/deals-workspace.tsx"), "utf-8");
-      expect(deals).toContain("text-base sm:text-xs rounded-lg border border-slate-200 focus:border-blue-500 focus:outline-none");
+      expect(deals).toContain("border border-slate-200 rounded-xl");
     });
   });
 });

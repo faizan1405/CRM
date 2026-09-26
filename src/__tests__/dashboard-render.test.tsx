@@ -6,7 +6,7 @@ vi.mock("@/app/actions/dashboard", () => ({
   getDashboardData: async () => ({
     success: true,
     data: {
-      kpis: { totalLeads: 0, newLeads: 0, qualifiedLeads: 0, wonClients: 0, followUpsToday: 4, wonRevenue: 0 },
+      kpis: { totalLeads: 0, newLeads: 0, qualifiedLeads: 0, wonClients: 0, followUpsToday: 4, wonRevenue: 0, pinnedLeads: 0, staleLeads: 0 },
       needsAttention: { overdueFollowUps: 0, proposalsPending: 0, leadsNotContacted: 0 },
       priorities: [], attentionLeads: [],
       pipeline: { new: 0, contacted: 0, qualified: 0, proposal: 0, won: 0, lost: 0 },
@@ -28,7 +28,8 @@ describe("Dashboard server rendering", () => {
     const html = renderToStaticMarkup(await DashboardPage());
     expect(html).toContain("Recent Activity");
     expect(html).toContain("Total Leads");
-    expect(html).toContain("Priority Leads");
+    expect(html).toContain("Pinned Leads");
+    expect(html).toContain("Stale Leads");
     expect(html).toContain("Today");
     expect(html).toContain("Pipeline Summary");
     expect(html).toContain("Revenue Summary");

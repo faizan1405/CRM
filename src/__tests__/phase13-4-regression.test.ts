@@ -190,12 +190,13 @@ describe("Phase 13.4 Regression Tests", () => {
   it("delete → excluded from Analytics", async () => {
     const lead = await createTestLead("AnalyticsDisappear", LeadStatus.WON);
     
-    // Create deal to establish canonical Won Deal Value
+    // Create deal record so wonRevenue is derived from deal.finalAmount
     await db.deal.create({
       data: {
         leadId: lead.id,
         finalAmount: 15000,
         source: "CRM_LEAD",
+        status: "CONFIRMED",
       },
     });
 
