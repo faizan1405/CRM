@@ -10,7 +10,7 @@ export function RevenueSnapshot({ data }: { data: { won: number; openPipeline: n
 
   const displayData = [
     {
-      label: "Won Revenue",
+      label: "Won Deal Value",
       value: formatCurrency(data.won),
       trend: "Total to date",
       icon: CircleDollarSign,

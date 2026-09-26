@@ -7,6 +7,12 @@ import type { AIAttentionSummaryItem } from "@/features/ai-attention/types";
 import { deriveAIAttention } from "@/features/ai-attention/helpers";
 import { statusFromDatabase } from "@/features/leads/types";
 import { getStaleLeadsCount } from "@/lib/stale-leads";
+import {
+  calculateWonDealValue,
+  calculateOpenPipelineValue,
+  decimalToNumber,
+  toDecimal,
+} from "@/lib/financial/calculations";
 
 class UserFacingError extends Error {}
 
@@ -98,8 +104,8 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
       totalLeads,
       pinnedLeadsCount,
       statusCounts,
-      wonRevenueAgg,
-      openPipelineAgg,
+      wonLeadsList,
+      activeOpportunitiesList,
       overdueFollowUpsCount,
       todayFollowUpsCount,
       todayFollowUpsList,
@@ -113,8 +119,34 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
       db.lead.count({ where: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
       db.lead.count({ where: { isPinned: true, isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
       db.lead.groupBy({ by: ["status"], _count: true, where: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
-      db.lead.aggregate({ _sum: { quotedAmount: true }, _avg: { quotedAmount: true }, where: { status: LeadStatus.WON, isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
-      db.lead.aggregate({ _sum: { quotedAmount: true }, where: { status: { in: [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED, LeadStatus.PROPOSAL_SENT] }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
+      db.lead.findMany({
+        where: { status: LeadStatus.WON, isWaste: false, deletedAt: null, mergedIntoLeadId: null },
+        select: {
+          id: true,
+          status: true,
+          isWaste: true,
+          deletedAt: true,
+          mergedIntoLeadId: true,
+          deal: { select: { finalAmount: true, status: true } },
+        },
+      }),
+      db.lead.findMany({
+        where: {
+          status: { in: [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED, LeadStatus.PROPOSAL_SENT] },
+          isWaste: false,
+          deletedAt: null,
+          mergedIntoLeadId: null,
+        },
+        select: {
+          id: true,
+          status: true,
+          quotedAmount: true,
+          isWaste: true,
+          deletedAt: true,
+          mergedIntoLeadId: true,
+          deal: { select: { finalAmount: true, status: true } },
+        },
+      }),
       db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } } }),
       db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } } }),
       db.followUp.findMany({
@@ -163,9 +195,17 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
     const statusMap = Object.fromEntries(statusCounts.map(s => [s.status, s._count]));
     const getCount = (status: LeadStatus) => statusMap[status] || 0;
 
-    const wonRevenue = Number(wonRevenueAgg._sum.quotedAmount || 0);
-    const avgWonDeal = Number(wonRevenueAgg._avg.quotedAmount || 0);
-    const openPipeline = Number(openPipelineAgg._sum.quotedAmount || 0);
+    const wonDealValueDecimal = calculateWonDealValue(wonLeadsList);
+    const wonRevenue = decimalToNumber(wonDealValueDecimal);
+    const wonDealsWithAmountCount = wonLeadsList.filter(
+      (l) => l.deal && toDecimal(l.deal.finalAmount).gt(0)
+    ).length;
+    const avgWonDeal = wonDealsWithAmountCount > 0
+      ? decimalToNumber(wonDealValueDecimal.div(wonDealsWithAmountCount))
+      : 0;
+
+    const openPipelineDecimal = calculateOpenPipelineValue(activeOpportunitiesList);
+    const openPipeline = decimalToNumber(openPipelineDecimal);
 
     // Format Priorities
     const priorities: PriorityItem[] = [];

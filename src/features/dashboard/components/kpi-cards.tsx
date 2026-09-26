@@ -66,7 +66,7 @@ export function KPICards({ data }: { data: { totalLeads: number; newLeads: numbe
     { label: "Qualified", value: data.qualifiedLeads, icon: BadgeCheck, colorScheme: "purple" as const, href: "/leads?status=QUALIFIED" },
     { label: "Won Clients", value: data.wonClients, icon: Handshake, colorScheme: "green" as const, href: "/leads?status=WON" },
     { label: "Follow-ups Today", value: data.followUpsToday, icon: CalendarClock, colorScheme: "orange" as const, href: "/follow-ups?filter=today" },
-    { label: "Revenue", value: compactCurrency(data.wonRevenue), fullValue: formattedRevenue, icon: CircleDollarSign, colorScheme: "emerald" as const, href: "/analytics" },
+    { label: "Won Deal Value", value: compactCurrency(data.wonRevenue), fullValue: formattedRevenue, icon: CircleDollarSign, colorScheme: "emerald" as const, href: "/analytics" },
   ];
 
   return (

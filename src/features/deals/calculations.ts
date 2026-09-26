@@ -12,15 +12,21 @@ import type {
   ClientTypeComparison,
   DealsAnalyticsData,
 } from "./types";
+import {
+  calculateMoneyReceived,
+  calculateDealOutstanding,
+  calculateCollectionRate as canonicalCollectionRate,
+  getTodayIST as canonicalTodayIST,
+  decimalToNumber,
+} from "@/lib/financial/calculations";
 
 /**
  * Calculates total received from a list of payment records.
- * Sums amounts accurately without floating point drift.
+ * Sums amounts accurately without floating point drift using canonical Decimal math.
  */
-export function calculateTotalReceived(payments: Array<{ amount: number }>): number {
+export function calculateTotalReceived(payments: Array<{ amount: number | any; deletedAt?: any }>): number {
   if (!payments || payments.length === 0) return 0;
-  const total = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-  return Math.round(total * 100) / 100;
+  return decimalToNumber(calculateMoneyReceived(payments));
 }
 
 /**
@@ -28,11 +34,8 @@ export function calculateTotalReceived(payments: Array<{ amount: number }>): num
  * Remaining = Final Deal Value - Total Payments Received
  * Never returns negative if overpaid (caps at 0).
  */
-export function calculateRemainingBalance(finalAmount: number, totalReceived: number): number {
-  const finalVal = Number(finalAmount) || 0;
-  const receivedVal = Number(totalReceived) || 0;
-  const remaining = Math.max(0, finalVal - receivedVal);
-  return Math.round(remaining * 100) / 100;
+export function calculateRemainingBalance(finalAmount: number | any, totalReceived: number | any): number {
+  return decimalToNumber(calculateDealOutstanding(finalAmount, totalReceived));
 }
 
 /**
@@ -40,12 +43,8 @@ export function calculateRemainingBalance(finalAmount: number, totalReceived: nu
  * Collection Rate = Total Received / Total Deal Value * 100
  * Rounded to 2 decimal places. Returns 0 if totalDealValue is 0.
  */
-export function calculateCollectionRate(totalReceived: number, totalDealValue: number): number {
-  const dealVal = Number(totalDealValue) || 0;
-  const recVal = Number(totalReceived) || 0;
-  if (dealVal <= 0) return 0;
-  const rate = (recVal / dealVal) * 100;
-  return Math.round(rate * 100) / 100;
+export function calculateCollectionRate(totalReceived: number | any, totalDealValue: number | any): number {
+  return decimalToNumber(canonicalCollectionRate(totalReceived, totalDealValue));
 }
 
 /**

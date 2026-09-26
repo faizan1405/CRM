@@ -200,6 +200,16 @@ export type CoreMetrics = {
 
   /** Sum of quotedAmount for WON leads within the date range */
   wonRevenue: number;
+  /** Canonical alias for wonRevenue */
+  wonDealValue?: number;
+  /** Conversion Rate = Won Leads / Total Valid Business Leads * 100 */
+  conversionRate?: number;
+  /** Total Money Received from payments (Payment.amount where deletedAt is null) */
+  moneyReceived?: number;
+  /** Total Outstanding across active deals: max(finalAmount - sum(payments), 0) */
+  totalOutstanding?: number;
+  /** Collection Rate = Money Received / Contracted Deal Value * 100 */
+  collectionRate?: number;
 
   /**
    * Sum of quotedAmount for leads in active statuses (current snapshot).

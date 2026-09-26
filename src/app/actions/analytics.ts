@@ -18,7 +18,7 @@
 
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { LeadStatus, FollowUpStatus, ActivityType } from "@prisma/client";
+import { Prisma, LeadStatus, FollowUpStatus, ActivityType } from "@prisma/client";
 import {
   getDateRangeBoundaries,
   getTrendGranularity,
@@ -27,6 +27,16 @@ import {
   serializeDecimal,
   safeRate,
 } from "@/lib/analytics-helpers";
+import {
+  calculateWonDealValue,
+  calculateOpenPipelineValue,
+  calculateMoneyReceived,
+  calculateTotalOutstanding,
+  calculateCollectionRate,
+  getOpportunityValue,
+  decimalToNumber,
+  toDecimal,
+} from "@/lib/financial/calculations";
 import type {
   DateRange,
   AnalyticsResult,
@@ -55,6 +65,7 @@ async function requireAuth() {
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const ACTIVE_OPPORTUNITY_STATUSES = [
+  LeadStatus.NEW,
   LeadStatus.CONTACTED,
   LeadStatus.QUALIFIED,
   LeadStatus.PROPOSAL_SENT,
@@ -144,6 +155,12 @@ export async function calculateSalesAnalytics(
 
       // 7. All active non-waste leads currently in CRM (for live pipeline health)
       allActiveLeads,
+
+      // 8. Scoped payments for Money Received
+      scopedPayments,
+
+      // 9. Active deals with payments for canonical Outstanding & Collection Rate
+      activeDealsWithPayments,
     ] = await Promise.all([
       // 1: Cohort leads
       db.lead.findMany({
@@ -237,6 +254,26 @@ export async function calculateSalesAnalytics(
           deal: true,
         },
       }),
+
+      // 8: Scoped payments for Money Received (using paymentDate filter in IST boundaries)
+      db.payment.findMany({
+        where: {
+          ...(dateFilter ? { paymentDate: dateFilter } : {}),
+        },
+      }),
+
+      // 9: Active deals with payments for canonical Outstanding & Collection Rate
+      db.deal.findMany({
+        where: {
+          OR: [
+            { source: "CRM_LEAD", lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } },
+            { source: "OTHER_CLIENT" },
+          ],
+        },
+        include: {
+          payments: true,
+        },
+      }),
     ]);
 
     // ─── 1. Canonical Status Counts for Cohort ─────────────────────────────────
@@ -277,36 +314,38 @@ export async function calculateSalesAnalytics(
     const winRate = safeRate(wonLeads, closedDeals);
     const lostRate = safeRate(lostLeads, closedDeals);
 
-    // ─── 2. Won Revenue & Average Won Deal ────────────────────────────────────
-    // Won Revenue = sum of Deal.finalAmount for WON leads with an associated Deal
-    // Average Won Deal = Won Revenue / number of WON deals that actually have finalAmount
-    let wonRevenue = 0;
-    let wonDealsCount = 0;
+    // Canonical Conversion Rate = Won Leads / Total Valid Business Leads in cohort * 100
+    const conversionRate = totalLeads > 0 ? Math.round((wonLeads / totalLeads) * 10000) / 100 : 0;
 
-    for (const lead of cohortLeads) {
-      if (lead.status === LeadStatus.WON && lead.deal) {
-        const finalAmount = Number(lead.deal.finalAmount) || 0;
-        if (finalAmount > 0) {
-          wonRevenue += finalAmount;
-          wonDealsCount++;
-        }
-      }
-    }
+    // ─── 2. Won Deal Value & Average Won Deal ─────────────────────────────────
+    // Won Deal Value = sum of Deal.finalAmount for WON leads with an associated Deal
+    // Never fallback to Lead.quotedAmount. If no deal, ₹0.
+    const wonLeadsCohort = cohortLeads.filter((l) => l.status === LeadStatus.WON);
+    const wonDealValueDecimal = calculateWonDealValue(wonLeadsCohort);
+    const wonRevenue = decimalToNumber(wonDealValueDecimal);
 
-    const avgWonDeal = safeRate(wonRevenue, wonDealsCount);
+    const wonDealsCount = wonLeadsCohort.filter(
+      (l) => l.deal && toDecimal(l.deal.finalAmount).gt(0)
+    ).length;
+    const avgWonDeal = wonDealsCount > 0
+      ? decimalToNumber(wonDealValueDecimal.div(wonDealsCount))
+      : 0;
 
     // ─── 3. Open Pipeline Value ───────────────────────────────────────────────
-    // Active opportunities only: CONTACTED, QUALIFIED, PROPOSAL_SENT
-    // Prefer: Deal.finalAmount if confirmed
-    // Fallback: Lead.quotedAmount if present
-    let openPipelineValue = 0;
-    for (const opp of activeOpportunities) {
-      if (opp.deal?.status === "CONFIRMED" && Number(opp.deal.finalAmount) > 0) {
-        openPipelineValue += Number(opp.deal.finalAmount);
-      } else if (opp.quotedAmount != null) {
-        openPipelineValue += serializeDecimal(opp.quotedAmount);
-      }
-    }
+    // Active opportunities: NEW, CONTACTED, QUALIFIED, PROPOSAL_SENT
+    // Priority: Deal.finalAmount if > 0, else Lead.quotedAmount, else 0
+    const openPipelineDecimal = calculateOpenPipelineValue(activeOpportunities);
+    const openPipelineValue = decimalToNumber(openPipelineDecimal);
+
+    // ─── 3b. Money Received, Outstanding, and Collection Rate ─────────────────
+    const moneyReceivedDecimal = calculateMoneyReceived(scopedPayments);
+    const moneyReceived = decimalToNumber(moneyReceivedDecimal);
+
+    const outstandingDecimal = calculateTotalOutstanding(activeDealsWithPayments);
+    const totalOutstanding = decimalToNumber(outstandingDecimal);
+
+    const collectionRateDecimal = calculateCollectionRate(moneyReceivedDecimal, wonDealValueDecimal);
+    const collectionRate = decimalToNumber(collectionRateDecimal);
 
     // ─── 4. Overdue Follow-ups & Follow-up Performance ────────────────────────
     let fuCompleted = 0;
@@ -504,25 +543,31 @@ export async function calculateSalesAnalytics(
     const leadTrend = { points: leadTrendPoints };
 
     // ─── 8. Pipeline Health (Current Live Snapshot across All Statuses) ───────
+    // For NEW, CONTACTED, QUALIFIED, PROPOSAL_SENT: canonical opportunity value
+    // For WON: strictly Deal.finalAmount (0 if no deal)
+    // For LOST: 0
+    // Do NOT use payment sums for Pipeline Health.
     const pipelineHealthStages: PipelineStageHealth[] = ALL_STATUSES.map((stage) => {
       const leadsInStage = allActiveLeads.filter((l) => l.status === stage);
-      let value = 0;
+      let stageDecimal = new Prisma.Decimal(0);
       for (const lead of leadsInStage) {
         if (stage === LeadStatus.LOST) {
-          value += 0;
-        } else if (lead.deal?.status === "CONFIRMED" && Number(lead.deal.finalAmount) > 0) {
-          value += Number(lead.deal.finalAmount);
-        } else if (stage === LeadStatus.WON && lead.deal) {
-          value += Number(lead.deal.finalAmount) || 0;
-        } else if (lead.quotedAmount != null) {
-          value += serializeDecimal(lead.quotedAmount);
+          // LOST contributes 0
+        } else if (stage === LeadStatus.WON) {
+          // WON strictly uses Deal.finalAmount (₹0 if no deal)
+          if (lead.deal && toDecimal(lead.deal.finalAmount).gt(0)) {
+            stageDecimal = stageDecimal.add(toDecimal(lead.deal.finalAmount));
+          }
+        } else {
+          // NEW, CONTACTED, QUALIFIED, PROPOSAL_SENT: canonical opportunity value
+          stageDecimal = stageDecimal.add(getOpportunityValue(lead, lead.deal));
         }
       }
       return {
         stage,
         label: PIPELINE_STAGE_LABELS[stage],
         count: leadsInStage.length,
-        value,
+        value: decimalToNumber(stageDecimal),
       };
     });
 
@@ -556,9 +601,14 @@ export async function calculateSalesAnalytics(
       lostLeads,
       winRate,
       lostRate,
+      conversionRate,
       wonRevenue,
+      wonDealValue: wonRevenue,
       openPipelineValue,
       avgWonDeal,
+      moneyReceived,
+      totalOutstanding,
+      collectionRate,
       followUpsCreated,
       followUpsCompleted: fuCompleted,
       overdueFollowUps: overdueCount,
