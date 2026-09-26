@@ -220,9 +220,17 @@ export function FollowUpForm({
               type="button"
               onClick={() => handleSubmit()}
               disabled={saving || !leadId || !scheduledDate || !scheduledTime}
-              className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-blue-600 px-4 text-[15px] font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 transition-colors cursor-pointer"
+              aria-busy={saving}
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-[15px] font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 transition-colors cursor-pointer"
             >
-              {saving ? "Saving..." : "Schedule"}
+              {saving ? (
+                <>
+                  <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white shrink-0" aria-hidden="true" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>Schedule</span>
+              )}
             </button>
           </div>
         ) : (
@@ -239,9 +247,17 @@ export function FollowUpForm({
               type="submit"
               form={formId}
               disabled={saving || !leadId || !scheduledDate || !scheduledTime}
-              className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-blue-600 px-4 text-[15px] font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 transition-colors cursor-pointer"
+              aria-busy={saving}
+              className="inline-flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-[15px] font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 disabled:opacity-50 transition-colors cursor-pointer"
             >
-              {saving ? "Saving..." : followUp ? "Update" : "Schedule"}
+              {saving ? (
+                <>
+                  <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white shrink-0" aria-hidden="true" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <span>{followUp ? "Update" : "Schedule"}</span>
+              )}
             </button>
           </div>
         )

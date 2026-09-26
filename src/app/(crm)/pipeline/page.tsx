@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getLeads } from "@/app/actions/leads";
 import { PipelineBoard } from "@/features/pipeline/pipeline-board";
 import { PageHeader } from "@/components/page-header";
+import { PipelineSkeleton } from "@/components/skeletons";
 
 export const metadata: Metadata = { title: "Sales Pipeline" };
 
@@ -25,7 +26,7 @@ export default async function PipelinePage() {
         />
       </div>
       <div className="w-full min-w-0 flex-1">
-        <Suspense fallback={<div className="p-6 text-slate-500">Loading pipeline...</div>}>
+        <Suspense fallback={<PipelineSkeleton includeHeader={false} />}>
           <PipelineBoard initialLeads={initialLeads} />
         </Suspense>
       </div>

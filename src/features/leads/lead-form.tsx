@@ -257,9 +257,17 @@ function ManualLeadEntry({
             <button
               type="submit"
               disabled={saving}
-              className="min-h-11 rounded-xl bg-blue-600 px-5 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 active:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
+              aria-busy={saving}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 active:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
             >
-              {saving ? "Saving…" : lead ? "Save changes" : "Add lead"}
+              {saving ? (
+                <>
+                  <span className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white shrink-0" aria-hidden="true" />
+                  <span>{lead ? "Saving changes…" : "Adding lead…"}</span>
+                </>
+              ) : (
+                <span>{lead ? "Save changes" : "Add lead"}</span>
+              )}
             </button>
           </footer>
         </div>
