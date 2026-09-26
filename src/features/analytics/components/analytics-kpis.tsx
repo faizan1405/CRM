@@ -88,7 +88,7 @@ const cards: CardDef[] = [
     label: "Collection Rate",
     icon: CheckCircle2,
     tone: "bg-cyan-50 text-cyan-700",
-    format: (v: number) => `${(v || 0).toFixed(1)}%`,
+    format: (v: number) => `${(v || 0).toFixed(2)}%`,
     note: "collected vs contracted",
     href: "/deals",
   },

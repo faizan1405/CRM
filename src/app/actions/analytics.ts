@@ -32,6 +32,7 @@ import {
   calculateOpenPipelineValue,
   calculateMoneyReceived,
   calculateTotalOutstanding,
+  calculateTotalContractedDealValue,
   calculateCollectionRate,
   getOpportunityValue,
   decimalToNumber,
@@ -344,7 +345,8 @@ export async function calculateSalesAnalytics(
     const outstandingDecimal = calculateTotalOutstanding(activeDealsWithPayments);
     const totalOutstanding = decimalToNumber(outstandingDecimal);
 
-    const collectionRateDecimal = calculateCollectionRate(moneyReceivedDecimal, wonDealValueDecimal);
+    const totalContractedDecimal = calculateTotalContractedDealValue(activeDealsWithPayments);
+    const collectionRateDecimal = calculateCollectionRate(moneyReceivedDecimal, totalContractedDecimal);
     const collectionRate = decimalToNumber(collectionRateDecimal);
 
     // ─── 4. Overdue Follow-ups & Follow-up Performance ────────────────────────

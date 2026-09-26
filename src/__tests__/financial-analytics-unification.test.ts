@@ -8,6 +8,7 @@ import {
   calculateMoneyReceived,
   calculateDealOutstanding,
   calculateTotalOutstanding,
+  calculateTotalContractedDealValue,
   calculateCollectionRate,
   getOpportunityValue,
   calculateOpenPipelineValue,
@@ -244,9 +245,16 @@ describe("Scale Flow CRM: Canonical Financial Analytics Unification", () => {
   });
 
   // ----------------------------------------------------------------------------
-  // 11. Zero contracted amount: Collection Rate = 0
+  // 11. Collection Rate: totalContracted = 20300, moneyReceived = 4910 => 24.19%
   // ----------------------------------------------------------------------------
-  it("Requirement 11: Zero contracted amount returns Collection Rate = 0 (no NaN/Infinity)", () => {
+  it("Requirement 11: Collection Rate: totalContracted = 20300, moneyReceived = 4910 => 24.19%, and contracted = 0 => 0", () => {
+    // Canonical production numbers
+    const contracted = 20300;
+    const received = 4910;
+    const rate = decimalToNumber(calculateCollectionRate(received, contracted));
+    expect(rate).toBe(24.19);
+
+    // contracted = 0 => 0 (no NaN/Infinity)
     const rate1 = decimalToNumber(calculateCollectionRate(0, 0));
     const rate2 = decimalToNumber(calculateCollectionRate(10000, 0));
     const rate3 = decimalToNumber(calculateCollectionRate(0, -5000));
@@ -256,6 +264,19 @@ describe("Scale Flow CRM: Canonical Financial Analytics Unification", () => {
     expect(rate3).toBe(0);
     expect(Number.isNaN(rate1)).toBe(false);
     expect(Number.isFinite(rate1)).toBe(true);
+
+    // Verify calculateTotalContractedDealValue across deal population
+    const deals = [
+      { id: "1", finalAmount: 12000 },
+      { id: "2", finalAmount: 5000 },
+      { id: "3", finalAmount: 3000 },
+      { id: "4", finalAmount: 300 },
+    ];
+    const totalContracted = decimalToNumber(calculateTotalContractedDealValue(deals));
+    expect(totalContracted).toBe(20300);
+
+    const fullRate = decimalToNumber(calculateCollectionRate(received, totalContracted));
+    expect(fullRate).toBe(24.19);
   });
 
   // ----------------------------------------------------------------------------

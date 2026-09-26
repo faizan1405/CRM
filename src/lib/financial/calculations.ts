@@ -211,6 +211,18 @@ export function calculateTotalOutstanding(deals: DealFinancialRecord[]): Prisma.
 export const calculateOutstanding = calculateTotalOutstanding;
 
 /**
+ * 3c. TOTAL CONTRACTED DEAL VALUE
+ * Sum of finalAmount across all deals in the target population.
+ */
+export function calculateTotalContractedDealValue(deals: DealFinancialRecord[]): Prisma.Decimal {
+  let total = new Prisma.Decimal(0);
+  for (const deal of deals) {
+    total = total.add(toDecimal(deal.finalAmount));
+  }
+  return total;
+}
+
+/**
  * 4. COLLECTION RATE
  * collectionRate = (Money Received / Contracted Deal Value) * 100
  * If contracted amount <= 0: return 0.
