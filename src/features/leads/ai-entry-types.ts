@@ -1,4 +1,4 @@
-import type { LeadStatus } from "./types";
+import type { Lead, LeadStatus } from "./types";
 
 export type AIFieldConfidence = "high" | "review";
 
@@ -102,6 +102,7 @@ export type BulkCreateItemResult = {
   outcome: BulkCreateItemOutcome;
   message?: string;
   error?: string;
+  lead?: Lead;
 };
 
 export type BulkCreateResponse = {
@@ -115,4 +116,5 @@ export type BulkCreateResponse = {
     failed: number;
   };
   error?: string;
+  undoId?: string;
 };

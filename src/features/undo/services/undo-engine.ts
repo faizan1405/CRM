@@ -459,7 +459,72 @@ export async function executeUndo(
           });
           await markLeadAIInsightNeedsRefresh(targetLeadId, tx);
         }
-      } else if (actionType === "FOLLOWUP_COMPLETE" || actionType === "FOLLOWUP_CANCEL") {
+      } else if (actionType === "FOLLOWUP_CANCEL") {
+        if (!currentFollowUp) {
+          throw new UndoValidationError("Follow-up not found.");
+        }
+        if (currentFollowUp.status !== "CANCELLED") {
+          throw new UndoConcurrencyError();
+        }
+        // Concurrency Guard
+        if (expectedUpdatedAt && currentFollowUp.updatedAt.getTime() > new Date(expectedUpdatedAt).getTime() + 1000) {
+          if (after?.status && currentFollowUp.status !== after.status) {
+            throw new UndoConcurrencyError();
+          }
+        }
+
+        // STRICT INVARIANT: Before restoring, verify the lead does not already have another active PENDING follow-up.
+        // If another pending follow-up exists: reject safely with the existing concurrency/invariant message.
+        // NEVER create a second pending follow-up.
+        if (targetLeadId) {
+          const existingPending = await tx.followUp.findFirst({
+            where: {
+              leadId: targetLeadId,
+              status: "PENDING",
+              id: { not: entityId },
+            },
+          });
+          if (existingPending) {
+            throw new UndoConcurrencyError();
+          }
+        }
+
+        const prevScheduledAt = before.scheduledAt ? new Date(before.scheduledAt as string) : currentFollowUp.scheduledAt;
+        const prevType = (before.type as "CALL" | "WHATSAPP" | "EMAIL" | "OTHER") || currentFollowUp.type;
+        const prevNote = before.note !== undefined ? (before.note as string | null) : currentFollowUp.note;
+
+        await tx.followUp.update({
+          where: { id: entityId },
+          data: {
+            status: "PENDING",
+            scheduledAt: prevScheduledAt,
+            type: prevType,
+            note: prevNote,
+            completedAt: null,
+          },
+        });
+
+        if (targetLeadId) {
+          await tx.leadActivity.create({
+            data: {
+              leadId: targetLeadId,
+              type: ActivityType.FOLLOWUP_RESCHEDULED,
+              message: "Undid follow-up cancellation, restored to Pending",
+              createdByUserId: userId ?? null,
+              metadata: { undoActionId },
+            },
+          });
+          const earliestActive = await tx.followUp.findFirst({
+            where: { leadId: targetLeadId, status: "PENDING" },
+            orderBy: { scheduledAt: "asc" },
+          });
+          await tx.lead.update({
+            where: { id: targetLeadId },
+            data: { nextFollowUpDate: earliestActive ? earliestActive.scheduledAt : null },
+          });
+          await markLeadAIInsightNeedsRefresh(targetLeadId, tx);
+        }
+      } else if (actionType === "FOLLOWUP_COMPLETE") {
         if (!currentFollowUp) {
           throw new UndoValidationError("Follow-up not found.");
         }
@@ -470,17 +535,17 @@ export async function executeUndo(
           }
         }
 
-        // STRICT INVARIANT: If this lead already has another active PENDING follow-up,
-        // supersede the other or ensure only one active follow-up remains.
         if (targetLeadId) {
-          await tx.followUp.updateMany({
+          const existingPending = await tx.followUp.findFirst({
             where: {
               leadId: targetLeadId,
               status: "PENDING",
               id: { not: entityId },
             },
-            data: { status: "CANCELLED" },
           });
+          if (existingPending) {
+            throw new UndoConcurrencyError();
+          }
         }
 
         await tx.followUp.update({
@@ -496,14 +561,18 @@ export async function executeUndo(
             data: {
               leadId: targetLeadId,
               type: ActivityType.FOLLOWUP_RESCHEDULED,
-              message: actionType === "FOLLOWUP_COMPLETE" ? "Undid follow-up completion, restored to Pending" : "Undid follow-up cancellation, restored to Pending",
+              message: "Undid follow-up completion, restored to Pending",
               createdByUserId: userId ?? null,
               metadata: { undoActionId },
             },
           });
+          const earliestActive = await tx.followUp.findFirst({
+            where: { leadId: targetLeadId, status: "PENDING" },
+            orderBy: { scheduledAt: "asc" },
+          });
           await tx.lead.update({
             where: { id: targetLeadId },
-            data: { nextFollowUpDate: currentFollowUp.scheduledAt },
+            data: { nextFollowUpDate: earliestActive ? earliestActive.scheduledAt : null },
           });
           await markLeadAIInsightNeedsRefresh(targetLeadId, tx);
         }
@@ -825,6 +894,160 @@ export async function executeUndo(
             createdAt: before.createdAt ? new Date(before.createdAt as string) : new Date(),
           },
         });
+      }
+    } else if (entityType === "BULK_IMPORT" || actionType === "BULK_LEAD_IMPORT") {
+      const items = (before?.items as Array<any>) || [];
+      if (!Array.isArray(items) || items.length === 0) {
+        throw new UndoValidationError("No batch items found to undo.");
+      }
+
+      let revertedCount = 0;
+      let blockedCount = 0;
+      const affectedLeadIds: string[] = [];
+
+      for (const item of items) {
+        if (item.type === "CREATE") {
+          const currentLead = await tx.lead.findUnique({
+            where: { id: item.leadId },
+            include: { deal: { include: { payments: true } } },
+          });
+
+          if (!currentLead) {
+            continue; // Already removed or non-existent
+          }
+
+          if (currentLead.deletedAt !== null) {
+            continue; // Already soft-deleted
+          }
+
+          // Safety 1: Never delete a lead that gained a Deal or Payment or other protected financial relationship
+          const hasDeal = Boolean(currentLead.deal);
+          const hasPayments = currentLead.deal && currentLead.deal.payments && currentLead.deal.payments.length > 0;
+          if (hasDeal || hasPayments) {
+            blockedCount++;
+            continue;
+          }
+
+          // Safety 2: Never delete a lead that has subsequently been materially edited
+          const initial = item.initial || {};
+          const isTimestampNewer = item.expectedUpdatedAt
+            ? currentLead.updatedAt.getTime() > new Date(item.expectedUpdatedAt).getTime() + 1000
+            : false;
+
+          const isMateriallyEdited =
+            currentLead.status !== initial.status ||
+            currentLead.name !== initial.name ||
+            currentLead.phone !== initial.phone ||
+            (currentLead.email ?? null) !== (initial.email ?? null) ||
+            (currentLead.business ?? null) !== (initial.business ?? null) ||
+            (currentLead.industry ?? null) !== (initial.industry ?? null) ||
+            (currentLead.notes ?? null) !== (initial.notes ?? null) ||
+            currentLead.isWaste !== false ||
+            currentLead.isPinned !== false ||
+            isTimestampNewer;
+
+          if (isMateriallyEdited) {
+            blockedCount++;
+            continue;
+          }
+
+          // Safe to reverse this created lead: soft delete and cancel pending follow-ups
+          await tx.followUp.updateMany({
+            where: { leadId: item.leadId, status: "PENDING" },
+            data: { status: "CANCELLED" },
+          });
+
+          await tx.lead.update({
+            where: { id: item.leadId },
+            data: { deletedAt: new Date() },
+          });
+
+          await tx.leadActivity.create({
+            data: {
+              leadId: item.leadId,
+              type: ActivityType.LEAD_UPDATED,
+              message: "Undid lead creation from bulk AI import",
+              createdByUserId: userId ?? null,
+              metadata: { undoActionId },
+            },
+          });
+
+          affectedLeadIds.push(item.leadId);
+          revertedCount++;
+        } else if (item.type === "UPDATE_EXISTING") {
+          const currentLead = await tx.lead.findUnique({
+            where: { id: item.leadId },
+          });
+
+          if (!currentLead || currentLead.deletedAt !== null) {
+            continue;
+          }
+
+          // Safety: do not touch pre-existing/enriched leads unless their exact reversible changes are safely captured
+          const afterSnap = (item.afterSnapshot as Record<string, unknown>) || {};
+          let hasConflict = false;
+          if (item.changedKeys && Array.isArray(item.changedKeys)) {
+            for (const key of item.changedKeys) {
+              const currentVal = (currentLead as Record<string, unknown>)[key];
+              const afterVal = afterSnap[key];
+              if (afterVal !== undefined && String(currentVal ?? "") !== String(afterVal ?? "")) {
+                hasConflict = true;
+                break;
+              }
+            }
+          }
+
+          if (hasConflict) {
+            blockedCount++;
+            continue;
+          }
+
+          const beforeSnap = (item.beforeSnapshot as Record<string, unknown>) || {};
+          const restoreData: Prisma.LeadUpdateInput = {};
+          if ("name" in beforeSnap) restoreData.name = beforeSnap.name as string;
+          if ("phone" in beforeSnap) restoreData.phone = beforeSnap.phone as string;
+          if ("email" in beforeSnap) restoreData.email = (beforeSnap.email as string) || null;
+          if ("business" in beforeSnap) restoreData.business = (beforeSnap.business as string) || null;
+          if ("industry" in beforeSnap) restoreData.industry = (beforeSnap.industry as string) || null;
+          if ("budget" in beforeSnap) restoreData.budget = beforeSnap.budget !== null ? new Prisma.Decimal(beforeSnap.budget as string | number) : null;
+          if ("status" in beforeSnap) restoreData.status = beforeSnap.status as PrismaLeadStatus;
+          if ("notes" in beforeSnap) restoreData.notes = (beforeSnap.notes as string) || null;
+          if ("nextFollowUpDate" in beforeSnap) restoreData.nextFollowUpDate = beforeSnap.nextFollowUpDate ? new Date(beforeSnap.nextFollowUpDate as string) : null;
+
+          await tx.lead.update({
+            where: { id: item.leadId },
+            data: restoreData,
+          });
+
+          if (item.createdFollowUpId) {
+            await tx.followUp.updateMany({
+              where: { id: item.createdFollowUpId, status: "PENDING" },
+              data: { status: "CANCELLED" },
+            });
+          }
+
+          await tx.leadActivity.create({
+            data: {
+              leadId: item.leadId,
+              type: ActivityType.LEAD_UPDATED,
+              message: "Undid bulk AI enrichment, restored previous details",
+              createdByUserId: userId ?? null,
+              metadata: { undoActionId },
+            },
+          });
+
+          affectedLeadIds.push(item.leadId);
+          revertedCount++;
+        }
+      }
+
+      // If nothing could be reverted and items were blocked due to subsequent edits or financials
+      if (revertedCount === 0 && blockedCount > 0) {
+        throw new UndoConcurrencyError("Unable to undo because records were changed afterward.");
+      }
+
+      for (const lid of affectedLeadIds) {
+        await markLeadAIInsightNeedsRefresh(lid, tx);
       }
     }
 

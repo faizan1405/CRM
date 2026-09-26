@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createLead } from "@/app/actions/leads";
-import { updateExistingLeadWithDraftAction } from "@/app/actions/ai-lead-entry";
+import { updateExistingLeadWithDraftAction, createBulkLeadsAction } from "@/app/actions/ai-lead-entry";
 import { ActionCard } from "@/components/action-card";
 import type { UILeadDraft as StructuredLeadDraft } from "./bulk-review-types";
 import type { ReviewLeadResult } from "./bulk-review-types";
+import type { BulkCreateLeadItem } from "@/features/leads/ai-entry-types";
 import { StructuredLeadPreview } from "./structured-lead-preview";
 import { useLeadNavigation } from "./lead-navigation-provider";
+import { useToast } from "@/components/toast-provider";
 import type { Lead } from "./types";
 
 type ReviewItem = ReviewLeadResult & { id: number; excluded: boolean; saved: boolean; error?: string };
@@ -42,6 +44,7 @@ export function BulkLeadReview({ leads, saving, onSaved, onBusyChange }: { leads
   const [progress, setProgress] = useState("");
   const navigation = useLeadNavigation();
   const router = useRouter();
+  const { showUndoToast } = useToast();
   const patch = (id: number, updates: Partial<ReviewItem>) => setItems(current => current.map(item => item.id === id ? { ...item, ...updates } : item));
   const ready = items.filter(item => !item.excluded && !item.saved && reviewState(item) === "Ready");
   const disabled = saving || busy;
@@ -49,19 +52,41 @@ export function BulkLeadReview({ leads, saving, onSaved, onBusyChange }: { leads
   async function addItems(selected: ReviewItem[]) {
     if (disabled || !selected.length) return;
     setBusy(true); onBusyChange?.(true);
-    const created: Lead[] = [];
+    setProgress(`Saving ${selected.length} leads…`);
     try {
-      for (const [index, item] of selected.entries()) {
-        setProgress(`Saving ${index + 1} of ${selected.length}…`);
-        try {
-          const result = await createLead(draftToFormData(item.draft));
-          if (result.success) { created.push(result.data); patch(item.id, { saved: true, error: undefined }); }
-          else patch(item.id, { error: result.error });
-        } catch { patch(item.id, { error: "Could not save. Review this item and retry." }); }
+      const itemsToCreate: BulkCreateLeadItem[] = selected.map(item => ({
+        draft: item.draft,
+        action: "CREATE",
+      }));
+      const res = await createBulkLeadsAction(itemsToCreate);
+      if (res.success) {
+        const created: Lead[] = [];
+        res.results.forEach((r, idx) => {
+          const item = selected[idx];
+          if (r.outcome === "created" && r.lead) {
+            created.push(r.lead);
+            patch(item.id, { saved: true, error: undefined });
+          } else if (r.outcome === "failed") {
+            patch(item.id, { error: r.error || "Could not save." });
+          }
+        });
+        setProgress(`${created.length} lead${created.length === 1 ? "" : "s"} added. ${res.summary.failed > 0 ? "Failed items remain available to retry." : ""}`);
+        if (created.length) {
+          onSaved?.(created);
+          router.refresh();
+        }
+        if (res.undoId && created.length > 0) {
+          showUndoToast(`${created.length} leads added`, res.undoId);
+        }
+      } else {
+        selected.forEach(item => patch(item.id, { error: res.error || "Could not save." }));
       }
-      setProgress(`${created.length} lead${created.length === 1 ? "" : "s"} added. Failed items remain available to retry.`);
-      if (created.length) { onSaved?.(created); router.refresh(); }
-    } finally { setBusy(false); onBusyChange?.(false); }
+    } catch {
+      selected.forEach(item => patch(item.id, { error: "Could not save. Review this item and retry." }));
+    } finally {
+      setBusy(false);
+      onBusyChange?.(false);
+    }
   }
 
   return <section aria-label="Bulk lead review" className="min-w-0 space-y-3">

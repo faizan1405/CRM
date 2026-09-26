@@ -30,6 +30,7 @@ import {
 import { AIConfigError, AIServiceError } from "@/lib/ai/groq-client";
 import { markLeadAIInsightNeedsRefresh } from "@/features/ai-attention/services/attention-engine";
 import { touchCrmSync } from "@/lib/crm-sync";
+import { recordUndoAction } from "@/features/undo/services/undo-engine";
 
 class UserFacingError extends Error {}
 
@@ -344,6 +345,28 @@ export async function createBulkLeadsAction(
     let skippedCount = 0;
     let failedCount = 0;
 
+    interface BatchReversalItem {
+      type: "CREATE" | "UPDATE_EXISTING";
+      leadId: string;
+      createdAt?: string;
+      expectedUpdatedAt: string;
+      createdFollowUpId?: string | null;
+      initial?: {
+        name: string;
+        phone: string;
+        email: string | null;
+        business: string | null;
+        industry: string | null;
+        budget: string | null;
+        status: string;
+        notes: string | null;
+      };
+      changedKeys?: string[];
+      beforeSnapshot?: Record<string, unknown>;
+      afterSnapshot?: Record<string, unknown>;
+    }
+    const reversalItems: BatchReversalItem[] = [];
+
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const draft = item.draft;
@@ -363,8 +386,38 @@ export async function createBulkLeadsAction(
 
       if (action === "UPDATE_EXISTING" && item.targetLeadId) {
         try {
+          const oldLead = await db.lead.findUnique({ where: { id: item.targetLeadId } });
           const updateRes = await updateExistingLeadWithDraftAction(item.targetLeadId, draft);
           if (updateRes.success) {
+            if (oldLead) {
+              reversalItems.push({
+                type: "UPDATE_EXISTING",
+                leadId: item.targetLeadId,
+                expectedUpdatedAt: updateRes.data.updatedAt,
+                beforeSnapshot: {
+                  name: oldLead.name,
+                  phone: oldLead.phone,
+                  email: oldLead.email,
+                  business: oldLead.business,
+                  industry: oldLead.industry,
+                  budget: oldLead.budget !== null ? oldLead.budget.toString() : null,
+                  status: oldLead.status,
+                  notes: oldLead.notes,
+                  nextFollowUpDate: oldLead.nextFollowUpDate ? oldLead.nextFollowUpDate.toISOString() : null,
+                },
+                afterSnapshot: {
+                  name: updateRes.data.name,
+                  phone: updateRes.data.phone,
+                  email: updateRes.data.email,
+                  business: updateRes.data.business,
+                  industry: updateRes.data.industry,
+                  budget: updateRes.data.budget !== null ? String(updateRes.data.budget) : null,
+                  status: updateRes.data.status,
+                  notes: updateRes.data.notes,
+                  nextFollowUpDate: updateRes.data.nextFollowUpDate,
+                },
+              });
+            }
             results.push({
               index: i,
               leadId: updateRes.data.id,
@@ -372,6 +425,7 @@ export async function createBulkLeadsAction(
               phone: updateRes.data.phone,
               outcome: "updated",
               message: "Existing lead updated",
+              lead: updateRes.data,
             });
             updatedCount++;
           } else {
@@ -442,13 +496,14 @@ export async function createBulkLeadsAction(
             },
           });
 
+          let createdFollowUpId: string | null = null;
           // Schedule follow-up if date is present
           if (nextFollowUpDateObj) {
             const scheduledAt =
               parseKolkataDateTime(draft.suggestedFollowUpDate!, draft.suggestedFollowUpTime || "10:00") ??
               nextFollowUpDateObj;
 
-            await tx.followUp.create({
+            const fu = await tx.followUp.create({
               data: {
                 leadId: created.id,
                 scheduledAt,
@@ -457,6 +512,7 @@ export async function createBulkLeadsAction(
                 status: "PENDING",
               },
             });
+            createdFollowUpId = fu.id;
 
             await tx.leadActivity.create({
               data: {
@@ -471,16 +527,35 @@ export async function createBulkLeadsAction(
 
           await markLeadAIInsightNeedsRefresh(created.id, tx);
 
-          return created;
+          return { created, createdFollowUpId };
+        });
+
+        reversalItems.push({
+          type: "CREATE",
+          leadId: newLead.created.id,
+          createdAt: newLead.created.createdAt.toISOString(),
+          expectedUpdatedAt: newLead.created.updatedAt.toISOString(),
+          createdFollowUpId: newLead.createdFollowUpId,
+          initial: {
+            name: newLead.created.name,
+            phone: newLead.created.phone,
+            email: newLead.created.email,
+            business: newLead.created.business,
+            industry: newLead.created.industry,
+            budget: newLead.created.budget ? newLead.created.budget.toString() : null,
+            status: newLead.created.status,
+            notes: newLead.created.notes,
+          },
         });
 
         results.push({
           index: i,
-          leadId: newLead.id,
-          name: newLead.name,
-          phone: newLead.phone,
+          leadId: newLead.created.id,
+          name: newLead.created.name,
+          phone: newLead.created.phone,
           outcome: "created",
           message: "Lead created successfully",
+          lead: serializeLead(newLead.created),
         });
         createdCount++;
       } catch (err) {
@@ -495,6 +570,31 @@ export async function createBulkLeadsAction(
 
     if (createdCount > 0 || updatedCount > 0) {
       await touchCrmSync();
+    }
+
+    let undoId: string | undefined;
+    if (reversalItems.length > 0) {
+      const batchId = `bulk_import_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const desc = createdCount > 0 
+        ? `${createdCount} leads added` 
+        : `${updatedCount} leads updated`;
+
+      const undoRecord = await recordUndoAction(db, {
+        actionType: "BULK_LEAD_IMPORT",
+        entityType: "BULK_IMPORT",
+        entityId: batchId,
+        beforeSnapshot: {
+          items: reversalItems,
+        },
+        afterSnapshot: {
+          total: items.length,
+          created: createdCount,
+          updated: updatedCount,
+        },
+        description: desc,
+        createdByUserId: session.id as string,
+      });
+      undoId = undoRecord.id;
     }
 
     try {
@@ -515,6 +615,7 @@ export async function createBulkLeadsAction(
         skipped: skippedCount,
         failed: failedCount,
       },
+      undoId,
     };
   } catch (error: unknown) {
     if (error instanceof UserFacingError) {
