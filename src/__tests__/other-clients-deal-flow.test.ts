@@ -407,7 +407,7 @@ describe("Targeted Verification: Other Clients Payment Flow & Deal Segregation",
     expect(markup).toContain("All Deals");
     expect(markup).toContain("CRM Clients");
     expect(markup).toContain("Other Clients");
-    expect(markup).toContain("Add Other Client Deal");
+    expect(markup).toContain("Add Deal");
 
     // Source Badges in All Deals view
     expect(markup).toContain("CRM Client");

@@ -394,15 +394,12 @@ describe("Deal Detail View & Client Information Experience", () => {
       })
     );
 
-    // Desktop elements
+    // Desktop and mobile elements
     expect(workspaceMarkup).toContain("Maxwell");
     expect(workspaceMarkup).toContain("Sarah Connor");
-    expect(workspaceMarkup).toContain("View"); // Desktop View button
+    expect(workspaceMarkup).toContain("Details"); // Desktop Details button
     expect(workspaceMarkup).toContain("Packaging Website");
     expect(workspaceMarkup).toContain("Defense Grid Upgrade");
-
-    // Mobile elements
-    expect(workspaceMarkup).toContain("View Details"); // Mobile View Details button
 
     // Source badges
     expect(workspaceMarkup).toContain("Other Client");

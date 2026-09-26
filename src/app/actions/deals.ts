@@ -23,8 +23,9 @@ import {
   derivePaymentStatus,
   calculateDealMetrics,
 } from "@/features/deals/calculations";
-import { touchCrmSync } from "@/lib/crm-sync";
+import { touchCrmSyncBestEffort } from "@/lib/crm-sync";
 import { recordUndoAction } from "@/features/undo/services/undo-engine";
+import { searchLeadsForWhatsApp } from "@/app/actions/lead-search";
 
 class UserFacingError extends Error {}
 
@@ -225,6 +226,100 @@ export async function getDealById(dealId: string): Promise<DealActionResult<Seri
 }
 
 /**
+ * Create a deal linked to an existing CRM Lead.
+ * Returns the existing deal if one already exists (1:1 lead-deal relationship).
+ */
+export async function createCrmClientDeal(leadId: string): Promise<DealActionResult<SerializedDeal>> {
+  try {
+    await requireAuthenticatedUser();
+
+    const lead = await db.lead.findUnique({
+      where: { id: leadId, deletedAt: null, mergedIntoLeadId: null },
+      select: { id: true, name: true, business: true, phone: true, email: true },
+    });
+
+    if (!lead) {
+      return { success: false, error: "Lead not found or has been deleted." };
+    }
+
+    const existingDeal = await db.deal.findUnique({
+      where: { leadId: lead.id },
+      include: {
+        payments: { orderBy: { paymentDate: "desc" } },
+        lead: { select: { id: true, name: true, business: true, phone: true, email: true, status: true } },
+      },
+    });
+
+    if (existingDeal) {
+      return { success: true, data: serializeDeal(existingDeal), alreadyExists: true };
+    }
+
+    let deal;
+    try {
+      deal = await db.deal.create({
+        data: {
+          source: "CRM_LEAD",
+          leadId: lead.id,
+          clientNameSnapshot: lead.name,
+          companyNameSnapshot: lead.business || null,
+          clientPhone: lead.phone || null,
+          clientEmail: lead.email || null,
+          finalAmount: new Prisma.Decimal(0),
+          currency: "INR",
+          status: "NEGOTIATING",
+        },
+        include: {
+          payments: { orderBy: { paymentDate: "desc" } },
+          lead: { select: { id: true, name: true, business: true, phone: true, email: true, status: true } },
+        },
+      });
+    } catch (err: unknown) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        // Concurrent race: another request created the deal between our pre-check and insert.
+        // Return the existing deal without creating a duplicate UndoAction.
+        const existingDeal = await db.deal.findUnique({
+          where: { leadId: lead.id },
+          include: {
+            payments: { orderBy: { paymentDate: "desc" } },
+            lead: { select: { id: true, name: true, business: true, phone: true, email: true, status: true } },
+          },
+        });
+        if (existingDeal) {
+          return { success: true, data: serializeDeal(existingDeal), alreadyExists: true };
+        }
+        // Fallback: deal somehow disappeared between conflict and lookup
+        return { success: false, error: "A deal for this lead already exists but could not be retrieved." };
+      }
+      throw err;
+    }
+
+    let undoId: string | undefined;
+    try {
+      const undo = await recordUndoAction({
+        actionType: "DEAL_CREATE",
+        entityType: "DEAL",
+        entityId: deal.id,
+        leadId: deal.leadId,
+        beforeSnapshot: null,
+        afterSnapshot: deal,
+        description: `Create CRM deal for ${deal.lead?.name || lead.name}`,
+        userId: (await getSession())!.id as string,
+      });
+      undoId = undo.id;
+    } catch (e) {
+      console.error("[Undo] Failed to record undo for CRM client deal:", e);
+    }
+
+    await touchCrmSyncBestEffort();
+    revalidatePath("/deals");
+    revalidatePath("/leads");
+    return { success: true, data: serializeDeal(deal), undoId };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+/**
  * Create or update deal info for a lead or existing deal.
  * Guaranteed: One lead can have at most one deal (via unique leadId constraint).
  */
@@ -328,7 +423,7 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
         console.error("[Undo] Failed to record undo for update deal:", e);
       }
 
-      await touchCrmSync();
+      await touchCrmSyncBestEffort();
 
       revalidatePath("/deals");
       revalidatePath("/leads");
@@ -438,7 +533,7 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
       console.error("[Undo] Failed to record undo for upsert lead deal:", e);
     }
 
-    await touchCrmSync();
+    await touchCrmSyncBestEffort();
 
     revalidatePath("/deals");
     revalidatePath("/leads");
@@ -532,7 +627,7 @@ export async function createOtherClientDeal(
       console.error("[Undo] Failed to record undo for other client deal:", e);
     }
 
-    await touchCrmSync();
+    await touchCrmSyncBestEffort();
 
     revalidatePath("/deals");
     return { success: true, data: serializeDeal(deal), undoId };
@@ -595,7 +690,7 @@ export async function addDealPayment(input: RecordPaymentInput): Promise<DealAct
       console.error("[Undo] Failed to record undo for add payment:", e);
     }
 
-    await touchCrmSync();
+    await touchCrmSyncBestEffort();
 
     revalidatePath("/deals");
     revalidatePath("/leads");
@@ -686,7 +781,7 @@ export async function updateDealPayment(
       console.error("[Undo] Failed to record undo for update payment:", e);
     }
 
-    await touchCrmSync();
+    await touchCrmSyncBestEffort();
 
     revalidatePath("/deals");
     revalidatePath("/leads");
@@ -736,7 +831,7 @@ export async function deleteDealPayment(paymentId: string): Promise<DealActionRe
       console.error("[Undo] Failed to record undo for delete payment:", e);
     }
 
-    await touchCrmSync();
+    await touchCrmSyncBestEffort();
 
     revalidatePath("/deals");
     revalidatePath("/leads");
@@ -782,7 +877,7 @@ export async function deleteDeal(dealId: string): Promise<DealActionResult<{ del
       console.error("[Undo] Failed to record undo for delete deal:", e);
     }
 
-    await touchCrmSync();
+    await touchCrmSyncBestEffort();
 
     revalidatePath("/deals");
     revalidatePath("/leads");
@@ -796,7 +891,7 @@ export async function deleteDeal(dealId: string): Promise<DealActionResult<{ del
  * Fetch all deals across clients, with payments, lead details, metrics, and filtering/sorting.
  */
 export async function getAllDeals(options?: {
-  filter?: "all" | "unpaid" | "partially_paid" | "paid" | "overdue";
+  filter?: "all" | "unpaid" | "partially_paid" | "paid" | "overdue" | "crm_clients" | "other_clients";
   sortBy?: "highest_outstanding" | "nearest_due_date" | "latest_deal";
 }): Promise<DealActionResult<{ deals: SerializedDeal[]; metrics: DealSummaryMetrics }>> {
   try {
@@ -835,6 +930,10 @@ export async function getAllDeals(options?: {
       filtered = filtered.filter((d) => d.paymentStatus === "Paid");
     } else if (filter === "overdue") {
       filtered = filtered.filter((d) => d.paymentStatus === "Overdue");
+    } else if (filter === "crm_clients") {
+      filtered = filtered.filter((d) => d.source === "CRM_LEAD");
+    } else if (filter === "other_clients") {
+      filtered = filtered.filter((d) => d.source === "OTHER_CLIENT");
     }
 
     // Apply sorting

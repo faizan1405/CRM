@@ -1,69 +1,81 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import type { 
-  SerializedDeal, 
+import type {
+  SerializedDeal,
   SerializedPayment,
-  DealSummaryMetrics, 
-  DealStatus, 
-  PaymentType, 
-  PaymentMethod 
+  DealSummaryMetrics,
+  DealStatus,
+  PaymentType,
+  PaymentMethod
 } from "../types";
-import { 
-  DEAL_STATUS_LABELS, 
+import {
+  DEAL_STATUS_LABELS,
   PAYMENT_TYPE_LABELS,
-  PAYMENT_METHOD_LABELS 
+  PAYMENT_METHOD_LABELS
 } from "../types";
-import { 
-  formatCurrency, 
+import {
+  formatCurrency,
   calculateDealMetrics,
   formatDisplayDate,
   formatDisplayDateTime,
-  calculateRemainingAfterPayment,
-  calculateTotalReceived,
-  calculateRemainingBalance,
   derivePaymentStatus
 } from "../calculations";
-import { 
-  addDealPayment, 
+import {
+  addDealPayment,
   updateDealPayment,
   deleteDealPayment,
   upsertLeadDeal,
   createOtherClientDeal,
-  deleteDeal
+  deleteDeal,
+  createCrmClientDeal
 } from "@/app/actions/deals";
 import { useLeadNavigation } from "@/features/leads/lead-navigation-provider";
 import { useToast } from "@/components/toast-provider";
 import { PaymentAnalytics } from "./payment-analytics";
 import { DealDetailPanel } from "./deal-detail-panel";
 import { AiNoteEditor } from "@/components/ui/ai-note-editor";
-import { 
-  Receipt, 
-  Plus, 
-  Search, 
-  Calendar, 
-  CheckCircle2, 
-  AlertCircle, 
-  Clock, 
-  Edit2, 
-  Trash2, 
-  ExternalLink, 
-  X, 
-  CreditCard, 
-  ArrowUpDown, 
-  History, 
-  ChevronDown, 
-  ChevronUp, 
-  Building2, 
-  Phone, 
-  Mail, 
-  FolderKanban, 
+import {
+  Receipt,
+  Plus,
+  Search,
+  Calendar,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Edit2,
+  Trash2,
+  ExternalLink,
+  X,
+  CreditCard,
+  ArrowUpDown,
+  History,
+  ChevronDown,
+  ChevronUp,
+  Building2,
+  Phone,
+  Mail,
+  FolderKanban,
   FileText,
   Eye,
   User,
-  ArrowLeft
+  ArrowLeft,
+  Users,
+  Store,
+  Loader2,
+  UserCheck
 } from "lucide-react";
+
+// ─── Debounce hook ───────────────────────────────────────────────────────────
+function useDebouncedValue<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
 
 interface DealsWorkspaceProps {
   initialDeals?: SerializedDeal[];
@@ -80,7 +92,7 @@ function PaymentNote({ note }: { note: string }) {
   return (
     <div className="mt-2 text-xs text-slate-700 bg-slate-50/90 border-l-2 border-blue-500 rounded-r-lg p-2.5">
       <p className={expanded || !isLong ? "whitespace-pre-wrap break-words italic text-slate-700 font-normal leading-relaxed" : "line-clamp-2 whitespace-pre-wrap break-words italic text-slate-700 font-normal leading-relaxed"}>
-        “{note}”
+        &ldquo;{note}&rdquo;
       </p>
       {isLong && (
         <button
@@ -95,6 +107,51 @@ function PaymentNote({ note }: { note: string }) {
         </button>
       )}
     </div>
+  );
+}
+
+// ─── Lead Search Result ──────────────────────────────────────────────────────
+function LeadSearchItem({ lead, onSelect, disabled }: { lead: any; onSelect: () => void; disabled: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      className="w-full text-left px-3 py-3 rounded-xl hover:bg-blue-50 transition-colors flex items-start gap-3 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed border border-transparent hover:border-blue-200"
+    >
+      <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0 mt-0.5">
+        <User className="text-blue-600" size={18} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-slate-900 truncate">{lead.name}</p>
+        {lead.business && (
+          <p className="text-xs text-slate-500 truncate">{lead.business}</p>
+        )}
+        <div className="flex items-center gap-3 mt-1">
+          {lead.phone && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+              <Phone size={11} />
+              {lead.phone}
+            </span>
+          )}
+          {lead.email && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+              <Mail size={11} />
+              {lead.email}
+            </span>
+          )}
+        </div>
+      </div>
+      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+        lead.status === "CONVERTED" || lead.status === "WON"
+          ? "bg-emerald-50 text-emerald-700"
+          : lead.status === "NEGOTIATING"
+            ? "bg-blue-50 text-blue-700"
+            : "bg-slate-100 text-slate-600"
+      }`}>
+        {lead.status}
+      </span>
+    </button>
   );
 }
 
@@ -121,7 +178,11 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
 
   // Modal States
   const [selectedDealForDetail, setSelectedDealForDetail] = useState<SerializedDeal | null>(null);
-  const [isCreateOtherModalOpen, setIsCreateOtherModalOpen] = useState(false);
+  const [isAddDealFlowOpen, setIsAddDealFlowOpen] = useState(false);
+  // "add_deal_type": user chooses between CRM / Other
+  // "create_crm_deal": searching leads + form
+  const [addDealStep, setAddDealStep] = useState<"type" | "crm_search" | "crm_form" | "other_form">("type");
+  const [selectedLeadForDeal, setSelectedLeadForDeal] = useState<any | null>(null);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [activeDealForPayment, setActiveDealForPayment] = useState<SerializedDeal | null>(null);
   const [activeDealForHistory, setActiveDealForHistory] = useState<SerializedDeal | null>(null);
@@ -131,6 +192,14 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
   const [activePaymentForEdit, setActivePaymentForEdit] = useState<{ deal: SerializedDeal; payment: SerializedPayment } | null>(null);
   const [activePaymentForDelete, setActivePaymentForDelete] = useState<{ deal: SerializedDeal; payment: SerializedPayment } | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // CRM lead search
+  const [leadSearchQuery, setLeadSearchQuery] = useState("");
+  const [leadSearchResults, setLeadSearchResults] = useState<any[]>([]);
+  const [leadSearchLoading, setLeadSearchLoading] = useState(false);
+  const [leadSearchError, setLeadSearchError] = useState<string | null>(null);
+  const debouncedLeadQuery = useDebouncedValue(leadSearchQuery, 300);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   // Filter deals based on active tab
   const tabScopedDeals = useMemo(() => {
@@ -207,7 +276,78 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
     return result;
   }, [tabScopedDeals, filter, sortBy, searchQuery]);
 
-  // Handler: Create Other Client Deal
+  // ─── Lead search effect ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (addDealStep !== "crm_search" || !debouncedLeadQuery.trim()) {
+      setLeadSearchResults([]);
+      setLeadSearchError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+
+    const run = async () => {
+      setLeadSearchLoading(true);
+      setLeadSearchError(null);
+      try {
+        // Use the server action via dynamic import to avoid bundling issues
+        const { searchLeadsForWhatsApp } = await import("@/app/actions/lead-search");
+        const result = await searchLeadsForWhatsApp(debouncedLeadQuery.trim());
+        if (!cancelled && result.success && Array.isArray(result.data)) {
+          setLeadSearchResults(result.data as any[]);
+        } else if (!cancelled) {
+          setLeadSearchResults([]);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setLeadSearchError("Search failed. Please try again.");
+          setLeadSearchResults([]);
+        }
+      } finally {
+        if (!cancelled) setLeadSearchLoading(false);
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [debouncedLeadQuery, addDealStep]);
+
+  // ─── Handler: Create CRM Client Deal ─────────────────────────────────────
+  const handleCreateCrmClientDeal = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedLeadForDeal) return;
+    setSaving(true);
+    const res = await createCrmClientDeal(selectedLeadForDeal.id);
+
+    setSaving(false);
+    if (res.success) {
+      if (res.alreadyExists) {
+        showToast("This CRM client already has a deal", "info");
+        setDeals((prev) => {
+          const exists = prev.find((d) => d.id === res.data.id);
+          if (exists) return prev;
+          return [res.data, ...prev];
+        });
+      } else if (res.undoId) {
+        showUndoToast("CRM Client deal created successfully", res.undoId);
+        setDeals((prev) => [res.data, ...prev]);
+      } else {
+        showToast("CRM Client deal created successfully", "success");
+        setDeals((prev) => [res.data, ...prev]);
+      }
+      closeAddDealFlow();
+      router.refresh();
+    } else {
+      showToast(res.error || "Failed to create deal", "error");
+    }
+  };
+
+  // ─── Handler: Create Other Client Deal ───────────────────────────────────
   const handleCreateOtherClientDeal = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
@@ -246,15 +386,14 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
         showToast("Other Client deal created successfully", "success");
       }
       setDeals((prev) => [res.data, ...prev]);
-      setIsCreateOtherModalOpen(false);
-      setShowMoreOptions(false);
+      closeAddDealFlow();
       router.refresh();
     } else {
       showToast(res.error || "Failed to create deal", "error");
     }
   };
 
-  // Handler: Record Payment
+  // ─── Handler: Record Payment ─────────────────────────────────────────────
   const handleRecordPayment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!activeDealForPayment) return;
@@ -320,7 +459,7 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
     }
   };
 
-  // Handler: Edit Payment
+  // ─── Handler: Edit Payment ───────────────────────────────────────────────
   const handleEditPayment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!activePaymentForEdit) return;
@@ -354,7 +493,9 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
       setDeals((prev) =>
         prev.map((d) => {
           if (d.id !== deal.id) return d;
-          const updatedPayments = d.payments.map((p) => (p.id === payment.id ? updatedPayment : p));
+          const updatedPayments = d.payments.map((p) =>
+            p.id === updatedPayment.id ? updatedPayment : p
+          );
           const newReceived = updatedPayments.reduce((s, p) => s + p.amount, 0);
           const newRemaining = Math.max(0, d.finalAmount - newReceived);
           let newStatus = d.paymentStatus;
@@ -362,20 +503,20 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
           else if (newReceived > 0) newStatus = "Partially Paid";
           else newStatus = "Unpaid";
 
-          const updatedDeal = {
+          const updated = {
             ...d,
             payments: updatedPayments,
             totalReceived: newReceived,
             remainingBalance: newRemaining,
             paymentStatus: newStatus,
           };
-          if (activeDealForHistory && activeDealForHistory.id === deal.id) {
-            setActiveDealForHistory(updatedDeal);
+          if (selectedDealForDetail && selectedDealForDetail.id === d.id) {
+            setSelectedDealForDetail(updated);
           }
-          if (selectedDealForDetail && selectedDealForDetail.id === deal.id) {
-            setSelectedDealForDetail(updatedDeal);
+          if (activeDealForHistory && activeDealForHistory.id === d.id) {
+            setActiveDealForHistory(updated);
           }
-          return updatedDeal;
+          return updated;
         })
       );
       setActivePaymentForEdit(null);
@@ -385,18 +526,19 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
     }
   };
 
-  // Handler: Delete Payment
+  // ─── Handler: Delete Payment ─────────────────────────────────────────────
   const handleDeletePayment = async () => {
     if (!activePaymentForDelete) return;
     setSaving(true);
     const { deal, payment } = activePaymentForDelete;
     const res = await deleteDealPayment(payment.id);
+
     setSaving(false);
     if (res.success) {
       if (res.undoId) {
-        showUndoToast("Payment removed", res.undoId);
+        showUndoToast("Payment deleted successfully", res.undoId);
       } else {
-        showToast("Payment removed", "info");
+        showToast("Payment deleted successfully", "info");
       }
       setDeals((prev) =>
         prev.map((d) => {
@@ -409,20 +551,20 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
           else if (newReceived > 0) newStatus = "Partially Paid";
           else newStatus = "Unpaid";
 
-          const updatedDeal = {
+          const updated = {
             ...d,
             payments: updatedPayments,
             totalReceived: newReceived,
             remainingBalance: newRemaining,
             paymentStatus: newStatus,
           };
-          if (activeDealForHistory && activeDealForHistory.id === deal.id) {
-            setActiveDealForHistory(updatedDeal);
+          if (selectedDealForDetail && selectedDealForDetail.id === d.id) {
+            setSelectedDealForDetail(updated);
           }
-          if (selectedDealForDetail && selectedDealForDetail.id === deal.id) {
-            setSelectedDealForDetail(updatedDeal);
+          if (activeDealForHistory && activeDealForHistory.id === d.id) {
+            setActiveDealForHistory(updated);
           }
-          return updatedDeal;
+          return updated;
         })
       );
       setActivePaymentForDelete(null);
@@ -432,45 +574,38 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
     }
   };
 
-  // Handler: Edit Deal
-  const handleEditDeal = async (e: React.FormEvent<HTMLFormElement>) => {
+  // ─── Handler: Update Deal ────────────────────────────────────────────────
+  const handleUpdateDeal = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!activeDealForEdit) return;
     setSaving(true);
     const formData = new FormData(e.currentTarget);
-    const finalAmount = Number(formData.get("finalAmount")) || 0;
-    const quoted = formData.get("quotedAmount") ? Number(formData.get("quotedAmount")) : null;
-    const currency = String(formData.get("currency") || "INR");
-    const status = String(formData.get("status") || "NEGOTIATING") as DealStatus;
-    const nextDueDate = formData.get("nextPaymentDueDate") ? String(formData.get("nextPaymentDueDate")) : null;
-    const nextDueAmount = formData.get("nextPaymentDueAmount") ? Number(formData.get("nextPaymentDueAmount")) : null;
-
-    const isOtherClient = activeDealForEdit.source === "OTHER_CLIENT";
-    const isDeletedLead = activeDealForEdit.source === "CRM_LEAD" && !activeDealForEdit.lead;
-    const canEditClientFields = isOtherClient || isDeletedLead;
-
-    const clientName = canEditClientFields && formData.get("clientName") ? String(formData.get("clientName")).trim() : undefined;
-    const companyName = canEditClientFields && formData.get("companyName") ? String(formData.get("companyName")).trim() : undefined;
-    const clientPhone = canEditClientFields && formData.get("clientPhone") ? String(formData.get("clientPhone")).trim() : undefined;
-    const clientEmail = canEditClientFields && formData.get("clientEmail") ? String(formData.get("clientEmail")).trim() : undefined;
-    const projectName = formData.get("projectName") !== null ? String(formData.get("projectName")).trim() : undefined;
-    const notes = formData.get("notes") !== null ? String(formData.get("notes")).trim() : undefined;
+    const dealId = activeDealForEdit.id;
+    const finalAmount = Number(formData.get("finalAmount"));
+    const status = String(formData.get("status") || activeDealForEdit.status) as DealStatus;
+    const nextPaymentDueDate = formData.get("nextPaymentDueDate") ? String(formData.get("nextPaymentDueDate")) : undefined;
+    const nextPaymentDueAmount = formData.get("nextPaymentDueAmount") ? Number(formData.get("nextPaymentDueAmount")) : undefined;
+    const notes = formData.get("notes") ? String(formData.get("notes")).trim() : undefined;
+    const projectName = formData.get("projectName") ? String(formData.get("projectName")).trim() : undefined;
+    const clientName = formData.get("clientName") ? String(formData.get("clientName")).trim() : undefined;
+    const clientPhone = formData.get("clientPhone") ? String(formData.get("clientPhone")).trim() : undefined;
+    const clientEmail = formData.get("clientEmail") ? String(formData.get("clientEmail")).trim() : undefined;
+    const companyName = formData.get("companyName") ? String(formData.get("companyName")).trim() : undefined;
+    const currency = String(formData.get("currency") || activeDealForEdit.currency) as any;
 
     const res = await upsertLeadDeal({
-      dealId: activeDealForEdit.id,
-      leadId: activeDealForEdit.leadId,
+      dealId,
+      finalAmount,
+      status,
+      nextPaymentDueDate,
+      nextPaymentDueAmount,
+      notes,
+      projectName,
       clientName,
-      companyName,
       clientPhone,
       clientEmail,
-      projectName,
-      notes,
-      quotedAmount: quoted,
-      finalAmount,
+      companyName,
       currency,
-      status,
-      nextPaymentDueDate: nextDueDate,
-      nextPaymentDueAmount: nextDueAmount,
     });
 
     setSaving(false);
@@ -480,10 +615,18 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
       } else {
         showToast("Deal updated successfully", "success");
       }
-      setDeals((prev) => prev.map((d) => (d.id === activeDealForEdit.id ? res.data : d)));
-      if (selectedDealForDetail && selectedDealForDetail.id === activeDealForEdit.id) {
-        setSelectedDealForDetail(res.data);
-      }
+      setDeals((prev) =>
+        prev.map((d) => {
+          if (d.id !== res.data.id) return d;
+          const newReceived = res.data.payments.reduce((s: number, p: SerializedPayment) => s + p.amount, 0);
+          return {
+            ...res.data,
+            totalReceived: newReceived,
+            remainingBalance: Math.max(0, res.data.finalAmount - newReceived),
+            paymentStatus: derivePaymentStatus(res.data.finalAmount, newReceived, res.data.nextPaymentDueDate),
+          };
+        })
+      );
       setActiveDealForEdit(null);
       router.refresh();
     } else {
@@ -491,7 +634,7 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
     }
   };
 
-  // Handler: Delete Deal (Deliberate confirmation)
+  // ─── Handler: Delete Deal ────────────────────────────────────────────────
   const handleDeleteDeal = async () => {
     if (!activeDealForDelete) return;
     setSaving(true);
@@ -516,6 +659,34 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
     } else {
       showToast(res.error || "Failed to delete financial record", "error");
     }
+  };
+
+  // ─── Flow control ────────────────────────────────────────────────────────
+  const closeAddDealFlow = () => {
+    setIsAddDealFlowOpen(false);
+    setAddDealStep("type");
+    setSelectedLeadForDeal(null);
+    setLeadSearchQuery("");
+    setLeadSearchResults([]);
+    setLeadSearchError(null);
+  };
+
+  const openAddDealFlow = (defaultType: "crm" | "other" = "crm") => {
+    setIsAddDealFlowOpen(true);
+    setSelectedLeadForDeal(null);
+    setLeadSearchQuery("");
+    setLeadSearchResults([]);
+    setLeadSearchError(null);
+    if (defaultType === "crm") {
+      setAddDealStep("crm_search");
+    } else {
+      setAddDealStep("other_form");
+    }
+  };
+
+  const selectLeadForDeal = (lead: any) => {
+    setSelectedLeadForDeal(lead);
+    setAddDealStep("crm_form");
   };
 
   const getStatusBadgeClass = (status: string) => {
@@ -560,39 +731,36 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
-      {/* Header with Title and Add Other Client Deal Button */}
+      {/* ─── Header with Title and Add Deal Button ───────────────────────── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
             <Receipt className="text-blue-600" size={26} />
-            Deals &amp; Payment Tracker
+            Deals &amp; Payments
           </h1>
           <p className="mt-1 text-xs sm:text-sm text-slate-500">
-            Track client deals, milestone payments, collections, and outstanding balances across CRM and standalone clients.
+            Track deals, milestone payments, collections, and outstanding balances.
           </p>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => {
-              setShowMoreOptions(false);
-              setIsCreateOtherModalOpen(true);
-            }}
+            onClick={() => openAddDealFlow(activeTab === "other" ? "other" : "crm")}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-xs sm:text-sm font-semibold transition-colors shadow-sm cursor-pointer"
           >
             <Plus size={16} />
-            <span>Add Other Client Deal</span>
+            <span>Add Deal</span>
           </button>
         </div>
       </div>
 
-      {/* TOP-LEVEL TABS */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-1">
+      {/* ─── TOP-LEVEL TABS ───────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-1 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab("all")}
-          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 border ${
+          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 border whitespace-nowrap ${
             activeTab === "all"
               ? "bg-blue-600 text-white border-blue-600 shadow-sm"
               : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900"
@@ -609,7 +777,7 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
         <button
           type="button"
           onClick={() => setActiveTab("crm")}
-          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 border ${
+          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 border whitespace-nowrap ${
             activeTab === "crm"
               ? "bg-blue-600 text-white border-blue-600 shadow-sm"
               : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900"
@@ -626,7 +794,7 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
         <button
           type="button"
           onClick={() => setActiveTab("other")}
-          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 border ${
+          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 border whitespace-nowrap ${
             activeTab === "other"
               ? "bg-blue-600 text-white border-blue-600 shadow-sm"
               : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900"
@@ -641,7 +809,7 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
         </button>
       </div>
 
-      {/* TAB-SCOPED SUMMARY METRICS CARDS */}
+      {/* ─── TAB-SCOPED SUMMARY METRICS CARDS ────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
@@ -688,710 +856,695 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-            Total Outstanding
+          <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider block">
+            Outstanding
           </span>
-          <span className="mt-1 text-lg sm:text-2xl font-bold text-slate-900 block">
-            {formatCurrency(metrics.totalOutstanding ?? 0)}
+          <span className="mt-1 text-lg sm:text-2xl font-bold text-amber-700 block">
+            {formatCurrency(metrics.totalOutstanding)}
           </span>
-          <span className="mt-1 text-xs text-slate-400 block font-medium">
-            Remaining client balances
+          <span className="mt-1 text-xs text-amber-600/80 block font-medium">
+            Pending collections
           </span>
         </div>
 
-        <div className={`rounded-2xl border p-4 shadow-sm ${
-          (metrics.overdueAmount ?? 0) > 0 
-            ? "border-rose-200 bg-rose-50/50" 
-            : "border-slate-200 bg-white"
-        }`}>
-          <span className={`text-xs font-semibold uppercase tracking-wider block ${
-            (metrics.overdueAmount ?? 0) > 0 ? "text-rose-600" : "text-slate-500"
-          }`}>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <span className="text-xs font-semibold text-rose-600 uppercase tracking-wider block">
             Overdue Amount
           </span>
-          <span className={`mt-1 text-lg sm:text-2xl font-bold block ${
-            (metrics.overdueAmount ?? 0) > 0 ? "text-rose-700" : "text-slate-900"
-          }`}>
-            {formatCurrency(metrics.overdueAmount ?? 0)}
+          <span className="mt-1 text-lg sm:text-2xl font-bold text-rose-700 block">
+            {formatCurrency(metrics.overdueAmount)}
           </span>
-          <span className={`mt-1 text-xs block font-medium ${
-            (metrics.overdueAmount ?? 0) > 0 ? "text-rose-600 font-semibold" : "text-slate-400"
-          }`}>
-            {(metrics.overdueAmount ?? 0) > 0 ? "Pending overdue collections" : "Zero overdue payments"}
+          <span className="mt-1 text-xs text-rose-600/80 block font-medium">
+            Past due date
           </span>
         </div>
       </div>
 
-      {/* DEAL STATUS COUNTS ROW */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <button
-          type="button"
-          onClick={() => setFilter("paid")}
-          className="p-3 rounded-xl border border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/30 transition-all text-left flex items-center justify-between cursor-pointer group shadow-2xs"
-        >
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
-            <span className="text-xs font-semibold text-slate-600 group-hover:text-slate-900">Paid Deals</span>
-          </div>
-          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            {metrics.paidDealsCount ?? 0}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setFilter("partially_paid")}
-          className="p-3 rounded-xl border border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30 transition-all text-left flex items-center justify-between cursor-pointer group shadow-2xs"
-        >
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0" />
-            <span className="text-xs font-semibold text-slate-600 group-hover:text-slate-900">Partially Paid</span>
-          </div>
-          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-            {metrics.partiallyPaidDealsCount ?? 0}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setFilter("unpaid")}
-          className="p-3 rounded-xl border border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50 transition-all text-left flex items-center justify-between cursor-pointer group shadow-2xs"
-        >
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-slate-400 shrink-0" />
-            <span className="text-xs font-semibold text-slate-600 group-hover:text-slate-900">Unpaid Deals</span>
-          </div>
-          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-            {metrics.unpaidDealsCount ?? 0}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setFilter("overdue")}
-          className="p-3 rounded-xl border border-slate-200 bg-white hover:border-rose-300 hover:bg-rose-50/30 transition-all text-left flex items-center justify-between cursor-pointer group shadow-2xs"
-        >
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-rose-500 shrink-0" />
-            <span className="text-xs font-semibold text-slate-600 group-hover:text-slate-900">Overdue Deals</span>
-          </div>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${
-            (metrics.overdueDealsCount ?? 0) > 0
-              ? "bg-rose-50 text-rose-700 border-rose-200"
-              : "bg-slate-100 text-slate-600 border-slate-200"
-          }`}>
-            {metrics.overdueDealsCount ?? 0}
-          </span>
-        </button>
-      </div>
-
-      {/* COMPACT PAYMENT ANALYTICS DASHBOARD */}
-      <PaymentAnalytics deals={tabScopedDeals} activeTab={activeTab} />
-
-      {/* CONTROLS: Filter Pills, Search, Sort */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-        {/* Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-          {(
-            [
-              { id: "all", label: "All" },
-              { id: "unpaid", label: "Unpaid" },
-              { id: "partially_paid", label: "Partially Paid" },
-              { id: "paid", label: "Paid" },
-              { id: "overdue", label: "Overdue" },
-            ] as const
-          ).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setFilter(item.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-                filter === item.id
-                  ? item.id === "overdue"
-                    ? "bg-rose-600 text-white shadow-sm"
-                    : "bg-blue-600 text-white shadow-sm"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              {item.label}
-            </button>
-          ))}
+      {/* ─── FILTERS AND SEARCH ───────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+        {/* Payment status filter */}
+        <div className="relative">
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as typeof filter)}
+            className="appearance-none bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 cursor-pointer shadow-sm"
+          >
+            <option value="all">All Statuses</option>
+            <option value="unpaid">Unpaid</option>
+            <option value="partially_paid">Partially Paid</option>
+            <option value="paid">Paid</option>
+            <option value="overdue">Overdue</option>
+          </select>
+          <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
 
-        {/* Search & Sort */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1 sm:w-64">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search client, business, project..."
-              className="w-full pl-8 pr-3 py-1.5 text-base sm:text-xs rounded-lg border border-slate-200 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
+        {/* Sort by */}
+        <div className="relative">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="appearance-none bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 cursor-pointer shadow-sm"
+          >
+            <option value="highest_outstanding">Highest Outstanding</option>
+            <option value="nearest_due_date">Nearest Due Date</option>
+            <option value="latest_deal">Latest Deal</option>
+          </select>
+          <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            <ArrowUpDown size={14} className="text-slate-400" />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="py-1.5 px-2 text-base sm:text-xs rounded-lg border border-slate-200 bg-white text-slate-700 font-medium focus:border-blue-500 focus:outline-none cursor-pointer"
-            >
-              <option value="highest_outstanding">Highest Outstanding</option>
-              <option value="nearest_due_date">Nearest Due Date</option>
-              <option value="latest_deal">Latest Deal</option>
-            </select>
-          </div>
+        {/* Search */}
+        <div className="relative flex-1 w-full sm:w-auto">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search deals..."
+            className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+          />
         </div>
       </div>
 
-      {/* DEALS LIST / TABLE */}
+      {/* ─── DEAL LIST ────────────────────────────────────────────────────── */}
       {filteredAndSortedDeals.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <Receipt size={36} className="mx-auto text-slate-300" />
-          <h3 className="mt-2.5 text-sm font-bold text-slate-800">No deals found</h3>
-          <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
-            {activeTab === "other"
-              ? "No Other Client deals recorded yet. Click 'Add Other Client Deal' to record money from non-CRM clients."
-              : activeTab === "crm"
-              ? "No CRM Client deals found matching the current criteria."
-              : "No deals matching the selected tab, filter, or search query."}
+        <div className="text-center py-16 px-4 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50">
+          <Receipt size={48} className="mx-auto text-slate-300 mb-4" />
+          <p className="text-sm font-semibold text-slate-500">
+            {searchQuery ? "No deals match your search" : "No deals yet"}
           </p>
-          {activeTab === "other" && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowMoreOptions(false);
-                setIsCreateOtherModalOpen(true);
-              }}
-              className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors cursor-pointer"
-            >
-              <Plus size={14} /> Add Other Client Deal
-            </button>
-          )}
+          <p className="text-xs text-slate-400 mt-1">
+            {searchQuery ? "Try adjusting your search terms" : `Click "Add Deal" to create your first ${activeTab === "crm" ? "CRM client" : activeTab === "other" ? "other client" : ""} deal`}
+          </p>
         </div>
       ) : (
-        <>
-          {/* DESKTOP VIEW: Clean Table */}
-          <div className="hidden md:block rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/80 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
-                  <th className="px-5 py-3.5">Client</th>
-                  <th className="px-4 py-3.5">Business / Project</th>
-                  <th className="px-4 py-3.5">Deal Value</th>
-                  <th className="px-4 py-3.5">Received</th>
-                  <th className="px-4 py-3.5">Remaining</th>
-                  <th className="px-4 py-3.5">Status</th>
-                  <th className="px-4 py-3.5">Next Due</th>
-                  <th className="px-5 py-3.5 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredAndSortedDeals.map((deal) => {
-                  const percent = deal.finalAmount > 0 
-                    ? Math.min(100, Math.round((deal.totalReceived / deal.finalAmount) * 100)) 
-                    : 0;
-                  const clientDisplayName = deal.lead?.name || deal.clientNameSnapshot || "Client";
-                  const businessName = deal.lead?.business || deal.companyNameSnapshot;
-                  const projectName = deal.projectName;
+        <div className="grid gap-3">
+          {filteredAndSortedDeals.map((deal) => {
+            const isCrm = deal.source === "CRM_LEAD";
+            const isOther = deal.source === "OTHER_CLIENT";
+            const isPaid = deal.paymentStatus === "Paid";
+            const isOverdue = deal.paymentStatus === "Overdue";
 
-                  return (
-                    <tr 
-                      key={deal.id} 
-                      onClick={() => setSelectedDealForDetail(deal)}
-                      className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
-                    >
-                      {/* Client Column */}
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedDealForDetail(deal);
-                            }}
-                            className="text-left font-bold text-slate-900 group-hover:text-blue-600 transition-colors flex items-center gap-1 cursor-pointer"
-                          >
-                            <span>{clientDisplayName}</span>
-                          </button>
-                          {renderSourceBadge(deal)}
-                        </div>
-                        <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2">
-                          {deal.lead?.phone || deal.clientPhone ? (
-                            <span>{deal.lead?.phone || deal.clientPhone}</span>
-                          ) : null}
-                          {deal.lead?.email || deal.clientEmail ? (
-                            <span className="text-slate-400">· {deal.lead?.email || deal.clientEmail}</span>
-                          ) : null}
-                        </div>
-                      </td>
-
-                      {/* Business / Project Column */}
-                      <td className="px-4 py-3.5">
-                        <div className="font-medium text-slate-800">
-                          {businessName || "—"}
-                        </div>
-                        {projectName && (
-                          <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
-                            <FolderKanban size={11} className="text-slate-400" />
-                            <span>{projectName}</span>
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Deal Value */}
-                      <td className="px-4 py-3.5 font-bold text-slate-900">
-                        {formatCurrency(deal.finalAmount, deal.currency)}
-                      </td>
-
-                      {/* Received */}
-                      <td className="px-4 py-3.5">
-                        <span className="font-bold text-emerald-700">
-                          {formatCurrency(deal.totalReceived, deal.currency)}
-                        </span>
-                        <div className="mt-1 flex items-center gap-2">
-                          <div className="h-1.5 w-16 bg-slate-100 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full ${percent >= 100 ? "bg-emerald-500" : "bg-blue-600"}`} 
-                              style={{ width: `${percent}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-slate-400 font-semibold">{percent}%</span>
-                        </div>
-                      </td>
-
-                      {/* Remaining */}
-                      <td className="px-4 py-3.5">
-                        <span className={`font-bold ${deal.remainingBalance > 0 ? "text-slate-900" : "text-slate-400"}`}>
-                          {formatCurrency(deal.remainingBalance, deal.currency)}
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-4 py-3.5">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${getStatusBadgeClass(deal.paymentStatus)}`}>
-                          {deal.paymentStatus === "Paid" && <CheckCircle2 size={12} />}
-                          {deal.paymentStatus === "Overdue" && <AlertCircle size={12} />}
-                          {deal.paymentStatus === "Partially Paid" && <Clock size={12} />}
-                          {deal.paymentStatus}
-                        </span>
-                      </td>
-
-                      {/* Next Due Date */}
-                      <td className="px-4 py-3.5 text-slate-600">
-                        {deal.nextPaymentDueDate ? (
-                          <div>
-                            <span className={`font-medium ${deal.paymentStatus === "Overdue" ? "text-rose-600 font-bold" : ""}`}>
-                              {deal.nextPaymentDueDate}
-                            </span>
-                            {deal.nextPaymentDueAmount ? (
-                              <div className="text-[11px] text-slate-400">
-                                {formatCurrency(deal.nextPaymentDueAmount, deal.currency)}
-                              </div>
-                            ) : null}
-                          </div>
+            return (
+              <div
+                key={deal.id}
+                className={`rounded-2xl border shadow-sm transition-all hover:shadow-md ${
+                  isOverdue
+                    ? "border-rose-200 bg-rose-50/30"
+                    : isPaid
+                      ? "border-emerald-200 bg-emerald-50/20"
+                      : "border-slate-200 bg-white"
+                }`}
+              >
+                {/* Deal card header */}
+                <div className="p-4 sm:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                        isCrm ? "bg-blue-100" : "bg-purple-100"
+                      }`}>
+                        {isCrm ? (
+                          <UserCheck className="text-blue-600" size={20} />
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <Store className="text-purple-600" size={20} />
                         )}
-                      </td>
-
-                      {/* Actions */}
-                      <td className="px-5 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedDealForDetail(deal)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold transition-colors cursor-pointer text-xs"
-                            title="View Complete Deal Details"
-                          >
-                            View
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveDealForPayment(deal)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold transition-colors cursor-pointer text-xs"
-                            title="Record Payment"
-                          >
-                            <Plus size={12} /> Payment
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveDealForHistory(deal)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
-                            title="View Payment History"
-                            aria-label="Payment history"
-                          >
-                            <History size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveDealForEdit(deal)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
-                            title="Edit Deal"
-                            aria-label="Edit deal"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveDealForDelete(deal)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                            title="Delete Financial Record"
-                            aria-label="Delete deal"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">
+                            {isCrm ? deal.lead?.name || deal.clientNameSnapshot : deal.clientNameSnapshot}
+                          </h3>
+                          {renderSourceBadge(deal)}
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadgeClass(deal.paymentStatus)}`}>
+                            {deal.paymentStatus}
+                          </span>
+                          {isOverdue && (
+                            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                              <AlertCircle size={10} />
+                              Overdue
+                            </span>
+                          )}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* MOBILE VIEW: Cards */}
-          <div className="md:hidden space-y-3">
-            {filteredAndSortedDeals.map((deal) => {
-              const percent = deal.finalAmount > 0 
-                ? Math.min(100, Math.round((deal.totalReceived / deal.finalAmount) * 100)) 
-                : 0;
-              const clientDisplayName = deal.lead?.name || deal.clientNameSnapshot || "Client";
-              const businessName = deal.lead?.business || deal.companyNameSnapshot;
-              const projectName = deal.projectName;
-
-              return (
-                <div 
-                  key={deal.id} 
-                  onClick={() => setSelectedDealForDetail(deal)}
-                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3 cursor-pointer hover:border-slate-300 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedDealForDetail(deal);
-                          }}
-                          className="text-left font-bold text-slate-900 text-sm hover:text-blue-600 transition-colors"
-                        >
-                          {clientDisplayName}
-                        </button>
-                        {renderSourceBadge(deal)}
-                      </div>
-                      <div className="text-xs text-slate-500 mt-0.5 space-y-0.5">
-                        {businessName && <p className="font-medium text-slate-700">{businessName}</p>}
-                        {projectName && <p className="text-[11px] text-slate-400">Project: {projectName}</p>}
-                        {(deal.lead?.phone || deal.clientPhone) && (
-                          <p className="text-[11px] text-slate-400">{deal.lead?.phone || deal.clientPhone}</p>
+                        {isCrm && deal.lead?.business && (
+                          <p className="text-xs text-slate-500 mt-0.5 truncate">{deal.lead.business}</p>
+                        )}
+                        {isOther && deal.companyNameSnapshot && (
+                          <p className="text-xs text-slate-500 mt-0.5 truncate">{deal.companyNameSnapshot}</p>
+                        )}
+                        {deal.projectName && (
+                          <p className="text-xs text-slate-400 mt-0.5 truncate">{deal.projectName}</p>
                         )}
                       </div>
                     </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm sm:text-base font-bold text-slate-900">
+                        {formatCurrency(deal.finalAmount)}
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        {deal.remainingBalance > 0 ? `${formatCurrency(deal.remainingBalance)} left` : "Fully paid"}
+                      </p>
+                    </div>
+                  </div>
 
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${getStatusBadgeClass(deal.paymentStatus)} shrink-0`}>
-                      {deal.paymentStatus === "Paid" && <CheckCircle2 size={12} />}
-                      {deal.paymentStatus === "Overdue" && <AlertCircle size={12} />}
-                      {deal.paymentStatus === "Partially Paid" && <Clock size={12} />}
-                      {deal.paymentStatus}
+                  {/* Deal info bar */}
+                  <div className="flex items-center gap-4 mt-3 pt-3 border-t border-slate-100 flex-wrap">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 font-medium">
+                      <CreditCard size={12} />
+                      {deal.payments.length} payment{deal.payments.length !== 1 ? "s" : ""}
                     </span>
-                  </div>
-
-                  {/* Numbers Grid */}
-                  <div className="grid grid-cols-3 gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100 text-xs">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Deal</span>
-                      <span className="font-bold text-slate-900 block mt-0.5">{formatCurrency(deal.finalAmount, deal.currency)}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-emerald-700/70 block">Received</span>
-                      <span className="font-bold text-emerald-700 block mt-0.5">{formatCurrency(deal.totalReceived, deal.currency)}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Remaining</span>
-                      <span className="font-bold text-slate-900 block mt-0.5">{formatCurrency(deal.remainingBalance, deal.currency)}</span>
-                    </div>
-                  </div>
-
-                  {/* Progress Bar */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] font-semibold text-slate-400">
-                      <span>Progress</span>
-                      <span>{percent}% collected</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full ${percent >= 100 ? "bg-emerald-500" : "bg-blue-600"}`} 
-                        style={{ width: `${percent}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Due Date Info */}
-                  {deal.nextPaymentDueDate && deal.remainingBalance > 0 && (
-                    <div className={`p-2 rounded-lg text-xs flex items-center justify-between border ${
-                      deal.paymentStatus === "Overdue" 
-                        ? "bg-rose-50 text-rose-800 border-rose-200" 
-                        : "bg-blue-50 text-blue-800 border-blue-100"
-                    }`}>
-                      <span className="flex items-center gap-1.5">
-                        <Calendar size={13} />
-                        Next Due: <strong>{deal.nextPaymentDueDate}</strong>
+                    {deal.nextPaymentDueDate && (
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${
+                        isOverdue ? "text-rose-600" : "text-slate-500"
+                      }`}>
+                        <Calendar size={12} />
+                        Due: {formatDisplayDate(deal.nextPaymentDueDate)}
+                        {deal.nextPaymentDueAmount && ` (${formatCurrency(deal.nextPaymentDueAmount)})`}
                       </span>
-                      {deal.nextPaymentDueAmount && (
-                        <span className="font-bold">{formatCurrency(deal.nextPaymentDueAmount, deal.currency)}</span>
-                      )}
-                    </div>
-                  )}
+                    )}
+                    {isCrm && deal.lead && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (leadNavigation) {
+                            leadNavigation.openLead(deal.lead!.id);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+                      >
+                        <ExternalLink size={11} />
+                        View Lead
+                      </button>
+                    )}
+                    {isOther && deal.clientPhone && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                        <Phone size={12} />
+                        {deal.clientPhone}
+                      </span>
+                    )}
+                  </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDealForDetail(deal)}
-                      className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
-                    >
-                      View Details
-                    </button>
+                  {/* Quick actions */}
+                  <div className="flex items-center gap-2 mt-3 flex-wrap">
                     <button
                       type="button"
                       onClick={() => setActiveDealForPayment(deal)}
-                      className="flex-1 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors text-center cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer border border-blue-200"
                     >
-                      + Payment
+                      <Plus size={13} />
+                      Record Payment
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveDealForHistory(deal)}
-                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
-                      title="Payment History"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer border border-slate-200"
                     >
+                      <History size={13} />
                       History
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveDealForEdit(deal)}
-                      className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
-                      title="Edit Deal"
-                      aria-label="Edit deal"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer border border-slate-200"
                     >
                       <Edit2 size={13} />
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDealForDetail(deal);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer border border-slate-200"
+                    >
+                      <Eye size={13} />
+                      Details
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveDealForDelete(deal)}
-                      className="p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer"
-                      title="Delete Financial Record"
-                      aria-label="Delete deal"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer border border-rose-200"
                     >
                       <Trash2 size={13} />
+                      Delete
                     </button>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </>
+              </div>
+            );
+          })}
+        </div>
       )}
 
-      {/* ======================================================== */}
-      {/* MODAL 1: ADD OTHER CLIENT DEAL (Quick Create)            */}
-      {/* ======================================================== */}
-      {isCreateOtherModalOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <Plus size={18} className="text-blue-600" />
-                  Add Other Client Deal
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Record money from clients who are not website leads (no CRM lead created).
-                </p>
-              </div>
+      {/* ─── Payment Analytics ────────────────────────────────────────────── */}
+      <PaymentAnalytics deals={tabScopedDeals} activeTab={activeTab} />
+
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+      {/* ─── MODALS ────────────────────────────────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════════ */}
+
+      {/* ─── ADD DEAL FLOW: Type Selection ───────────────────────────────── */}
+      {isAddDealFlowOpen && addDealStep === "type" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={closeAddDealFlow}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900">Add New Deal</h2>
+              <button onClick={closeAddDealFlow} className="p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+                <X size={20} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
               <button
                 type="button"
-                onClick={() => {
-                  setIsCreateOtherModalOpen(false);
-                  setShowMoreOptions(false);
-                }}
-                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"
+                onClick={() => openAddDealFlow("crm")}
+                className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-blue-200 hover:border-blue-400 hover:bg-blue-50/50 transition-all cursor-pointer text-left group"
               >
-                <X size={18} />
+                <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center shrink-0 group-hover:bg-blue-200 transition-colors">
+                  <UserCheck className="text-blue-600" size={24} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-900">CRM Client</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Create a deal for an existing CRM lead</p>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => openAddDealFlow("other")}
+                className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-purple-200 hover:border-purple-400 hover:bg-purple-50/50 transition-all cursor-pointer text-left group"
+              >
+                <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center shrink-0 group-hover:bg-purple-200 transition-colors">
+                  <Store className="text-purple-600" size={24} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-900">Other Client</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Create a standalone deal for an external client</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── ADD DEAL FLOW: CRM Client — Lead Search ─────────────────────── */}
+      {isAddDealFlowOpen && addDealStep === "crm_search" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={closeAddDealFlow}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setAddDealStep("type"); setLeadSearchQuery(""); setLeadSearchResults([]); }}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <ArrowLeft size={18} className="text-slate-400" />
+                </button>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Select CRM Client</h2>
+                  <p className="text-[11px] text-slate-500">Search by name or phone number</p>
+                </div>
+              </div>
+              <button onClick={closeAddDealFlow} className="p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+                <X size={20} className="text-slate-400" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateOtherClientDeal} className="mt-4 space-y-3.5 text-xs">
-              {/* Basic Quick-Create Fields */}
+            {/* Search input */}
+            <div className="p-4 border-b border-slate-100 shrink-0">
+              <div className="relative">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={leadSearchQuery}
+                  onChange={(e) => setLeadSearchQuery(e.target.value)}
+                  placeholder="Search leads by name or phone..."
+                  autoFocus
+                  className="w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                />
+                {leadSearchLoading && (
+                  <Loader2 size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500 animate-spin" />
+                )}
+              </div>
+            </div>
+
+            {/* Results */}
+            <div className="flex-1 overflow-y-auto p-2">
+              {leadSearchError && (
+                <div className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700">
+                  {leadSearchError}
+                </div>
+              )}
+              {!leadSearchLoading && !leadSearchError && debouncedLeadQuery.trim() && leadSearchResults.length === 0 && (
+                <div className="text-center py-10 px-4">
+                  <User size={40} className="mx-auto text-slate-300 mb-3" />
+                  <p className="text-sm font-semibold text-slate-500">No leads found</p>
+                  <p className="text-xs text-slate-400 mt-1">Try a different search term</p>
+                </div>
+              )}
+              {!debouncedLeadQuery.trim() && (
+                <div className="text-center py-10 px-4">
+                  <Search size={40} className="mx-auto text-slate-300 mb-3" />
+                  <p className="text-sm font-semibold text-slate-500">Start typing to search</p>
+                  <p className="text-xs text-slate-400 mt-1">Search by lead name or phone number</p>
+                </div>
+              )}
+              <div className="space-y-1">
+                {leadSearchResults.map((lead) => (
+                  <LeadSearchItem
+                    key={lead.id}
+                    lead={lead}
+                    onSelect={() => selectLeadForDeal(lead)}
+                    disabled={saving}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── ADD DEAL FLOW: CRM Client — Deal Form ───────────────────────── */}
+      {isAddDealFlowOpen && addDealStep === "crm_form" && selectedLeadForDeal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" onClick={closeAddDealFlow}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg my-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAddDealStep("crm_search")}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <ArrowLeft size={18} className="text-slate-400" />
+                </button>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Create Deal for {selectedLeadForDeal.name}</h2>
+                  <p className="text-[11px] text-slate-500">
+                    {selectedLeadForDeal.business || selectedLeadForDeal.phone || selectedLeadForDeal.email || "No additional info"}
+                  </p>
+                </div>
+              </div>
+              <button onClick={closeAddDealFlow} className="p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+                <X size={20} className="text-slate-400" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateCrmClientDeal} className="p-5 space-y-4">
+              {/* Lead info (read-only) */}
+              <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 space-y-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-blue-800 mb-2">
+                  <User size={14} />
+                  CRM Lead Information
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-blue-600 font-medium">Name:</span>
+                    <span className="ml-1 text-blue-900">{selectedLeadForDeal.name}</span>
+                  </div>
+                  {selectedLeadForDeal.business && (
+                    <div>
+                      <span className="text-blue-600 font-medium">Company:</span>
+                      <span className="ml-1 text-blue-900">{selectedLeadForDeal.business}</span>
+                    </div>
+                  )}
+                  {selectedLeadForDeal.phone && (
+                    <div>
+                      <span className="text-blue-600 font-medium">Phone:</span>
+                      <span className="ml-1 text-blue-900">{selectedLeadForDeal.phone}</span>
+                    </div>
+                  )}
+                  {selectedLeadForDeal.email && (
+                    <div>
+                      <span className="text-blue-600 font-medium">Email:</span>
+                      <span className="ml-1 text-blue-900">{selectedLeadForDeal.email}</span>
+                    </div>
+                  )}
+                </div>
+                <p className="text-[11px] text-blue-600/80 italic">
+                  Lead details are linked automatically. No duplicate will be created.
+                </p>
+              </div>
+
+              {/* Deal Amount */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Client Name <span className="text-rose-500">*</span>
-                </label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Deal Amount (INR)</label>
+                <input
+                  type="number"
+                  name="finalAmount"
+                  min="0"
+                  step="0.01"
+                  required
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  placeholder="0.00"
+                />
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
+                <select
+                  name="status"
+                  defaultValue="NEGOTIATING"
+                  className="w-full appearance-none bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                >
+                  {Object.entries(DEAL_STATUS_LABELS).map(([val, label]) => (
+                    <option key={val} value={val}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Project Name */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Project Name (optional)</label>
+                <input
+                  type="text"
+                  name="projectName"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  placeholder="e.g., Website Redesign"
+                />
+              </div>
+
+              {/* Next Payment Due */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Next Payment Due (optional)</label>
+                  <input
+                    type="date"
+                    name="nextPaymentDueDate"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Due Amount (optional)</label>
+                  <input
+                    type="number"
+                    name="nextPaymentDueAmount"
+                    min="0"
+                    step="0.01"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Notes (optional)</label>
+                <textarea
+                  name="notes"
+                  rows={2}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm resize-none"
+                  placeholder="Add any notes about this deal..."
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={closeAddDealFlow}
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
+                >
+                  {saving && <Loader2 size={16} className="animate-spin" />}
+                  Create Deal
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── ADD DEAL FLOW: Other Client — Deal Form ─────────────────────── */}
+      {isAddDealFlowOpen && addDealStep === "other_form" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" onClick={closeAddDealFlow}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg my-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setAddDealStep("type")}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  <ArrowLeft size={18} className="text-slate-400" />
+                </button>
+                <h2 className="text-base font-bold text-slate-900">Add Other Client Deal</h2>
+              </div>
+              <button onClick={closeAddDealFlow} className="p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+                <X size={20} className="text-slate-400" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateOtherClientDeal} className="p-5 space-y-4">
+              {/* Client Name */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Client Name *</label>
                 <input
                   type="text"
                   name="clientName"
                   required
-                  placeholder="e.g. John Doe / Acme Corp"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  autoFocus
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  placeholder="Client or company name"
                 />
               </div>
 
+              {/* Company Name */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Final Deal Value (₹) <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  name="finalAmount"
-                  step="0.01"
-                  min="0"
-                  required
-                  placeholder="50000"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Business / Company Name <span className="text-slate-400 font-normal">(optional)</span>
-                </label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Company Name (optional)</label>
                 <input
                   type="text"
                   name="companyName"
-                  placeholder="e.g. Apex Global Solutions"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  placeholder="Company name"
                 />
               </div>
 
-              {/* Collapsible: More Options */}
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowMoreOptions(!showMoreOptions)}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors py-1 cursor-pointer"
-                >
-                  {showMoreOptions ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  <span>{showMoreOptions ? "Fewer options" : "More options (Phone, Email, Project, Due Date, Notes)"}</span>
-                </button>
-
-                {showMoreOptions && (
-                  <div className="mt-3 space-y-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 animate-in fade-in slide-in-from-top-2">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Phone Number</label>
-                        <input
-                          type="tel"
-                          name="clientPhone"
-                          placeholder="+91 98765 43210"
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Email Address</label>
-                        <input
-                          type="email"
-                          name="clientEmail"
-                          placeholder="client@example.com"
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Project / Deal Name</label>
-                        <input
-                          type="text"
-                          name="projectName"
-                          placeholder="e.g. Website Redesign"
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Currency</label>
-                        <input
-                          type="text"
-                          name="currency"
-                          defaultValue="INR"
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Deal Status</label>
-                      <select
-                        name="status"
-                        defaultValue="CONFIRMED"
-                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none cursor-pointer"
-                      >
-                        <option value="CONFIRMED">Confirmed</option>
-                        <option value="NEGOTIATING">Negotiating</option>
-                        <option value="COMPLETED">Completed</option>
-                        <option value="NO_DEAL">No Deal</option>
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Next Payment Due Date</label>
-                        <input
-                          type="date"
-                          name="nextPaymentDueDate"
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Next Due Amount (₹)</label>
-                        <input
-                          type="number"
-                          name="nextPaymentDueAmount"
-                          step="0.01"
-                          min="0"
-                          placeholder="25000"
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <AiNoteEditor
-                        name="notes"
-                        label="Internal Notes"
-                        labelClassName="block font-semibold text-slate-700 mb-1"
-                        rows={2}
-                        placeholder="Additional details about this deal or payment terms..."
-                        textareaClassName="bg-white px-3 py-2 text-sm"
-                        compact
-                      />
-                    </div>
-                  </div>
-                )}
+              {/* Phone & Email */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone (optional)</label>
+                  <input
+                    type="tel"
+                    name="clientPhone"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                    placeholder="+91 98765 43210"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email (optional)</label>
+                  <input
+                    type="email"
+                    name="clientEmail"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                    placeholder="client@email.com"
+                  />
+                </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-2.5 pt-3 border-t border-slate-100">
+              {/* Deal Amount */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Deal Amount (INR) *</label>
+                <input
+                  type="number"
+                  name="finalAmount"
+                  min="0"
+                  step="0.01"
+                  required
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  placeholder="0.00"
+                />
+              </div>
+
+              {/* Currency & Status */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Currency</label>
+                  <select
+                    name="currency"
+                    defaultValue="INR"
+                    className="w-full appearance-none bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  >
+                    <option value="INR">INR (₹)</option>
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
+                  <select
+                    name="status"
+                    defaultValue="CONFIRMED"
+                    className="w-full appearance-none bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  >
+                    {Object.entries(DEAL_STATUS_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Project Name */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Project Name (optional)</label>
+                <input
+                  type="text"
+                  name="projectName"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  placeholder="e.g., Website Redesign"
+                />
+              </div>
+
+              {/* Next Payment Due */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Next Payment Due (optional)</label>
+                  <input
+                    type="date"
+                    name="nextPaymentDueDate"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Due Amount (optional)</label>
+                  <input
+                    type="number"
+                    name="nextPaymentDueAmount"
+                    min="0"
+                    step="0.01"
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Notes (optional)</label>
+                <textarea
+                  name="notes"
+                  rows={2}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm resize-none"
+                  placeholder="Add any notes about this deal..."
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsCreateOtherModalOpen(false);
-                    setShowMoreOptions(false);
-                  }}
-                  className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  onClick={closeAddDealFlow}
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer shadow-sm"
+                  className="px-5 py-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                 >
-                  {saving ? "Creating Deal..." : "Create Deal"}
+                  {saving && <Loader2 size={16} className="animate-spin" />}
+                  Create Deal
                 </button>
               </div>
             </form>
@@ -1399,136 +1552,103 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* MODAL 2: RECORD PAYMENT                                  */}
-      {/* ======================================================== */}
+      {/* ─── RECORD PAYMENT MODAL ─────────────────────────────────────────── */}
       {activeDealForPayment && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setActiveDealForPayment(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
               <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <CreditCard size={18} className="text-blue-600" />
-                  Record Payment
-                </h3>
+                <h2 className="text-base font-bold text-slate-900">Record Payment</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Client: <strong>{activeDealForPayment.lead?.name || activeDealForPayment.clientNameSnapshot || "Client"}</strong>
+                  {activeDealForPayment.source === "CRM_LEAD" ? activeDealForPayment.lead?.name : activeDealForPayment.clientNameSnapshot}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setActiveDealForPayment(null)}
-                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"
-              >
-                <X size={18} />
+              <button onClick={() => setActiveDealForPayment(null)} className="p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+                <X size={20} className="text-slate-400" />
               </button>
             </div>
-
-            <form onSubmit={handleRecordPayment} className="mt-4 space-y-3.5 text-xs">
+            <form onSubmit={handleRecordPayment} className="p-5 space-y-4">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Amount (₹) *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Amount (INR) *</label>
                 <input
                   type="number"
                   name="amount"
+                  min="0"
                   step="0.01"
-                  min="0.01"
                   required
-                  defaultValue={activeDealForPayment.remainingBalance > 0 ? activeDealForPayment.remainingBalance : ""}
-                  placeholder="10000"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  autoFocus
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  placeholder="0.00"
                 />
               </div>
-
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Date</label>
+                <input
+                  type="date"
+                  name="paymentDate"
+                  required
+                  defaultValue={new Date().toISOString().split("T")[0]}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Date *</label>
-                  <input
-                    type="date"
-                    name="paymentDate"
-                    required
-                    defaultValue={new Date().toISOString().slice(0, 10)}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  />
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Type</label>
+                  <select
+                    name="type"
+                    defaultValue="PARTIAL"
+                    className="w-full appearance-none bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  >
+                    {Object.entries(PAYMENT_TYPE_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Method *</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Method</label>
                   <select
                     name="method"
                     defaultValue="UPI"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none cursor-pointer"
+                    className="w-full appearance-none bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
                   >
-                    <option value="UPI">UPI</option>
-                    <option value="BANK_TRANSFER">Bank Transfer</option>
-                    <option value="CASH">Cash</option>
-                    <option value="CARD">Card</option>
-                    <option value="PAYPAL">PayPal</option>
-                    <option value="OTHER">Other</option>
+                    {Object.entries(PAYMENT_METHOD_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Type</label>
-                  <select
-                    name="type"
-                    defaultValue={activeDealForPayment.totalReceived === 0 ? "ADVANCE" : "PARTIAL"}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none cursor-pointer"
-                  >
-                    <option value="ADVANCE">Advance</option>
-                    <option value="PARTIAL">Partial Payment</option>
-                    <option value="FINAL">Final Payment</option>
-                    <option value="CUSTOM">Custom</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Custom Label</label>
-                  <input
-                    type="text"
-                    name="customType"
-                    placeholder="Milestone 2"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Reference / Transaction ID</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Reference (optional)</label>
                 <input
                   type="text"
                   name="reference"
-                  placeholder="e.g. UTR-TEST-001 or Txn #12345"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none font-mono"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  placeholder="Transaction reference number"
                 />
               </div>
-
               <div>
-                <AiNoteEditor
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Note (optional)</label>
+                <textarea
                   name="note"
-                  label="Payment Note"
-                  labelClassName="block font-semibold text-slate-700 mb-1"
                   rows={2}
-                  placeholder="e.g. Advance received for homepage and admin panel"
-                  textareaClassName="px-3 py-2 text-sm resize-none"
-                  compact
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm resize-none"
+                  placeholder="Payment note..."
                 />
               </div>
-
-              <div className="flex gap-2.5 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setActiveDealForPayment(null)}
-                  className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer shadow-sm"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                 >
-                  {saving ? "Recording..." : "Record Payment"}
+                  {saving && <Loader2 size={16} className="animate-spin" />}
+                  Record Payment
                 </button>
               </div>
             </form>
@@ -1536,557 +1656,89 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* MODAL 3: PAYMENT HISTORY                                 */}
-      {/* ======================================================== */}
-      {activeDealForHistory && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-2xl sm:max-w-3xl rounded-2xl bg-white p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto overflow-x-hidden">
-            {/* Modal Header */}
-            <div className="flex items-start justify-between pb-3 border-b border-slate-100 gap-3">
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <History size={18} className="text-blue-600" />
-                    Payment History
-                  </h3>
-                  {renderSourceBadge(activeDealForHistory)}
-                </div>
-                <div className="flex items-center gap-2 mt-1 text-xs text-slate-600 flex-wrap">
-                  <span>
-                    Client: <strong>{activeDealForHistory.lead?.name || activeDealForHistory.clientNameSnapshot || "Client"}</strong>
-                  </span>
-                  {(activeDealForHistory.lead?.business || activeDealForHistory.companyNameSnapshot) && (
-                    <>
-                      <span className="text-slate-300">•</span>
-                      <span>Company: <strong>{activeDealForHistory.lead?.business || activeDealForHistory.companyNameSnapshot}</strong></span>
-                    </>
-                  )}
-                  {activeDealForHistory.projectName && (
-                    <>
-                      <span className="text-slate-300">•</span>
-                      <span>Project: <strong>{activeDealForHistory.projectName}</strong></span>
-                    </>
-                  )}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveDealForHistory(null)}
-                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer shrink-0"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Financial & Due Overview inside History */}
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2.5 bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Deal Value</span>
-                <span className="font-bold text-slate-900 text-sm mt-0.5 block">
-                  {formatCurrency(activeDealForHistory.finalAmount, activeDealForHistory.currency)}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-emerald-700/70 block tracking-wider">Total Received</span>
-                <span className="font-bold text-emerald-700 text-sm mt-0.5 block">
-                  {formatCurrency(activeDealForHistory.totalReceived, activeDealForHistory.currency)}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Remaining</span>
-                <span className="font-bold text-slate-900 text-sm mt-0.5 block">
-                  {formatCurrency(activeDealForHistory.remainingBalance, activeDealForHistory.currency)}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Payment Status</span>
-                <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[11px] font-bold border ${getStatusBadgeClass(activeDealForHistory.paymentStatus)}`}>
-                  {activeDealForHistory.paymentStatus === "Paid" && <CheckCircle2 size={11} />}
-                  {activeDealForHistory.paymentStatus === "Overdue" && <AlertCircle size={11} />}
-                  {activeDealForHistory.paymentStatus === "Partially Paid" && <Clock size={11} />}
-                  {activeDealForHistory.paymentStatus}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Next Payment Due</span>
-                <span className={`font-semibold text-xs mt-1 block ${activeDealForHistory.paymentStatus === "Overdue" ? "text-rose-600 font-bold" : "text-slate-800"}`}>
-                  {activeDealForHistory.nextPaymentDueDate ? formatDisplayDate(activeDealForHistory.nextPaymentDueDate) : "—"}
-                </span>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Next Due Amount</span>
-                <span className="font-semibold text-slate-800 text-xs mt-1 block">
-                  {activeDealForHistory.nextPaymentDueAmount ? formatCurrency(activeDealForHistory.nextPaymentDueAmount, activeDealForHistory.currency) : "—"}
-                </span>
-              </div>
-            </div>
-
-            {/* Header with Add Payment inside History */}
-            <div className="mt-4 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Transaction Ledger ({activeDealForHistory.payments.length})
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveDealForPayment(activeDealForHistory);
-                }}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
-              >
-                <Plus size={14} /> Add Payment
-              </button>
-            </div>
-
-            {/* Transactions List / Timeline (Newest first) */}
-            <div className="mt-2.5 space-y-2.5">
-              {activeDealForHistory.payments.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-400 italic bg-slate-50/50 rounded-xl border border-slate-100">
-                  No payment entries recorded yet. Click "Add Payment" to record the first transaction.
-                </div>
-              ) : (
-                [...activeDealForHistory.payments]
-                  .sort((a, b) => {
-                    const dateA = new Date(a.paymentDate).getTime();
-                    const dateB = new Date(b.paymentDate).getTime();
-                    if (dateB !== dateA) return dateB - dateA;
-                    const createA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                    const createB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                    return createB - createA;
-                  })
-                  .map((p) => {
-                    const isEdited = new Date(p.updatedAt).getTime() - new Date(p.createdAt).getTime() > 1000;
-                    return (
-                      <div
-                        key={p.id}
-                        onClick={() => setActiveTransactionDetail({ deal: activeDealForHistory, payment: p })}
-                        className="group relative rounded-xl border border-slate-200 bg-white p-3.5 sm:p-4 shadow-2xs hover:border-blue-300 hover:shadow-sm transition-all cursor-pointer"
-                      >
-                        {/* Transaction Card Header */}
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-base font-extrabold text-slate-900">
-                                {formatCurrency(p.amount, activeDealForHistory.currency)}
-                              </span>
-                              <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-semibold border border-blue-100">
-                                {p.type === "CUSTOM" && p.customType ? p.customType : PAYMENT_TYPE_LABELS[p.type]} • {PAYMENT_METHOD_LABELS[p.method]}
-                              </span>
-                              {p.reference && (
-                                <span className="font-mono text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 font-medium">
-                                  Ref: {p.reference}
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Date, Recorded Timestamp & Edited Tag */}
-                            <div className="flex items-center gap-2 mt-1 text-slate-500 text-[11px] flex-wrap">
-                              <span className="font-semibold text-slate-700 flex items-center gap-1">
-                                <Calendar size={12} className="text-slate-400" />
-                                {formatDisplayDate(p.paymentDate)}
-                              </span>
-                              <span className="text-slate-300">•</span>
-                              <span className="text-slate-400 text-[10px]">
-                                Recorded {formatDisplayDateTime(p.createdAt)}
-                              </span>
-                              {isEdited && (
-                                <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                                  Edited
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Action Buttons */}
-                          <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => setActivePaymentForEdit({ deal: activeDealForHistory, payment: p })}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                              title="Edit payment"
-                              aria-label="Edit payment"
-                            >
-                              <Edit2 size={13} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setActivePaymentForDelete({ deal: activeDealForHistory, payment: p })}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                              title="Delete payment"
-                              aria-label="Delete payment"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Clearly visible payment note */}
-                        {p.note && (
-                          <PaymentNote note={p.note} />
-                        )}
-
-                        {/* Prompt hint */}
-                        <div className="mt-2.5 pt-2 border-t border-slate-50 flex items-center justify-between text-[10px] text-slate-400">
-                          <span>Click transaction to view full ledger details</span>
-                          <span className="text-blue-600 font-semibold group-hover:translate-x-0.5 transition-transform">Details →</span>
-                        </div>
-                      </div>
-                    );
-                  })
-              )}
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-slate-100 text-right">
-              <button
-                type="button"
-                onClick={() => setActiveDealForHistory(null)}
-                className="px-4 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* MODAL 3.5: DETAILED TRANSACTION VIEW                     */}
-      {/* ======================================================== */}
-      {activeTransactionDetail && (
-        <div className="fixed inset-0 z-[75] flex items-center justify-center bg-slate-950/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto overflow-x-hidden">
-            {/* Top Navigation */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <button
-                type="button"
-                onClick={() => setActiveTransactionDetail(null)}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
-              >
-                <ArrowLeft size={14} /> Back to History
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTransactionDetail(null)}
-                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Hero Card */}
-            <div className="mt-4 p-4 rounded-xl bg-gradient-to-br from-blue-50/70 to-slate-50 border border-blue-100">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Payment Amount</span>
-                  <span className="text-2xl font-extrabold text-slate-900">
-                    {formatCurrency(activeTransactionDetail.payment.amount, activeTransactionDetail.deal.currency)}
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-600 text-white text-xs font-bold shadow-xs">
-                    {activeTransactionDetail.payment.type === "CUSTOM" && activeTransactionDetail.payment.customType
-                      ? activeTransactionDetail.payment.customType
-                      : PAYMENT_TYPE_LABELS[activeTransactionDetail.payment.type]}
-                  </span>
-                  <span className="block text-[11px] font-medium text-slate-500 mt-1">
-                    via {PAYMENT_METHOD_LABELS[activeTransactionDetail.payment.method]}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Key-Value Transaction Details Table */}
-            <div className="mt-4 divide-y divide-slate-100 rounded-xl border border-slate-200 overflow-hidden bg-white text-xs">
-              {/* Client Name */}
-              <div className="p-3 flex justify-between gap-3">
-                <span className="text-slate-500 font-medium shrink-0">Client Name</span>
-                <span className="font-bold text-slate-900 text-right">
-                  {activeTransactionDetail.deal.lead?.name || activeTransactionDetail.deal.clientNameSnapshot || "Client"}
-                </span>
-              </div>
-
-              {/* Business / Company */}
-              <div className="p-3 flex justify-between gap-3">
-                <span className="text-slate-500 font-medium shrink-0">Business / Company</span>
-                <span className="font-semibold text-slate-800 text-right">
-                  {activeTransactionDetail.deal.lead?.business || activeTransactionDetail.deal.companyNameSnapshot || "—"}
-                </span>
-              </div>
-
-              {/* Project / Deal Name */}
-              <div className="p-3 flex justify-between gap-3">
-                <span className="text-slate-500 font-medium shrink-0">Project / Deal Name</span>
-                <span className="font-semibold text-slate-800 text-right">
-                  {activeTransactionDetail.deal.projectName || "Standard Deal"}
-                </span>
-              </div>
-
-              {/* Deal Value */}
-              <div className="p-3 flex justify-between gap-3">
-                <span className="text-slate-500 font-medium shrink-0">Deal Value</span>
-                <span className="font-bold text-slate-900 text-right">
-                  {formatCurrency(activeTransactionDetail.deal.finalAmount, activeTransactionDetail.deal.currency)}
-                </span>
-              </div>
-
-              {/* Remaining After Payment */}
-              <div className="p-3 flex justify-between gap-3 bg-slate-50/60">
-                <span className="text-slate-500 font-medium shrink-0">Remaining After Payment</span>
-                <span className="font-bold text-blue-700 text-right">
-                  {formatCurrency(
-                    calculateRemainingAfterPayment(
-                      activeTransactionDetail.deal.finalAmount,
-                      activeTransactionDetail.deal.payments,
-                      activeTransactionDetail.payment.id
-                    ),
-                    activeTransactionDetail.deal.currency
-                  )}
-                </span>
-              </div>
-
-              {/* Payment Date */}
-              <div className="p-3 flex justify-between gap-3">
-                <span className="text-slate-500 font-medium shrink-0">Payment Date</span>
-                <span className="font-semibold text-slate-800 text-right">
-                  {formatDisplayDate(activeTransactionDetail.payment.paymentDate)}
-                </span>
-              </div>
-
-              {/* Reference ID */}
-              <div className="p-3 flex justify-between gap-3">
-                <span className="text-slate-500 font-medium shrink-0">Reference / Txn ID</span>
-                <span className="font-mono font-medium text-slate-800 text-right">
-                  {activeTransactionDetail.payment.reference ? (
-                    <span className="bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                      {activeTransactionDetail.payment.reference}
-                    </span>
-                  ) : (
-                    "—"
-                  )}
-                </span>
-              </div>
-
-              {/* Payment Type */}
-              <div className="p-3 flex justify-between gap-3">
-                <span className="text-slate-500 font-medium shrink-0">Payment Type</span>
-                <span className="font-semibold text-slate-800 text-right">
-                  {activeTransactionDetail.payment.type === "CUSTOM" && activeTransactionDetail.payment.customType
-                    ? activeTransactionDetail.payment.customType
-                    : PAYMENT_TYPE_LABELS[activeTransactionDetail.payment.type]}
-                </span>
-              </div>
-
-              {/* Payment Method */}
-              <div className="p-3 flex justify-between gap-3">
-                <span className="text-slate-500 font-medium shrink-0">Payment Method</span>
-                <span className="font-semibold text-slate-800 text-right">
-                  {PAYMENT_METHOD_LABELS[activeTransactionDetail.payment.method]}
-                </span>
-              </div>
-
-              {/* Created At */}
-              <div className="p-3 flex justify-between gap-3">
-                <span className="text-slate-500 font-medium shrink-0">Created At</span>
-                <span className="text-slate-600 text-right">
-                  {formatDisplayDateTime(activeTransactionDetail.payment.createdAt)}
-                </span>
-              </div>
-
-              {/* Updated At */}
-              <div className="p-3 flex justify-between gap-3">
-                <span className="text-slate-500 font-medium shrink-0">Updated At</span>
-                <span className="text-slate-600 text-right flex items-center gap-1.5 justify-end">
-                  {formatDisplayDateTime(activeTransactionDetail.payment.updatedAt)}
-                  {new Date(activeTransactionDetail.payment.updatedAt).getTime() -
-                    new Date(activeTransactionDetail.payment.createdAt).getTime() >
-                    1000 && (
-                    <span className="text-[10px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
-                      Edited
-                    </span>
-                  )}
-                </span>
-              </div>
-            </div>
-
-            {/* Payment Note Section */}
-            <div className="mt-4">
-              <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block mb-1.5">
-                Payment Note
-              </span>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 whitespace-pre-wrap break-words leading-relaxed">
-                {activeTransactionDetail.payment.note ? (
-                  <span>“{activeTransactionDetail.payment.note}”</span>
-                ) : (
-                  <span className="text-slate-400 italic">No note was provided for this payment.</span>
-                )}
-              </div>
-            </div>
-
-            {/* Bottom Actions: Edit & Delete available */}
-            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveTransactionDetail(null)}
-                className="px-3.5 py-2 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
-              >
-                Close
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActivePaymentForEdit({
-                      deal: activeTransactionDetail.deal,
-                      payment: activeTransactionDetail.payment,
-                    });
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  <Edit2 size={13} /> Edit Payment
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActivePaymentForDelete({
-                      deal: activeTransactionDetail.deal,
-                      payment: activeTransactionDetail.payment,
-                    });
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 text-xs font-semibold transition-colors cursor-pointer"
-                >
-                  <Trash2 size={13} /> Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================== */}
-      {/* MODAL 4: EDIT PAYMENT                                    */}
-      {/* ======================================================== */}
+      {/* ─── EDIT PAYMENT MODAL ───────────────────────────────────────────── */}
       {activePaymentForEdit && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">Edit Payment</h3>
-              <button
-                type="button"
-                onClick={() => setActivePaymentForEdit(null)}
-                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"
-              >
-                <X size={18} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setActivePaymentForEdit(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h2 className="text-base font-bold text-slate-900">Edit Payment</h2>
+              <button onClick={() => setActivePaymentForEdit(null)} className="p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+                <X size={20} className="text-slate-400" />
               </button>
             </div>
-
-            <form onSubmit={handleEditPayment} className="mt-4 space-y-3.5 text-xs">
+            <form onSubmit={handleEditPayment} className="p-5 space-y-4">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Amount (₹) *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Amount (INR) *</label>
                 <input
                   type="number"
                   name="amount"
+                  min="0"
                   step="0.01"
-                  min="0.01"
                   required
                   defaultValue={activePaymentForEdit.payment.amount}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  autoFocus
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Date *</label>
-                  <input
-                    type="date"
-                    name="paymentDate"
-                    required
-                    defaultValue={activePaymentForEdit.payment.paymentDate}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Method *</label>
-                  <select
-                    name="method"
-                    defaultValue={activePaymentForEdit.payment.method}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none cursor-pointer"
-                  >
-                    <option value="UPI">UPI</option>
-                    <option value="BANK_TRANSFER">Bank Transfer</option>
-                    <option value="CASH">Cash</option>
-                    <option value="CARD">Card</option>
-                    <option value="PAYPAL">PayPal</option>
-                    <option value="OTHER">Other</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Payment Date</label>
+                <input
+                  type="date"
+                  name="paymentDate"
+                  required
+                  defaultValue={new Date(activePaymentForEdit.payment.paymentDate).toISOString().split("T")[0]}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Payment Type</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Type</label>
                   <select
                     name="type"
                     defaultValue={activePaymentForEdit.payment.type}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none cursor-pointer"
+                    className="w-full appearance-none bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
                   >
-                    <option value="ADVANCE">Advance</option>
-                    <option value="PARTIAL">Partial Payment</option>
-                    <option value="FINAL">Final Payment</option>
-                    <option value="CUSTOM">Custom</option>
+                    {Object.entries(PAYMENT_TYPE_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Custom Label</label>
-                  <input
-                    type="text"
-                    name="customType"
-                    defaultValue={activePaymentForEdit.payment.customType || ""}
-                    placeholder="Milestone 2"
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  />
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Method</label>
+                  <select
+                    name="method"
+                    defaultValue={activePaymentForEdit.payment.method}
+                    className="w-full appearance-none bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  >
+                    {Object.entries(PAYMENT_METHOD_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
-
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Reference / Transaction ID</label>
-                <input
-                  type="text"
-                  name="reference"
-                  defaultValue={activePaymentForEdit.payment.reference || ""}
-                  placeholder="e.g. UTR-TEST-001 or Txn #12345"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none font-mono"
-                />
-              </div>
-
-              <div>
-                <AiNoteEditor
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Note (optional)</label>
+                <textarea
                   name="note"
-                  defaultValue={activePaymentForEdit.payment.note || ""}
-                  label="Payment Note"
-                  labelClassName="block font-semibold text-slate-700 mb-1"
                   rows={2}
-                  placeholder="e.g. Advance received for homepage and admin panel"
-                  textareaClassName="px-3 py-2 text-sm resize-none"
-                  compact
+                  defaultValue={activePaymentForEdit.payment.note || ""}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm resize-none"
                 />
               </div>
-
-              <div className="flex gap-2.5 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setActivePaymentForEdit(null)}
-                  className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer shadow-sm"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                 >
-                  {saving ? "Saving..." : "Save Payment"}
+                  {saving && <Loader2 size={16} className="animate-spin" />}
+                  Update Payment
                 </button>
               </div>
             </form>
@@ -2094,320 +1746,189 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* MODAL 5: DELETE PAYMENT CONFIRMATION                     */}
-      {/* ======================================================== */}
+      {/* ─── DELETE PAYMENT CONFIRMATION ──────────────────────────────────── */}
       {activePaymentForDelete && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl animate-in fade-in zoom-in-95 text-center">
-            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
-              <Trash2 size={22} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setActivePaymentForDelete(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="text-rose-600" size={24} />
+              </div>
+              <h3 className="text-base font-bold text-slate-900">Delete Payment?</h3>
+              <p className="text-xs text-slate-500 mt-2">
+                Are you sure you want to delete this payment of <strong>{formatCurrency(activePaymentForDelete.payment.amount)}</strong>?
+                This action can be undone.
+              </p>
             </div>
-            <h3 className="mt-3 text-base font-bold text-slate-900">Delete Payment</h3>
-            <p className="mt-1 text-xs text-slate-500">
-              Are you sure you want to delete this payment of{" "}
-              <strong>{formatCurrency(activePaymentForDelete.payment.amount)}</strong>? Deal totals will automatically recalculate.
-            </p>
-            <div className="mt-4 flex gap-2.5">
+            <div className="flex items-center justify-center gap-3 p-5 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setActivePaymentForDelete(null)}
-                className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                disabled={saving}
                 onClick={handleDeletePayment}
-                className="flex-1 rounded-lg bg-rose-600 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50 cursor-pointer shadow-sm"
+                disabled={saving}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 text-white hover:bg-rose-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 cursor-pointer flex items-center gap-2"
               >
-                {saving ? "Deleting..." : "Delete Payment"}
+                {saving && <Loader2 size={16} className="animate-spin" />}
+                Delete
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* MODAL 6: EDIT CLIENT / DEAL                              */}
-      {/* ======================================================== */}
-      {activeDealForEdit && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Edit Deal &amp; Client
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {activeDealForEdit.source === "OTHER_CLIENT" 
-                    ? "Other Client (Direct / Standalone)" 
-                    : activeDealForEdit.lead 
-                    ? "CRM Client Deal" 
-                    : "Preserved CRM Deal (Lead Deleted)"}
-                </p>
+      {/* ─── DELETE DEAL CONFIRMATION ─────────────────────────────────────── */}
+      {activeDealForDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setActiveDealForDelete(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="text-rose-600" size={24} />
               </div>
+              <h3 className="text-base font-bold text-slate-900">Delete Deal?</h3>
+              <p className="text-xs text-slate-500 mt-2">
+                Are you sure you want to delete this deal and all its payments? This action can be undone.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 p-5 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setActiveDealForEdit(null)}
-                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"
+                onClick={() => setActiveDealForDelete(null)}
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
               >
-                <X size={18} />
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteDeal}
+                disabled={saving}
+                className="px-5 py-2.5 rounded-xl bg-rose-600 text-white hover:bg-rose-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 cursor-pointer flex items-center gap-2"
+              >
+                {saving && <Loader2 size={16} className="animate-spin" />}
+                Delete
               </button>
             </div>
+          </div>
+        </div>
+      )}
 
-            <form onSubmit={handleEditDeal} className="mt-4 space-y-4 text-xs">
-              {/* SECTION 1: CLIENT INFORMATION */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-3">
-                <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <User size={13} className="text-blue-600" />
-                  Client Information
-                </h4>
-
-                {/* If CRM Client with active Lead: canonical read-only display */}
-                {activeDealForEdit.source === "CRM_LEAD" && activeDealForEdit.lead ? (
-                  <div className="space-y-2">
-                    <div className="bg-blue-50/70 border border-blue-200/70 rounded-lg p-2.5 text-[11px] text-blue-800 leading-relaxed">
-                      Canonical client contact data is managed by the CRM Lead record. Name, Company, Phone, and Email are linked directly to avoid silent overwrites.
-                    </div>
-                    <div className="grid grid-cols-2 gap-2.5 pt-1 text-xs">
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Client Name</span>
-                        <span className="font-bold text-slate-900">{activeDealForEdit.lead.name}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Business</span>
-                        <span className="font-semibold text-slate-800">{activeDealForEdit.lead.business || "—"}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Phone</span>
-                        <span className="text-slate-800">{activeDealForEdit.lead.phone}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Email</span>
-                        <span className="text-slate-800">{activeDealForEdit.lead.email || "—"}</span>
-                      </div>
-                    </div>
-                  </div>
-                ) : activeDealForEdit.source === "OTHER_CLIENT" ? (
-                  /* Other Client: editable directly */
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">
-                        Client Name <span className="text-rose-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        name="clientName"
-                        required
-                        defaultValue={activeDealForEdit.clientNameSnapshot || ""}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Business / Company</label>
-                        <input
-                          type="text"
-                          name="companyName"
-                          defaultValue={activeDealForEdit.companyNameSnapshot || ""}
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Phone Number</label>
-                        <input
-                          type="tel"
-                          name="clientPhone"
-                          defaultValue={activeDealForEdit.clientPhone || ""}
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Email Address</label>
-                      <input
-                        type="email"
-                        name="clientEmail"
-                        defaultValue={activeDealForEdit.clientEmail || ""}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  /* Preserved CRM Lead: lead deleted */
-                  <div className="space-y-3">
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-[11px] text-amber-800 leading-relaxed">
-                      Lead deleted: editing snapshot client details for historical financial records.
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Client Name Snapshot</label>
-                      <input
-                        type="text"
-                        name="clientName"
-                        defaultValue={activeDealForEdit.clientNameSnapshot || ""}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Company Snapshot</label>
-                        <input
-                          type="text"
-                          name="companyName"
-                          defaultValue={activeDealForEdit.companyNameSnapshot || ""}
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Phone</label>
-                        <input
-                          type="tel"
-                          name="clientPhone"
-                          defaultValue={activeDealForEdit.clientPhone || ""}
-                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Email</label>
-                      <input
-                        type="email"
-                        name="clientEmail"
-                        defaultValue={activeDealForEdit.clientEmail || ""}
-                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* SECTION 2: DEAL & CONTRACT INFORMATION */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-3">
-                <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <FolderKanban size={13} className="text-blue-600" />
-                  Deal &amp; Financial Information
-                </h4>
-
+      {/* ─── EDIT DEAL MODAL ─────────────────────────────────────────────── */}
+      {activeDealForEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto" onClick={() => setActiveDealForEdit(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg my-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-slate-100">
+              <h2 className="text-base font-bold text-slate-900">Edit Deal</h2>
+              <button onClick={() => setActiveDealForEdit(null)} className="p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+                <X size={20} className="text-slate-400" />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateDeal} className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Project / Deal Name</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Client Name</label>
                   <input
                     type="text"
-                    name="projectName"
-                    defaultValue={activeDealForEdit.projectName || ""}
-                    placeholder="e.g. Packaging Website / Redesign"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                    name="clientName"
+                    defaultValue={activeDealForEdit.clientNameSnapshot || ""}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
                   />
                 </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">
-                      Final Deal Value (₹) <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      name="finalAmount"
-                      step="0.01"
-                      min="0"
-                      required
-                      defaultValue={activeDealForEdit.finalAmount}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Quoted Amount (₹)</label>
-                    <input
-                      type="number"
-                      name="quotedAmount"
-                      step="0.01"
-                      min="0"
-                      defaultValue={activeDealForEdit.quotedAmount ?? ""}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Currency</label>
-                    <input
-                      type="text"
-                      name="currency"
-                      defaultValue={activeDealForEdit.currency || "INR"}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Deal Status</label>
-                    <select
-                      name="status"
-                      defaultValue={activeDealForEdit.status}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none cursor-pointer"
-                    >
-                      <option value="CONFIRMED">Confirmed</option>
-                      <option value="NEGOTIATING">Negotiating</option>
-                      <option value="COMPLETED">Completed</option>
-                      <option value="NO_DEAL">No Deal</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Next Due Date</label>
-                    <input
-                      type="date"
-                      name="nextPaymentDueDate"
-                      defaultValue={activeDealForEdit.nextPaymentDueDate ?? ""}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Next Due Amount (₹)</label>
-                    <input
-                      type="number"
-                      name="nextPaymentDueAmount"
-                      step="0.01"
-                      min="0"
-                      defaultValue={activeDealForEdit.nextPaymentDueAmount ?? ""}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
                 <div>
-                  <AiNoteEditor
-                    name="notes"
-                    defaultValue={activeDealForEdit.notes || ""}
-                    label={<>Business / Deal Notes <span className="text-slate-400 font-normal">(Scope of work, terms)</span></>}
-                    labelClassName="block font-semibold text-slate-700 mb-1"
-                    rows={3}
-                    placeholder="e.g. Website + catalog + inquiry system"
-                    textareaClassName="bg-white px-3 py-2 text-sm"
-                    helperText="Permanent deal-level scope notes, kept separate from transaction payment notes."
-                    compact
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Deal Amount (INR)</label>
+                  <input
+                    type="number"
+                    name="finalAmount"
+                    min="0"
+                    step="0.01"
+                    required
+                    defaultValue={activeDealForEdit.finalAmount}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
                   />
                 </div>
               </div>
-
-              <div className="flex gap-2.5 pt-3 border-t border-slate-100">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Status</label>
+                  <select
+                    name="status"
+                    defaultValue={activeDealForEdit.status}
+                    className="w-full appearance-none bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  >
+                    {Object.entries(DEAL_STATUS_LABELS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    name="clientPhone"
+                    defaultValue={activeDealForEdit.clientPhone || ""}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Project Name</label>
+                <input
+                  type="text"
+                  name="projectName"
+                  defaultValue={activeDealForEdit.projectName || ""}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Next Payment Due</label>
+                  <input
+                    type="date"
+                    name="nextPaymentDueDate"
+                    defaultValue={activeDealForEdit.nextPaymentDueDate || ""}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Due Amount</label>
+                  <input
+                    type="number"
+                    name="nextPaymentDueAmount"
+                    min="0"
+                    step="0.01"
+                    defaultValue={activeDealForEdit.nextPaymentDueAmount || ""}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Notes</label>
+                <textarea
+                  name="notes"
+                  rows={3}
+                  defaultValue={activeDealForEdit.notes || ""}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 shadow-sm resize-none"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setActiveDealForEdit(null)}
-                  className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer shadow-sm"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                 >
-                  {saving ? "Saving..." : "Save Deal & Client"}
+                  {saving && <Loader2 size={16} className="animate-spin" />}
+                  Update Deal
                 </button>
               </div>
             </form>
@@ -2415,77 +1936,97 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* MODAL 7: DELETE DEAL (Deliberate Confirmation)           */}
-      {/* ======================================================== */}
-      {activeDealForDelete && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95 text-center">
-            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
-              <Trash2 size={24} />
-            </div>
-            <h3 className="mt-3 text-base font-bold text-slate-900">
-              Delete Financial Record
-            </h3>
-            <p className="mt-2 text-xs text-slate-600">
-              Are you sure you want to permanently delete the financial deal record for{" "}
-              <strong>{activeDealForDelete.lead?.name || activeDealForDelete.clientNameSnapshot || "this client"}</strong>?
-            </p>
-            <div className="mt-3 bg-rose-50 border border-rose-200 rounded-xl p-3 text-left text-xs text-rose-800 space-y-1">
-              <p className="font-semibold flex items-center gap-1.5">
-                <AlertCircle size={14} className="shrink-0 text-rose-600" />
-                This action cannot be undone:
-              </p>
-              <ul className="list-disc list-inside pl-1 text-[11px] text-rose-700 space-y-0.5">
-                <li>Deal value of {formatCurrency(activeDealForDelete.finalAmount, activeDealForDelete.currency)} will be deleted.</li>
-                <li>All {activeDealForDelete.payments.length} payment records totaling {formatCurrency(activeDealForDelete.totalReceived, activeDealForDelete.currency)} will be permanently removed.</li>
-              </ul>
-            </div>
-            <div className="mt-5 flex gap-2.5">
-              <button
-                type="button"
-                onClick={() => setActiveDealForDelete(null)}
-                className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
-              >
-                Cancel
+      {/* ─── PAYMENT HISTORY MODAL ────────────────────────────────────────── */}
+      {activeDealForHistory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setActiveDealForHistory(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-slate-100 sticky top-0 bg-white z-10">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Payment History</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {activeDealForHistory.source === "CRM_LEAD" ? activeDealForHistory.lead?.name : activeDealForHistory.clientNameSnapshot}
+                </p>
+              </div>
+              <button onClick={() => setActiveDealForHistory(null)} className="p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+                <X size={20} className="text-slate-400" />
               </button>
-              <button
-                type="button"
-                disabled={saving}
-                onClick={handleDeleteDeal}
-                className="flex-1 rounded-lg bg-rose-600 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50 cursor-pointer shadow-sm"
-              >
-                {saving ? "Deleting..." : "Permanently Delete"}
-              </button>
+            </div>
+            <div className="p-5">
+              {activeDealForHistory.payments.length === 0 ? (
+                <div className="text-center py-10">
+                  <History size={40} className="mx-auto text-slate-300 mb-3" />
+                  <p className="text-sm font-semibold text-slate-500">No payments yet</p>
+                  <p className="text-xs text-slate-400 mt-1">Record the first payment to see it here</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {activeDealForHistory.payments.map((payment) => (
+                    <div
+                      key={payment.id}
+                      className="flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-slate-900">{formatCurrency(payment.amount)}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            payment.type === "ADVANCE" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                            payment.type === "FINAL" ? "bg-blue-50 text-blue-700 border-blue-200" :
+                            "bg-amber-50 text-amber-700 border-amber-200"
+                          }`}>
+                            {PAYMENT_TYPE_LABELS[payment.type] || payment.type}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">
+                            {PAYMENT_METHOD_LABELS[payment.method] || payment.method}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1">{formatDisplayDate(payment.paymentDate)}</p>
+                        {payment.note && <p className="text-[11px] text-slate-500 mt-0.5 truncate">{payment.note}</p>}
+                      </div>
+                      <div className="flex items-center gap-1 ml-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveDealForHistory(null);
+                            setActivePaymentForEdit({ deal: activeDealForHistory, payment });
+                          }}
+                          className="p-2 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+                          title="Edit payment"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveDealForHistory(null);
+                            setActivePaymentForDelete({ deal: activeDealForHistory, payment });
+                          }}
+                          className="p-2 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
+                          title="Delete payment"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* ======================================================== */}
-      {/* DEAL DETAIL PANEL (Slide-over Detail View)                */}
-      {/* ======================================================== */}
+      {/* ─── DEAL DETAIL PANEL ────────────────────────────────────────────── */}
       {selectedDealForDetail && (
         <DealDetailPanel
           deal={selectedDealForDetail}
           onClose={() => setSelectedDealForDetail(null)}
-          onRecordPayment={(deal) => {
-            setActiveDealForPayment(deal);
-          }}
           onEditDeal={(deal) => {
+            setSelectedDealForDetail(null);
             setActiveDealForEdit(deal);
           }}
-          onEditPayment={(deal, payment) => {
-            setActivePaymentForEdit({ deal, payment });
-          }}
-          onDeletePayment={(deal, payment) => {
-            setActivePaymentForDelete({ deal, payment });
-          }}
-          onDeleteDeal={(deal) => {
-            setActiveDealForDelete(deal);
-          }}
-          onOpenLead={(leadId) => {
-            leadNavigation?.openLead(leadId);
+          onRecordPayment={(deal) => {
+            setSelectedDealForDetail(null);
+            setActiveDealForPayment(deal);
           }}
         />
       )}

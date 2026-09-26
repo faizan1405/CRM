@@ -32,45 +32,57 @@ async function ensureSyncTable(client: PrismaClient | Prisma.TransactionClient) 
  * Monotonically touches and increments the CRM sync version in the database.
  * Executes atomically in a single round-trip.
  * Can be passed a transaction client (tx) or uses global `db`.
+ * Throws if database persistence fails.
+ * NEVER returns a fake or locally fabricated version.
  */
 export async function touchCrmSync(
   txOrDb?: PrismaClient | Prisma.TransactionClient
 ): Promise<CrmSyncStateRecord> {
   const client = txOrDb ?? db;
 
-  try {
-    await ensureSyncTable(client);
+  await ensureSyncTable(client);
 
-    const rows = await client.$queryRawUnsafe<Array<{ version: bigint | number; updatedAt: Date | string }>>(`
-      INSERT INTO "CrmSyncState" ("id", "version", "updatedAt")
-      VALUES ('global', 1, CURRENT_TIMESTAMP)
-      ON CONFLICT ("id")
-      DO UPDATE SET 
-        "version" = "CrmSyncState"."version" + 1,
-        "updatedAt" = CURRENT_TIMESTAMP
-      RETURNING "version", "updatedAt";
-    `);
+  const rows = await client.$queryRawUnsafe<Array<{ version: bigint | number; updatedAt: Date | string }>>(`
+    INSERT INTO "CrmSyncState" ("id", "version", "updatedAt")
+    VALUES ('global', 1, CURRENT_TIMESTAMP)
+    ON CONFLICT ("id")
+    DO UPDATE SET 
+      "version" = "CrmSyncState"."version" + 1,
+      "updatedAt" = CURRENT_TIMESTAMP
+    RETURNING "version", "updatedAt";
+  `);
 
-    if (rows && rows.length > 0) {
-      const row = rows[0];
-      const versionNum = Number(row.version);
-      const updatedAtStr = row.updatedAt ? new Date(row.updatedAt).toISOString() : new Date().toISOString();
-      return {
-        id: "global",
-        version: versionNum,
-        updatedAt: updatedAtStr,
-      };
-    }
-  } catch (error) {
-    console.error("[CRM Sync Touch Error]:", error instanceof Error ? error.message : error);
+  if (rows && rows.length > 0) {
+    const row = rows[0];
+    const versionNum = Number(row.version);
+    const updatedAtStr = row.updatedAt ? new Date(row.updatedAt).toISOString() : new Date().toISOString();
+    return {
+      id: "global",
+      version: versionNum,
+      updatedAt: updatedAtStr,
+    };
   }
 
-  // Fallback if raw query is not supported in a test environment
-  return {
-    id: "global",
-    version: Date.now(),
-    updatedAt: new Date().toISOString(),
-  };
+  throw new Error("Failed to touch CRM sync state: INSERT ... RETURNING returned no rows");
+}
+
+/**
+ * Best-effort CRM sync touch for callers that execute after a primary mutation has already committed.
+ * If database persistence of the sync version fails, logs safely and returns null.
+ * NEVER returns a fake or locally fabricated version.
+ */
+export async function touchCrmSyncBestEffort(
+  txOrDb?: PrismaClient | Prisma.TransactionClient
+): Promise<CrmSyncStateRecord | null> {
+  try {
+    return await touchCrmSync(txOrDb);
+  } catch (error) {
+    console.error(
+      "[CRM Sync Best-Effort Failed]:",
+      error instanceof Error ? error.message : "Sync touch failed"
+    );
+    return null;
+  }
 }
 
 /**
