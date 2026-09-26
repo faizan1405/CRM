@@ -807,20 +807,7 @@ export async function updateQuickStatus(
       }
 
       await markLeadAIInsightNeedsRefresh(id, tx);
-
-      const undoRecord = await recordUndoAction(tx, {
-        actionType: "LEAD_QUICK_STATUS",
-        entityType: "LEAD",
-        entityId: id,
-        leadId: id,
-        beforeSnapshot: { status: existing.status, quickStatus: existing.quickStatus },
-        afterSnapshot: { status: nextStatus, quickStatus: quickStatus as PrismaQuickStatus },
-        expectedUpdatedAt: result.updatedAt,
-        description: `Quick status set to ${quickStatus}`,
-        createdByUserId: validUserId,
-      });
-
-      return { result, undoId: undoRecord.id };
+      return result;
     }, {
       maxWait: 10000,
       timeout: 20000,
@@ -828,7 +815,7 @@ export async function updateQuickStatus(
 
     safeRevalidateLeadPaths(id);
 
-    return { success: true, data: serializeLead(updated.result), undoId: updated.undoId };
+    return { success: true, data: serializeLead(updated) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -1079,8 +1066,8 @@ export async function markLeadWaste(leadId: string): Promise<LeadActionResult<Le
     const session = await requireAuthenticatedUser();
     const id = readLeadId(leadId);
     const validUserId = await resolveValidUserId(session.id);
-
-    const result = await db.$transaction(async (tx) => {
+    
+    const lead = await db.$transaction(async (tx) => {
       const oldLead = await tx.lead.findUnique({ where: { id } });
       if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
 
@@ -1099,27 +1086,12 @@ export async function markLeadWaste(leadId: string): Promise<LeadActionResult<Le
         },
       });
 
-      const undoRecord = await recordUndoAction(tx, {
-        actionType: "LEAD_WASTE",
-        entityType: "LEAD",
-        entityId: id,
-        leadId: id,
-        beforeSnapshot: { isWaste: false },
-        afterSnapshot: { isWaste: true },
-        expectedUpdatedAt: updatedLead.updatedAt,
-        description: `Mark lead ${updatedLead.name} as Waste`,
-        createdByUserId: validUserId,
-      });
-
-      return { lead: updatedLead, undoId: undoRecord.id };
-    }, {
-      timeout: 30000,
-      maxWait: 15000,
+      return updatedLead;
     });
 
     safeRevalidateLeadPaths(id);
 
-    return { success: true, data: serializeLead(result.lead), undoId: result.undoId };
+    return { success: true, data: serializeLead(lead) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -1131,16 +1103,16 @@ export async function restoreWasteLead(leadId: string): Promise<LeadActionResult
     const id = readLeadId(leadId);
     const validUserId = await resolveValidUserId(session.id);
 
-    const result = await db.$transaction(async (tx) => {
+    const lead = await db.$transaction(async (tx) => {
       const oldLead = await tx.lead.findUnique({ where: { id } });
       if (!oldLead) throw new Prisma.PrismaClientKnownRequestError("Lead not found.", { code: "P2025", clientVersion: Prisma.prismaVersion.client });
-
+      
       const updatedLead = await tx.lead.update({
         where: { id },
         data: { isWaste: false },
         include: leadIncludeStandard,
       });
-
+      
       await tx.leadActivity.create({
         data: {
           leadId: id,
@@ -1149,28 +1121,13 @@ export async function restoreWasteLead(leadId: string): Promise<LeadActionResult
           createdByUserId: validUserId,
         },
       });
-
-      const undoRecord = await recordUndoAction(tx, {
-        actionType: "LEAD_WASTE_RESTORE",
-        entityType: "LEAD",
-        entityId: id,
-        leadId: id,
-        beforeSnapshot: { isWaste: true },
-        afterSnapshot: { isWaste: false },
-        expectedUpdatedAt: updatedLead.updatedAt,
-        description: `Restore lead ${updatedLead.name} from Waste`,
-        createdByUserId: validUserId,
-      });
-
-      return { lead: updatedLead, undoId: undoRecord.id };
-    }, {
-      timeout: 30000,
-      maxWait: 15000,
+      
+      return updatedLead;
     });
 
     safeRevalidateLeadPaths(id);
 
-    return { success: true, data: serializeLead(result.lead), undoId: result.undoId };
+    return { success: true, data: serializeLead(lead) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }

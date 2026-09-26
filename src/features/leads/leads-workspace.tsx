@@ -7,7 +7,6 @@ import { statusFromDatabase, type DatabaseLeadStatus } from "./types";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { changeLeadStatus, createLead, deleteLead, getLead, togglePinLead, updateLead, updateQuickStatus } from "@/app/actions/leads";
 import { scheduleLeadFollowUp } from "@/app/actions/follow-ups";
-import { useToast } from "@/components/toast-provider";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { LeadCard } from "@/features/leads/lead-card";
@@ -45,7 +44,6 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const navigation = useLeadNavigation();
-  const { showToast, showUndoToast } = useToast();
   const statusParam = searchParams.get("status");
   const selectedParam = searchParams.get("selected");
   const actionParam = searchParams.get("action");
@@ -228,14 +226,6 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
         setFeedback({ tone: "error", message: result.error });
       } else {
         replaceLead(result.data);
-        const msg = nextPinned ? "Lead pinned to shortlist" : "Lead removed from shortlist";
-        if (result.undoId) {
-          showUndoToast(msg, result.undoId, () => {
-            void replaceLead(result.data!);
-          });
-        } else {
-          setFeedback({ tone: "success", message: msg });
-        }
       }
     } catch {
       replaceLead(lead);
@@ -256,12 +246,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     else setLeads((current) => [result.data, ...current]);
     setFormOpen(false);
     setEditingLead(null);
-    const msg = editingLead ? "Lead updated." : "Lead added.";
-    if (result.undoId) {
-      showUndoToast(msg, result.undoId);
-    } else {
-      setFeedback({ tone: "success", message: msg });
-    }
+    setFeedback({ tone: "success", message: editingLead ? "Lead updated." : "Lead added." });
   }
 
   async function selectLead(lead: Lead, action: "note" | "status" | null = null) {
@@ -344,18 +329,9 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
         ? (updatedLead || { ...current, nextFollowUpDate: nextDate, activeFollowUp: result.data })
         : current
     );
-    setFollowUpLead(null);
     if (selectedLead?.id === data.leadId) await refreshActivities();
-    if (result.undoId) {
-      const msg = isRescheduled ? "Follow-up rescheduled" : "Follow-up added";
-      showUndoToast(msg, result.undoId, () => {
-        if (selectedLead) {
-          void refreshActivities();
-        }
-      });
-    } else {
-      setFeedback({ tone: "success", message: isRescheduled ? "Follow-up rescheduled." : "Follow-up added." });
-    }
+    setFollowUpLead(null);
+    setFeedback({ tone: "success", message: isRescheduled ? "Follow-up rescheduled." : "Follow-up added." });
   }
 
   async function setLeadStatus(nextStatus: LeadStatus) {
@@ -370,11 +346,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     if (!result.success) return setFeedback({ tone: "error", message: result.error });
     replaceLead(result.data);
     await refreshActivities();
-    if (result.undoId) {
-      showUndoToast(`Lead moved to ${nextStatus}`, result.undoId);
-    } else {
-      setFeedback({ tone: "success", message: "Lead status updated." });
-    }
+    setFeedback({ tone: "success", message: "Lead status updated." });
 
     if (nextStatus === "Proposal Sent") {
       setFollowUpSuggestion(getFollowUpSuggestion("PROPOSAL_SENT"));
@@ -399,13 +371,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     replaceLead(result.data);
     await refreshActivities();
     setLostReasonLead(null);
-    if (result.undoId) {
-      showUndoToast("Lead marked as Lost", result.undoId, () => {
-        void replaceLead(result.data!);
-      });
-    } else {
-      setFeedback({ tone: "success", message: "Lead marked as lost." });
-    }
+    setFeedback({ tone: "success", message: "Lead marked as lost." });
   }
 
   async function removeLead() {
@@ -418,11 +384,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     setLeads((current) => current.filter((lead) => lead.id !== result.data.id));
     setSelectedLead(current => current?.id === target.id ? null : current);
     setDeleteTarget(null);
-    if (result.undoId) {
-      showUndoToast(`Lead "${target.name}" deleted`, result.undoId);
-    } else {
-      setFeedback({ tone: "success", message: "Lead deleted." });
-    }
+    setFeedback({ tone: "success", message: "Lead deleted." });
     } catch { setFeedback({ tone: "error", message: "Could not delete this lead. Please retry." }); }
     finally { setSaving(false); }
   }
@@ -447,13 +409,7 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     setSaving(false);
     if (!result.success) return setFeedback({ tone: "error", message: result.error });
     replaceLead(result.data);
-    if (result.undoId) {
-      showUndoToast(`Quick status updated to ${statusKey}`, result.undoId, () => {
-        void replaceLead(result.data!);
-      });
-    } else {
-      setFeedback({ tone: "success", message: "Quick status updated." });
-    }
+    setFeedback({ tone: "success", message: "Quick status updated." });
 
     if (statusKey === "CALL_NOT_PICK") {
       setFollowUpSuggestion(getFollowUpSuggestion("NOT_PICKED"));

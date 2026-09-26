@@ -23,7 +23,6 @@ import {
   transformPersonalNoteAction,
   improvePersonalNote,
 } from "@/app/actions/personal-notes";
-import { useToast } from "@/components/toast-provider";
 
 export function NotesWorkspace({
   initialNotes = [],
@@ -52,7 +51,6 @@ export function NotesWorkspace({
   const [deletingNote, setDeletingNote] = useState<PersonalNote | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const { showToast, showUndoToast } = useToast();
 
   // Filter notes based on search query
   const filteredNotes = useMemo(() => {
@@ -93,11 +91,6 @@ export function NotesWorkspace({
         const res = await createPersonalNote(newNoteData);
         if (res.success && res.data) {
           setNotes((prev) => [res.data!, ...prev]);
-          if (res.undoId) {
-            showUndoToast("Note added", res.undoId, () => {
-              setNotes((prev) => prev.filter((n) => n.id !== res.data!.id));
-            });
-          }
         } else {
           setErrorMessage(res.error || "Failed to save personal note.");
         }
@@ -154,9 +147,6 @@ export function NotesWorkspace({
             setNotes((prev) =>
               prev.map((n) => (n.id === data.id ? res.data! : n))
             );
-            if (res.undoId) {
-              showUndoToast("Note updated", res.undoId);
-            }
           } else {
             setErrorMessage(res.error || "Failed to update personal note.");
             return;
@@ -181,11 +171,6 @@ export function NotesWorkspace({
           });
           if (res.success && res.data) {
             setNotes((prev) => [res.data!, ...prev]);
-            if (res.undoId) {
-              showUndoToast("Note added", res.undoId, () => {
-                setNotes((prev) => prev.filter((n) => n.id !== res.data!.id));
-              });
-            }
           } else {
             setErrorMessage(res.error || "Failed to create personal note.");
             return;
@@ -215,11 +200,6 @@ export function NotesWorkspace({
           setErrorMessage(res.error || "Failed to pin/unpin note.");
           return;
         }
-        if (res.undoId) {
-          showUndoToast(nextPinned ? "Note pinned" : "Note unpinned", res.undoId, () => {
-            void togglePersonalNotePinned(note.id, !nextPinned);
-          });
-        }
       }
       setNotes((prev) =>
         prev.map((n) =>
@@ -246,11 +226,6 @@ export function NotesWorkspace({
         if (!res.success) {
           setErrorMessage(res.error || "Failed to delete personal note.");
           return;
-        }
-        if (res.undoId) {
-          showUndoToast("Note deleted", res.undoId, () => {
-            setNotes((prev) => [...prev, { ...deletingNote, id: "" + res.data!.id } as PersonalNote]);
-          });
         }
       }
       setNotes((prev) => prev.filter((n) => n.id !== deletingNote.id));

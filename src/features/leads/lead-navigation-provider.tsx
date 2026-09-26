@@ -204,13 +204,8 @@ export function LeadNavigationProvider({ children }: { children: ReactNode }) {
       }} />
     {editing && lead && <LeadForm open lead={lead} saving={saving} onClose={() => { if (!saving) setEditing(false); }} onSubmit={async form => {
       setSaving(true);
-      try {
-        const result = await updateLead(lead.id, form);
-        if (result.success) {
-          setLead(result.data); setEditing(false); router.refresh();
-          if (result.undoId) showUndoToast("Lead details updated", result.undoId);
-        } else setError(result.error);
-      } catch { setError("Could not save this lead."); } finally { setSaving(false); }
+      try { const result = await updateLead(lead.id, form); if (result.success) { setLead(result.data); setEditing(false); router.refresh(); } else setError(result.error); }
+      catch { setError("Could not save this lead."); } finally { setSaving(false); }
     }} />}
     {followUpLead && (
       <FollowUpForm
