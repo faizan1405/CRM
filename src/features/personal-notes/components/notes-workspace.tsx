@@ -360,7 +360,7 @@ export function NotesWorkspace({
 
       {/* Quick Note Box (Fast Mobile-first Capture) */}
       <section aria-label="Quick note capture">
-        <QuickNoteBox onSave={handleQuickSave} onImproveNote={handleImproveNote} />
+        <QuickNoteBox onSave={handleQuickSave} onImproveNote={handleImproveNote} saving={isSaving} />
       </section>
 
       {/* Main Content Layout: Desktop Split Screen vs Mobile Stack */}

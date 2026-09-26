@@ -537,9 +537,11 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+                  aria-busy={saving}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
                 >
-                  {saving ? "Saving..." : "Save Deal"}
+                  {saving && <span className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white shrink-0" aria-hidden="true" />}
+                  <span>{saving ? "Saving..." : "Save Deal"}</span>
                 </button>
               </div>
             </form>
@@ -675,9 +677,11 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                 <button
                   type="submit"
                   disabled={saving}
-                  className="flex-1 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+                  aria-busy={saving}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
                 >
-                  {saving ? "Saving..." : editingPayment ? "Update Payment" : "Record Payment"}
+                  {saving && <span className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white shrink-0" aria-hidden="true" />}
+                  <span>{saving ? "Saving..." : editingPayment ? "Update Payment" : "Record Payment"}</span>
                 </button>
               </div>
             </form>
@@ -710,10 +714,12 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
               <button
                 type="button"
                 disabled={saving}
+                aria-busy={saving}
                 onClick={handleDeletePayment}
-                className="flex-1 rounded-lg bg-rose-600 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50 cursor-pointer"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-rose-600 py-2 text-xs font-semibold text-white hover:bg-rose-700 disabled:opacity-50 cursor-pointer"
               >
-                {saving ? "Deleting..." : "Confirm Delete"}
+                {saving && <span className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white shrink-0" aria-hidden="true" />}
+                <span>{saving ? "Deleting..." : "Confirm Delete"}</span>
               </button>
             </div>
           </div>

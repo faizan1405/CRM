@@ -8,9 +8,10 @@ interface QuickNoteBoxProps {
   onSave: (content: string) => void;
   className?: string;
   onImproveNote?: (text: string) => Promise<string>;
+  saving?: boolean;
 }
 
-export function QuickNoteBox({ onSave, className = "", onImproveNote }: QuickNoteBoxProps) {
+export function QuickNoteBox({ onSave, className = "", onImproveNote, saving = false }: QuickNoteBoxProps) {
   const [content, setContent] = useState("");
   const [isFocused, setIsFocused] = useState(false);
   const [isImproving, setIsImproving] = useState(false);
@@ -171,12 +172,17 @@ export function QuickNoteBox({ onSave, className = "", onImproveNote }: QuickNot
 
             <button
               type="submit"
-              disabled={!content.trim()}
+              disabled={!content.trim() || saving}
+              aria-busy={saving}
               className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-blue-700 active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-40"
               aria-label="Save quick note"
             >
-              <Plus size={15} aria-hidden="true" />
-              <span>Save Note</span>
+              {saving ? (
+                <span className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white shrink-0" aria-hidden="true" />
+              ) : (
+                <Plus size={15} aria-hidden="true" />
+              )}
+              <span>{saving ? "Saving..." : "Save Note"}</span>
             </button>
           </div>
         </div>

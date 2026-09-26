@@ -232,9 +232,14 @@ export function NoteEditor({
           type="button"
           onClick={handleSave}
           disabled={(!content.trim() && !title.trim()) || isSaving}
+          aria-busy={isSaving}
           className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-5 text-xs sm:text-sm font-semibold text-white shadow-xs hover:bg-blue-700 active:bg-blue-800 disabled:opacity-40 transition-colors"
         >
-          <Save size={15} aria-hidden="true" />
+          {isSaving ? (
+            <span className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white shrink-0" aria-hidden="true" />
+          ) : (
+            <Save size={15} aria-hidden="true" />
+          )}
           <span>{isSaving ? "Saving..." : "Save Note"}</span>
         </button>
       </div>

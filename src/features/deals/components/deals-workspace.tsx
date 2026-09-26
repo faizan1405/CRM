@@ -1366,10 +1366,11 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
                 <button
                   type="submit"
                   disabled={saving}
+                  aria-busy={saving}
                   className="px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                 >
                   {saving && <Loader2 size={16} className="animate-spin" />}
-                  Create Deal
+                  <span>{saving ? "Creating..." : "Create Deal"}</span>
                 </button>
               </div>
             </form>
@@ -1541,10 +1542,11 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
                 <button
                   type="submit"
                   disabled={saving}
+                  aria-busy={saving}
                   className="px-5 py-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                 >
                   {saving && <Loader2 size={16} className="animate-spin" />}
-                  Create Deal
+                  <span>{saving ? "Creating..." : "Create Deal"}</span>
                 </button>
               </div>
             </form>
@@ -1645,10 +1647,11 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
                 <button
                   type="submit"
                   disabled={saving}
+                  aria-busy={saving}
                   className="px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                 >
                   {saving && <Loader2 size={16} className="animate-spin" />}
-                  Record Payment
+                  <span>{saving ? "Recording..." : "Record Payment"}</span>
                 </button>
               </div>
             </form>
@@ -1735,10 +1738,11 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
                 <button
                   type="submit"
                   disabled={saving}
+                  aria-busy={saving}
                   className="px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                 >
                   {saving && <Loader2 size={16} className="animate-spin" />}
-                  Update Payment
+                  <span>{saving ? "Updating..." : "Update Payment"}</span>
                 </button>
               </div>
             </form>
@@ -1772,10 +1776,11 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
                 type="button"
                 onClick={handleDeletePayment}
                 disabled={saving}
+                aria-busy={saving}
                 className="px-5 py-2.5 rounded-xl bg-rose-600 text-white hover:bg-rose-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 cursor-pointer flex items-center gap-2"
               >
                 {saving && <Loader2 size={16} className="animate-spin" />}
-                Delete
+                <span>{saving ? "Deleting..." : "Delete"}</span>
               </button>
             </div>
           </div>
@@ -1807,10 +1812,11 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
                 type="button"
                 onClick={handleDeleteDeal}
                 disabled={saving}
+                aria-busy={saving}
                 className="px-5 py-2.5 rounded-xl bg-rose-600 text-white hover:bg-rose-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 cursor-pointer flex items-center gap-2"
               >
                 {saving && <Loader2 size={16} className="animate-spin" />}
-                Delete
+                <span>{saving ? "Deleting..." : "Delete"}</span>
               </button>
             </div>
           </div>
@@ -1925,10 +1931,11 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
                 <button
                   type="submit"
                   disabled={saving}
+                  aria-busy={saving}
                   className="px-5 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-sm font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-2"
                 >
                   {saving && <Loader2 size={16} className="animate-spin" />}
-                  Update Deal
+                  <span>{saving ? "Updating..." : "Update Deal"}</span>
                 </button>
               </div>
             </form>
