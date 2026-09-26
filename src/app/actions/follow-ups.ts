@@ -56,9 +56,16 @@ function cleanError(error: unknown) {
 
 function serializeFollowUp(
   followUp: import("@prisma/client").FollowUp & { 
-    lead?: (import("@prisma/client").Lead & {
-      activities?: { message: string }[]
-    }) | null 
+    lead?: {
+      id: string;
+      name: string;
+      business?: string | null;
+      phone: string;
+      status: import("@prisma/client").LeadStatus;
+      isPinned?: boolean;
+      notes?: string | null;
+      activities?: { message: string }[];
+    } | null 
   }
 ): FollowUp {
   const canonicalNote = followUp.lead?.activities?.[0]?.message || followUp.lead?.notes || "";
@@ -313,9 +320,26 @@ export async function getFollowUps(): Promise<FollowUpActionResult<{
           mergedIntoLeadId: null,
         },
       },
-      include: { 
+      select: {
+        id: true,
+        leadId: true,
+        scheduledAt: true,
+        type: true,
+        status: true,
+        note: true,
+        completedAt: true,
+        submissionId: true,
+        createdAt: true,
+        updatedAt: true,
         lead: {
-          include: {
+          select: {
+            id: true,
+            name: true,
+            business: true,
+            phone: true,
+            status: true,
+            isPinned: true,
+            notes: true,
             activities: {
               where: { type: "NOTE_ADDED" },
               orderBy: { createdAt: "desc" },

@@ -101,13 +101,10 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
 
     // Parallel aggregate queries
     const [
-      totalLeads,
       pinnedLeadsCount,
       statusCounts,
-      wonLeadsList,
-      activeOpportunitiesList,
+      activeAndWonLeads,
       overdueFollowUpsCount,
-      todayFollowUpsCount,
       todayFollowUpsList,
       overdueFollowUpsList,
       proposalsPendingList,
@@ -116,23 +113,11 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
       activeLeadsWithAI,
       staleLeadsCount
     ] = await Promise.all([
-      db.lead.count({ where: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
       db.lead.count({ where: { isPinned: true, isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
       db.lead.groupBy({ by: ["status"], _count: true, where: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
       db.lead.findMany({
-        where: { status: LeadStatus.WON, isWaste: false, deletedAt: null, mergedIntoLeadId: null },
-        select: {
-          id: true,
-          status: true,
-          isWaste: true,
-          deletedAt: true,
-          mergedIntoLeadId: true,
-          deal: { select: { finalAmount: true, status: true } },
-        },
-      }),
-      db.lead.findMany({
         where: {
-          status: { in: [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED, LeadStatus.PROPOSAL_SENT] },
+          status: { in: [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED, LeadStatus.PROPOSAL_SENT, LeadStatus.WON] },
           isWaste: false,
           deletedAt: null,
           mergedIntoLeadId: null,
@@ -148,15 +133,26 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
         },
       }),
       db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } } }),
-      db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } } }),
       db.followUp.findMany({
         where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } },
-        include: { lead: { select: { id: true, name: true, phone: true, business: true, status: true } } },
+        select: {
+          id: true,
+          leadId: true,
+          scheduledAt: true,
+          type: true,
+          lead: { select: { id: true, name: true, phone: true, business: true, status: true } },
+        },
         orderBy: { scheduledAt: "asc" }
       }),
       db.followUp.findMany({
         where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } },
-        include: { lead: { select: { id: true, name: true, phone: true, business: true, status: true } } },
+        select: {
+          id: true,
+          leadId: true,
+          scheduledAt: true,
+          type: true,
+          lead: { select: { id: true, name: true, phone: true, business: true, status: true } },
+        },
         orderBy: { scheduledAt: "asc" },
         take: 5
       }),
@@ -176,13 +172,38 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
         where: { lead: { deletedAt: null, mergedIntoLeadId: null } },
         take: 8,
         orderBy: { createdAt: "desc" },
-        include: { lead: { select: { id: true, name: true } } }
+        select: {
+          id: true,
+          leadId: true,
+          message: true,
+          type: true,
+          createdAt: true,
+          lead: { select: { id: true, name: true } },
+        },
       }),
       db.lead.findMany({
-        where: { isWaste: false, deletedAt: null, mergedIntoLeadId: null,
+        where: {
+          isWaste: false,
+          deletedAt: null,
+          mergedIntoLeadId: null,
           status: { in: [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.QUALIFIED, LeadStatus.PROPOSAL_SENT] },
         },
-        include: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+          business: true,
+          industry: true,
+          leadSource: true,
+          budget: true,
+          status: true,
+          quotedAmount: true,
+          lastContactDate: true,
+          nextFollowUpDate: true,
+          notes: true,
+          createdAt: true,
+          updatedAt: true,
           aiInsight: true,
         },
         orderBy: { updatedAt: "desc" },
@@ -191,8 +212,11 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
       getStaleLeadsCount()
     ]);
 
-    // Format KPIs
     const statusMap = Object.fromEntries(statusCounts.map(s => [s.status, s._count]));
+    const totalLeads = statusCounts.reduce((sum, s) => sum + s._count, 0);
+    const todayFollowUpsCount = todayFollowUpsList.length;
+    const wonLeadsList = activeAndWonLeads.filter(l => l.status === LeadStatus.WON);
+    const activeOpportunitiesList = activeAndWonLeads.filter(l => l.status !== LeadStatus.WON);
     const getCount = (status: LeadStatus) => statusMap[status] || 0;
 
     const wonDealValueDecimal = calculateWonDealValue(wonLeadsList);

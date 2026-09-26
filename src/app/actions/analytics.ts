@@ -136,61 +136,50 @@ export async function calculateSalesAnalytics(
 
     // ─── Parallel Query Execution ─────────────────────────────────────────────
     const [
-      // 1. Cohort leads matching selected date range with attached Deal
-      cohortLeads,
-
-      // 2. Active opportunities for live open pipeline (any creation date)
-      activeOpportunities,
-
-      // 3. All follow-ups on active non-waste leads (current snapshot)
-      followUpsOnActiveLeads,
-
-      // 4. Earliest LeadActivity record for coverage metadata
-      earliestActivity,
-
-      // 5. STATUS_CHANGED to WON activities for revenue timestamps
-      wonActivities,
-
-      // 6. STATUS_CHANGED activities for LOST cohort leads (if any reached later stages)
-      lostActivities,
-
-      // 7. All active non-waste leads currently in CRM (for live pipeline health)
+      // 1. All active non-waste leads currently in CRM (used for cohort, live pipeline, and health)
       allActiveLeads,
 
-      // 8. Scoped payments for Money Received
+      // 2. All follow-ups on active non-waste leads (current snapshot)
+      followUpsOnActiveLeads,
+
+      // 3. Earliest LeadActivity record for coverage metadata
+      earliestActivity,
+
+      // 4. STATUS_CHANGED to WON activities for revenue timestamps
+      wonActivities,
+
+      // 5. STATUS_CHANGED activities for LOST cohort leads (if any reached later stages)
+      lostActivities,
+
+      // 6. Scoped payments for Money Received
       scopedPayments,
 
-      // 9. Active deals with payments for canonical Outstanding & Collection Rate
+      // 7. Active deals with payments for canonical Outstanding & Collection Rate
       activeDealsWithPayments,
     ] = await Promise.all([
-      // 1: Cohort leads
+      // 1: All active leads
       db.lead.findMany({
         where: {
           deletedAt: null,
           isWaste: false,
           mergedIntoLeadId: null,
-          ...(dateFilter ? { createdAt: dateFilter } : {}),
         },
-        include: {
-          deal: true,
+        select: {
+          id: true,
+          status: true,
+          quotedAmount: true,
+          createdAt: true,
+          updatedAt: true,
+          deal: {
+            select: {
+              finalAmount: true,
+            },
+          },
         },
         orderBy: { createdAt: "asc" },
       }),
 
-      // 2: Active opportunities (CONTACTED, QUALIFIED, PROPOSAL_SENT)
-      db.lead.findMany({
-        where: {
-          status: { in: [...ACTIVE_OPPORTUNITY_STATUSES] },
-          deletedAt: null,
-          isWaste: false,
-          mergedIntoLeadId: null,
-        },
-        include: {
-          deal: true,
-        },
-      }),
-
-      // 3: Follow-ups on active non-waste leads
+      // 2: Follow-ups on active non-waste leads
       db.followUp.findMany({
         where: {
           lead: {
@@ -207,13 +196,13 @@ export async function calculateSalesAnalytics(
         },
       }),
 
-      // 4: Earliest activity record
+      // 3: Earliest activity record
       db.leadActivity.findFirst({
         orderBy: { createdAt: "asc" },
         select: { createdAt: true },
       }),
 
-      // 5: WON status change activities
+      // 4: WON status change activities
       db.leadActivity.findMany({
         where: {
           type: ActivityType.STATUS_CHANGED,
@@ -226,7 +215,7 @@ export async function calculateSalesAnalytics(
         },
       }),
 
-      // 6: LOST cohort activities (to check if any reached later stages historically)
+      // 5: LOST cohort activities (to check if any reached later stages historically)
       db.leadActivity.findMany({
         where: {
           type: ActivityType.STATUS_CHANGED,
@@ -244,26 +233,17 @@ export async function calculateSalesAnalytics(
         },
       }),
 
-      // 7: All active leads for current pipeline health
-      db.lead.findMany({
-        where: {
-          deletedAt: null,
-          isWaste: false,
-          mergedIntoLeadId: null,
-        },
-        include: {
-          deal: true,
-        },
-      }),
-
-      // 8: Scoped payments for Money Received (using paymentDate filter in IST boundaries)
+      // 6: Scoped payments for Money Received (using paymentDate filter in IST boundaries)
       db.payment.findMany({
         where: {
           ...(dateFilter ? { paymentDate: dateFilter } : {}),
         },
+        select: {
+          amount: true,
+        },
       }),
 
-      // 9: Active deals with payments for canonical Outstanding & Collection Rate
+      // 7: Active deals with payments for canonical Outstanding & Collection Rate
       db.deal.findMany({
         where: {
           OR: [
@@ -271,11 +251,30 @@ export async function calculateSalesAnalytics(
             { source: "OTHER_CLIENT" },
           ],
         },
-        include: {
-          payments: true,
+        select: {
+          id: true,
+          finalAmount: true,
+          payments: {
+            select: {
+              amount: true,
+            },
+          },
         },
       }),
     ]);
+
+    // Derive cohort leads and active opportunities in-memory with zero extra database round-trips
+    const cohortLeads = dateFilter
+      ? allActiveLeads.filter((l) => l.createdAt >= dateFilter.gte && l.createdAt <= dateFilter.lte)
+      : allActiveLeads;
+
+    const activeOpportunitySet = new Set<LeadStatus>([
+      LeadStatus.NEW,
+      LeadStatus.CONTACTED,
+      LeadStatus.QUALIFIED,
+      LeadStatus.PROPOSAL_SENT,
+    ]);
+    const activeOpportunities = allActiveLeads.filter((l) => activeOpportunitySet.has(l.status));
 
     // ─── 1. Canonical Status Counts for Cohort ─────────────────────────────────
     const totalLeads = cohortLeads.length;

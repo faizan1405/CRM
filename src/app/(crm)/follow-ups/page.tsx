@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { getFollowUps } from "@/app/actions/follow-ups";
-import { getLeads } from "@/app/actions/leads";
+import { getLeadQuickOptions } from "@/app/actions/leads";
 import { FollowUpsWorkspace } from "@/features/followups/follow-ups-workspace";
 
 export const metadata: Metadata = { title: "Follow-ups" };
 
 export default async function FollowUpsPage() {
-  const [followUpsRes, leadsRes] = await Promise.all([
+  const [followUpsRes, leads] = await Promise.all([
     getFollowUps(),
-    getLeads()
+    getLeadQuickOptions()
   ]);
 
   const followUps = followUpsRes.success ? [
@@ -17,8 +17,6 @@ export default async function FollowUpsPage() {
     ...followUpsRes.data.today,
     ...followUpsRes.data.upcoming
   ] : [];
-
-  const leads = leadsRes.success ? leadsRes.data : [];
 
   return (
     <div className="flex h-full flex-col">

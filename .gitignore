@@ -12,6 +12,8 @@
 
 # testing
 /coverage
+/.vitest/
+/.worktrees/
 
 # next.js
 /.next/

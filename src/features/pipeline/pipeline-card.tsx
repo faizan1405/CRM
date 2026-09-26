@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { ActionCard } from "@/components/action-card";
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
 import { Building2, Phone, MessageCircle, CalendarPlus, GripVertical, Star, Clock } from "lucide-react";
@@ -8,7 +9,7 @@ import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
 import { formatLeadAge, formatLastContacted, formatNextFollowUp } from "@/lib/date-utils";
 import { CopyContactButton } from "@/components/copy-contact-button";
 
-export function PipelineCard({
+export const PipelineCard = memo(function PipelineCard({
   lead,
   onClick,
   onTogglePin,
@@ -95,4 +96,4 @@ export function PipelineCard({
       </div>
     </ActionCard>
   );
-}
+});

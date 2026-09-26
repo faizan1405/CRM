@@ -25,7 +25,7 @@ export default defineConfig({
     setupFiles: ["./src/__tests__/setup.ts"],
     testTimeout: 120000,
     hookTimeout: 120000,
-    exclude: ["**/.diagnostic-worktree/**", "**/node_modules/**"],
+    exclude: ["**/.diagnostic-worktree/**", "**/.worktrees/**", "**/node_modules/**"],
     sequence: {
       concurrent: false,
     },

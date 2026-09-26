@@ -25,7 +25,7 @@ import type { LostReasonSubmission } from "@/features/lost-reasons/types";
 import { useLeadActivities } from "@/features/activity/use-activities";
 import { FollowUpForm } from "@/features/followups/follow-up-form";
 import { MergeLeadsModal } from "./merge-leads-modal";
-import { isPhoneMatch, isEmailMatch } from "./duplicate-detection-service";
+import { isPhoneMatch, isEmailMatch, normalizePhone, normalizeEmail } from "./duplicate-detection-service";
 import type { NewFollowUpInput } from "@/features/followups/types";
 import { getFollowUpSuggestion, type FollowUpSuggestion } from "@/lib/follow-up-suggestions";
 import type { DuplicateLeadCandidate, StructuredLeadDraft } from "@/features/leads/ai-entry-types";
@@ -93,24 +93,42 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
     const activeOnly = leads.filter((l) => !l.mergedIntoLeadId);
     const seenPairKeys = new Set<string>();
 
-    for (let i = 0; i < activeOnly.length; i++) {
-      for (let j = i + 1; j < activeOnly.length; j++) {
-        const a = activeOnly[i];
-        const b = activeOnly[j];
-        const phoneMatch = isPhoneMatch(a.phone, b.phone);
-        const emailMatch = isEmailMatch(a.email, b.email);
+    const phoneMap = new Map<string, Lead[]>();
+    const emailMap = new Map<string, Lead[]>();
 
-        if (phoneMatch || emailMatch) {
-          const pairKey = [a.id, b.id].sort().join(":");
-          if (!seenPairKeys.has(pairKey)) {
-            seenPairKeys.add(pairKey);
-            pairs.push({
-              key: pairKey,
-              leadA: a,
-              leadB: b,
-              matchedBy: phoneMatch ? "phone" : "email",
-            });
+    for (const lead of activeOnly) {
+      const normP = normalizePhone(lead.phone);
+      if (normP?.isValid && normP.comparisonDigits) {
+        const phoneKey = `${normP.isIndian ? "IN" : "INTL"}:${normP.comparisonDigits}`;
+        const existing = phoneMap.get(phoneKey);
+        if (existing) {
+          for (const prev of existing) {
+            const pairKey = [lead.id, prev.id].sort().join(":");
+            if (!seenPairKeys.has(pairKey)) {
+              seenPairKeys.add(pairKey);
+              pairs.push({ key: pairKey, leadA: prev, leadB: lead, matchedBy: "phone" });
+            }
           }
+          existing.push(lead);
+        } else {
+          phoneMap.set(phoneKey, [lead]);
+        }
+      }
+
+      const normE = normalizeEmail(lead.email);
+      if (normE) {
+        const existing = emailMap.get(normE);
+        if (existing) {
+          for (const prev of existing) {
+            const pairKey = [lead.id, prev.id].sort().join(":");
+            if (!seenPairKeys.has(pairKey)) {
+              seenPairKeys.add(pairKey);
+              pairs.push({ key: pairKey, leadA: prev, leadB: lead, matchedBy: "email" });
+            }
+          }
+          existing.push(lead);
+        } else {
+          emailMap.set(normE, [lead]);
         }
       }
     }

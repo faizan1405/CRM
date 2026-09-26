@@ -250,13 +250,20 @@ export function SyncProvider({
     [checkHasDirtyDrafts, pathname, pendingUpdates, router]
   );
 
+  const mutationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const applyPendingUpdates = useCallback(async () => {
     await triggerSync({ forceRefresh: true });
   }, [triggerSync]);
 
   const notifyDataMutated = useCallback(() => {
-    // Local mutation happened, immediately sync
-    triggerSync({ forceRefresh: true });
+    // Local mutation happened: debounce sync by 100ms so rapid updates coalesce
+    if (mutationTimeoutRef.current) {
+      clearTimeout(mutationTimeoutRef.current);
+    }
+    mutationTimeoutRef.current = setTimeout(() => {
+      triggerSync({ forceRefresh: true });
+    }, 100);
   }, [triggerSync]);
 
   // Initial sync & BroadcastChannel setup
@@ -326,6 +333,9 @@ export function SyncProvider({
     }, POLLING_INTERVAL_MS);
 
     return () => {
+      if (mutationTimeoutRef.current) {
+        clearTimeout(mutationTimeoutRef.current);
+      }
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       window.removeEventListener("focus", handleVisibilityOrFocus);

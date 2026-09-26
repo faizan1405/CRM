@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { ActionCard } from "@/components/action-card";
 import { Phone, MessageCircle, CalendarPlus, Trash2, FileText, Check, Star, Clock } from "lucide-react";
 import { formatCurrency } from "@/features/leads/formatters";
@@ -28,7 +29,7 @@ type LeadCardProps = {
   aiAttention?: AIAttentionLeadData;
 };
 
-export function LeadCard({
+export const LeadCard = memo(function LeadCard({
   lead,
   onSelect,
   onAddFollowUp,
@@ -156,4 +157,4 @@ export function LeadCard({
       </div>
     </ActionCard>
   );
-}
+});

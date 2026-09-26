@@ -133,17 +133,42 @@ const leadIncludeStandard = {
   },
   followUps: {
     where: { status: "PENDING" as const },
-    orderBy: { updatedAt: "desc" as const },
+    orderBy: { scheduledAt: "asc" as const },
+    take: 5,
+    select: {
+      id: true,
+      leadId: true,
+      scheduledAt: true,
+      type: true,
+      status: true,
+      note: true,
+      completedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   },
   activities: {
     orderBy: { createdAt: "desc" as const },
-    take: 10,
-    select: { id: true, type: true, message: true, metadata: true, createdAt: true },
+    take: 3,
+    select: { id: true, type: true, message: true, createdAt: true },
   },
   mergedInto: {
     select: { id: true, name: true, phone: true, status: true },
   },
 } as const;
+
+export async function getLeadQuickOptions(): Promise<Array<{ id: string; name: string }>> {
+  try {
+    await requireAuthenticatedUser();
+    return await db.lead.findMany({
+      where: { deletedAt: null, mergedIntoLeadId: null, isWaste: false },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+  } catch {
+    return [];
+  }
+}
 
 function safeRevalidateLeadPaths(leadId?: string) {
   try {
