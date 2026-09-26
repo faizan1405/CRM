@@ -86,38 +86,36 @@ const testLeads: Lead[] = [
 ];
 
 describe("Mobile Pipeline Drag-and-Drop Targeted Verification", () => {
-  it("1 & 2. Mobile stage pills are rendered as real Droppable targets for New -> Contacted -> Qualified", () => {
+  it("1 & 2. All 6 stages have dedicated drop targets on the board", () => {
     const html = renderToStaticMarkup(<PipelineBoard initialLeads={testLeads} />);
     
-    // Stage tabs droppable container exists
-    expect(html).toContain('data-testid="mobile-stage-tabs"');
-    
-    // All 6 stages have dedicated pill drop targets
-    expect(html).toContain('data-stage-pill="New"');
-    expect(html).toContain('data-stage-pill="Contacted"');
-    expect(html).toContain('data-stage-pill="Qualified"');
-    expect(html).toContain('data-stage-pill="Proposal Sent"');
-    expect(html).toContain('data-stage-pill="Won"');
-    expect(html).toContain('data-stage-pill="Lost"');
+    // All 6 stages have dedicated stage columns and drop targets
+    expect(html).toContain('data-stage="New"');
+    expect(html).toContain('data-stage="Contacted"');
+    expect(html).toContain('data-stage="Qualified"');
+    expect(html).toContain('data-stage="Proposal Sent"');
+    expect(html).toContain('data-stage="Won"');
+    expect(html).toContain('data-stage="Lost"');
 
-    // Droppable IDs for stage pills are registered
-    expect(html).toContain('data-rfd-droppable-id="stage-pill-New"');
-    expect(html).toContain('data-rfd-droppable-id="stage-pill-Contacted"');
-    expect(html).toContain('data-rfd-droppable-id="stage-pill-Qualified"');
-    expect(html).toContain('data-rfd-droppable-id="stage-pill-Proposal Sent"');
-    expect(html).toContain('data-rfd-droppable-id="stage-pill-Won"');
-    expect(html).toContain('data-rfd-droppable-id="stage-pill-Lost"');
+    // Droppable IDs for stages are registered
+    expect(html).toContain('data-rfd-droppable-id="New"');
+    expect(html).toContain('data-rfd-droppable-id="Contacted"');
+    expect(html).toContain('data-rfd-droppable-id="Qualified"');
+    expect(html).toContain('data-rfd-droppable-id="Proposal Sent"');
+    expect(html).toContain('data-rfd-droppable-id="Won"');
+    expect(html).toContain('data-rfd-droppable-id="Lost"');
   });
 
-  it("3. Stage tabs horizontally swipe correctly with proper classes", () => {
+  it("3. Stages container horizontally swipes with proper scroll and touch classes", () => {
     const html = renderToStaticMarkup(<PipelineBoard initialLeads={testLeads} />);
     
-    // Required touch & scroll classes
+    // Required touch & scroll classes on stage container
     expect(html).toContain("overflow-x-auto");
     expect(html).toContain("overscroll-x-contain");
     expect(html).toContain("touch-pan-x");
-    expect(html).toContain("hide-scrollbar");
-    expect(html).toContain("sticky top-14");
+    expect(html).toContain("touch-pan-y");
+    // Mobile horizontal scroll indicator
+    expect(html).toContain("pipeline-mobile-scroll-indicator");
   });
 
   it("4. Vertical card/page scrolling is not broken: grip handle is isolated and card root does not block scroll", () => {

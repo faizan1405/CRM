@@ -51,6 +51,7 @@ describe("Phase 13.4 Regression Tests", () => {
 
   afterAll(async () => {
     if (createdLeadIds.length > 0) {
+      await db.deal.deleteMany({ where: { leadId: { in: createdLeadIds } } });
       await db.salesNotification.deleteMany({ where: { leadId: { in: createdLeadIds } } });
       await db.leadLossEvent.deleteMany({ where: { leadId: { in: createdLeadIds } } });
       await db.followUp.deleteMany({ where: { leadId: { in: createdLeadIds } } });
@@ -188,6 +189,15 @@ describe("Phase 13.4 Regression Tests", () => {
   it("delete → excluded from Analytics", async () => {
     const lead = await createTestLead("AnalyticsDisappear", LeadStatus.WON);
     
+    // Create Deal record so wonRevenue is derived from deal.finalAmount
+    await db.deal.create({
+      data: {
+        leadId: lead.id,
+        finalAmount: 15000,
+        status: "CONFIRMED",
+      },
+    });
+
     // Create activity for reliable won analytics
     await db.leadActivity.create({
       data: {

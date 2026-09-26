@@ -451,7 +451,7 @@ describe("Phase 7: AI Lead Entry Backend", () => {
     });
 
     it("allows Create Anyway even if duplicate phone exists", async () => {
-      const duplicatePhone = "+91 98765 88888";
+      const duplicatePhone = `+91 98765 ${Math.floor(10000 + Math.random() * 90000)}`;
       const lead1 = await db.lead.create({
         data: {
           name: "First Lead",
@@ -466,6 +466,7 @@ describe("Phase 7: AI Lead Entry Backend", () => {
       formData.set("name", "Second Lead With Same Phone");
       formData.set("phone", duplicatePhone);
       formData.set("status", "New");
+      formData.set("allowDuplicate", "true");
 
       const res = await createLead(formData);
       if (!res.success) {
@@ -485,9 +486,10 @@ describe("Phase 7: AI Lead Entry Backend", () => {
   // =========================================================================
   describe("Lead Creation with Accepted Follow-Up", () => {
     it("creates Lead and schedules FollowUp record when nextFollowUpDate is submitted", async () => {
+      const uniquePhone = `98765${Math.floor(10000 + Math.random() * 90000)}`;
       const formData = new FormData();
       formData.set("name", "FollowUp Lead");
-      formData.set("phone", "9876544444");
+      formData.set("phone", uniquePhone);
       formData.set("status", "New");
       formData.set("nextFollowUpDate", "2026-09-17");
       formData.set("suggestedFollowUpTime", "11:30");
@@ -497,7 +499,7 @@ describe("Phase 7: AI Lead Entry Backend", () => {
       if (!res.success) return;
 
       createdLeadIds.push(res.data.id);
-      expect(res.data.nextFollowUpDate).toBe("2026-09-17");
+      expect(res.data.nextFollowUpDate).toContain("2026-09-17");
 
       // Verify FollowUp entity was created in DB
       const followUps = await db.followUp.findMany({

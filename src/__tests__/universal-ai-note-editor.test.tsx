@@ -289,7 +289,7 @@ Call on Friday`;
         />
       );
 
-      expect(html).toContain("Search client, business, project...");
+      expect(html).toContain("Search deals...");
     });
 
     it("renders Lost Reason Dialog with AiNoteEditor", async () => {

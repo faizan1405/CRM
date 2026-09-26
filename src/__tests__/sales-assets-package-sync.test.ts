@@ -11,6 +11,15 @@ import {
   formatSinglePackageForMessage,
 } from "@/features/sales-assets/packages-sync";
 import { interpolatePlaceholders } from "@/features/whatsapp-templates/placeholders";
+import { vi } from "vitest";
+
+vi.mock("@/lib/auth", () => ({
+  getSession: vi.fn().mockResolvedValue({
+    id: "test-sales-assets-user",
+    email: "test@example.com",
+    role: "ADMIN",
+  }),
+}));
 
 describe("Sales Assets Package Synchronization", () => {
   let originalBusinessPackage: any = null;

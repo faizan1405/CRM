@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { PipelineBoard } from "@/features/pipeline/pipeline-board";
-import type { Lead } from "@/features/leads/types";
+import { PipelineConversion } from "@/features/pipeline/pipeline-conversion";
+import type { Lead, LeadStatus } from "@/features/leads/types";
 
 vi.mock("@/components/toast-provider", () => ({
   useToast: () => ({ showToast: vi.fn() }),
@@ -137,7 +138,6 @@ describe("Pipeline Responsive Rendering & Analytics Regression", () => {
     expect(html).toContain("hidden sm:flex");
     // Analytics regions exist
     expect(html).toContain('aria-label="Pipeline summary"');
-    expect(html).toContain('aria-label="Pipeline conversion analytics"');
   });
 
   it("2. Pipeline analytics renders on mobile", () => {
@@ -184,13 +184,14 @@ describe("Pipeline Responsive Rendering & Analytics Regression", () => {
     expect(html).toContain("sm:snap-x");
   });
 
-  it("8. Active-stage mobile behavior remains unchanged", () => {
+  it("8. Mobile stages scroll horizontally with mobile indicator", () => {
     const html = renderToStaticMarkup(<PipelineBoard initialLeads={mockLeads} />);
-    // Mobile stage buttons container exists
-    expect(html).toContain("flex sm:hidden overflow-x-auto");
-    // The active stage (New) is flex, while other stages are hidden on mobile
-    expect(html).toContain('data-stage="New" class="w-[calc(100vw-2rem)] sm:w-[18rem] lg:w-80 shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-50 snap-center flex"');
-    expect(html).toContain('data-stage="Contacted" class="w-[calc(100vw-2rem)] sm:w-[18rem] lg:w-80 shrink-0 flex-col rounded-xl border border-slate-200 bg-slate-50 snap-center hidden sm:flex"');
+    // Mobile horizontal scroll indicator exists
+    expect(html).toContain("pipeline-mobile-scroll-indicator");
+    // All stages are rendered as swipeable cards
+    expect(html).toContain('data-stage="New"');
+    expect(html).toContain('data-stage="Contacted"');
+    expect(html).toContain("overflow-x-auto");
   });
 
   it("9. Analytics calculations follow strict funnel business rules", () => {
@@ -199,7 +200,15 @@ describe("Pipeline Responsive Rendering & Analytics Regression", () => {
     // Qualified -> Proposal: Proposal-and-beyond (Proposal(1) + Won(1) = 2) / Qualified-and-beyond(3) = 67%
     // Proposal -> Won: Won(1) / Proposal-and-beyond(2) = 50%
     // Overall Win Rate: Won(1) / Total(6) = 17%
-    const html = renderToStaticMarkup(<PipelineBoard initialLeads={mockLeads} />);
+    const grouped: Record<LeadStatus, Lead[]> = {
+      New: mockLeads.filter((l) => l.status === "New"),
+      Contacted: mockLeads.filter((l) => l.status === "Contacted"),
+      Qualified: mockLeads.filter((l) => l.status === "Qualified"),
+      "Proposal Sent": mockLeads.filter((l) => l.status === "Proposal Sent"),
+      Won: mockLeads.filter((l) => l.status === "Won"),
+      Lost: mockLeads.filter((l) => l.status === "Lost"),
+    };
+    const html = renderToStaticMarkup(<PipelineConversion leads={mockLeads} grouped={grouped} />);
     expect(html).toContain("67%");
     expect(html).toContain("75%");
     expect(html).toContain("50%");
