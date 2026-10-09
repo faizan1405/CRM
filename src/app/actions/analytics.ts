@@ -170,9 +170,10 @@ export async function calculateSalesAnalytics(
           quotedAmount: true,
           createdAt: true,
           updatedAt: true,
-          deal: {
+          deals: {
             select: {
               finalAmount: true,
+              status: true,
             },
           },
         },
@@ -324,9 +325,10 @@ export async function calculateSalesAnalytics(
     const wonDealValueDecimal = calculateWonDealValue(wonLeadsCohort);
     const wonRevenue = decimalToNumber(wonDealValueDecimal);
 
-    const wonDealsCount = wonLeadsCohort.filter(
-      (l) => l.deal && toDecimal(l.deal.finalAmount).gt(0)
-    ).length;
+    const wonDealsCount = wonLeadsCohort.reduce(
+      (sum, l) => sum + (l.deals?.filter((d) => toDecimal(d.finalAmount).gt(0) && d.status !== "NEGOTIATING" && d.status !== "NO_DEAL").length || 0),
+      0
+    );
     const avgWonDeal = wonDealsCount > 0
       ? decimalToNumber(wonDealValueDecimal.div(wonDealsCount))
       : 0;
@@ -491,7 +493,10 @@ export async function calculateSalesAnalytics(
 
       const timestamp = reliableTs ?? lead.updatedAt;
       const label = bucketLabel(timestamp, granularity);
-      const amount = lead.deal ? Number(lead.deal.finalAmount) || 0 : 0;
+      const amount = (lead.deals || []).reduce((sum, d) => {
+        if (d.status === "NEGOTIATING" || d.status === "NO_DEAL") return sum;
+        return sum + (Number(d.finalAmount) || 0);
+      }, 0);
 
       const bucket = revenueBuckets.get(label) ?? {
         revenue: 0,
@@ -555,13 +560,15 @@ export async function calculateSalesAnalytics(
         if (stage === LeadStatus.LOST) {
           // LOST contributes 0
         } else if (stage === LeadStatus.WON) {
-          // WON strictly uses Deal.finalAmount (₹0 if no deal)
-          if (lead.deal && toDecimal(lead.deal.finalAmount).gt(0)) {
-            stageDecimal = stageDecimal.add(toDecimal(lead.deal.finalAmount));
+          // WON strictly uses confirmed Deal.finalAmount (₹0 if no deal)
+          for (const d of lead.deals || []) {
+            if (d.status !== "NEGOTIATING" && d.status !== "NO_DEAL" && toDecimal(d.finalAmount).gt(0)) {
+              stageDecimal = stageDecimal.add(toDecimal(d.finalAmount));
+            }
           }
         } else {
           // NEW, CONTACTED, QUALIFIED, PROPOSAL_SENT: canonical opportunity value
-          stageDecimal = stageDecimal.add(getOpportunityValue(lead, lead.deal));
+          stageDecimal = stageDecimal.add(getOpportunityValue(lead, lead.deals));
         }
       }
       return {

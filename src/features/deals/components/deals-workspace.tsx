@@ -322,12 +322,29 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
     e.preventDefault();
     if (!selectedLeadForDeal) return;
     setSaving(true);
-    const res = await createCrmClientDeal(selectedLeadForDeal.id);
+    const formData = new FormData(e.currentTarget);
+    const finalAmount = Number(formData.get("finalAmount")) || 0;
+    const status = (String(formData.get("status") || "NEGOTIATING")) as DealStatus;
+    const projectName = formData.get("projectName") ? String(formData.get("projectName")).trim() : undefined;
+    const nextPaymentDueDate = formData.get("nextPaymentDueDate") ? String(formData.get("nextPaymentDueDate")) : undefined;
+    const nextPaymentDueAmount = formData.get("nextPaymentDueAmount") ? Number(formData.get("nextPaymentDueAmount")) : undefined;
+    const notes = formData.get("notes") ? String(formData.get("notes")).trim() : undefined;
+    const submissionId = `crm_${selectedLeadForDeal.id}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+    const res = await createCrmClientDeal(selectedLeadForDeal.id, {
+      projectName,
+      finalAmount,
+      status,
+      nextPaymentDueDate,
+      nextPaymentDueAmount,
+      notes,
+      submissionId,
+    });
 
     setSaving(false);
     if (res.success) {
       if (res.alreadyExists) {
-        showToast("This CRM client already has a deal", "info");
+        showToast("This deal already exists", "info");
         setDeals((prev) => {
           const exists = prev.find((d) => d.id === res.data.id);
           if (exists) return prev;

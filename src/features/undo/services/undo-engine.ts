@@ -638,7 +638,7 @@ export async function executeUndo(
     // 4. DEALS & FINANCIAL RECORD MUTATIONS
     // ==========================================
     else if (entityType === "DEAL") {
-      if (actionType === "DEAL_UPSERT") {
+      if (actionType === "DEAL_UPSERT" || actionType === "DEAL_CREATE" || actionType === "DEAL_UPDATE") {
         const currentDeal = await tx.deal.findUnique({ where: { id: entityId } });
         if (!currentDeal) {
           throw new UndoValidationError("Deal not found.");
@@ -647,7 +647,7 @@ export async function executeUndo(
           throw new UndoConcurrencyError();
         }
 
-        if (before.isNewlyCreated) {
+        if (actionType === "DEAL_CREATE" || before?.isNewlyCreated || !before) {
           // If deal was created and has no payments, delete it; if it has payments, report safely
           const paymentCount = await tx.payment.count({ where: { dealId: entityId } });
           if (paymentCount > 0) {
@@ -909,7 +909,7 @@ export async function executeUndo(
         if (item.type === "CREATE") {
           const currentLead = await tx.lead.findUnique({
             where: { id: item.leadId },
-            include: { deal: { include: { payments: true } } },
+            include: { deals: { include: { payments: true } } },
           });
 
           if (!currentLead) {
@@ -921,8 +921,8 @@ export async function executeUndo(
           }
 
           // Safety 1: Never delete a lead that gained a Deal or Payment or other protected financial relationship
-          const hasDeal = Boolean(currentLead.deal);
-          const hasPayments = currentLead.deal && currentLead.deal.payments && currentLead.deal.payments.length > 0;
+          const hasDeal = Boolean(currentLead.deals && currentLead.deals.length > 0);
+          const hasPayments = Boolean(currentLead.deals && currentLead.deals.some((d) => d.payments && d.payments.length > 0));
           if (hasDeal || hasPayments) {
             blockedCount++;
             continue;

@@ -64,6 +64,7 @@ export interface SerializedDeal {
   payments: SerializedPayment[];
   createdAt: string;
   updatedAt: string;
+  submissionId?: string | null;
   // Computed tracking properties
   totalReceived: number;
   remainingBalance: number;
@@ -94,6 +95,19 @@ export interface DealSummaryMetrics {
 export type DealActionResult<T = undefined> =
   | { success: true; data: T; undoId?: string; alreadyExists?: boolean }
   | { success: false; error: string };
+
+export interface CreateCrmClientDealInput {
+  leadId?: string;
+  projectName?: string | null;
+  finalAmount?: number;
+  quotedAmount?: number | null;
+  currency?: string;
+  status?: DealStatus;
+  nextPaymentDueDate?: string | null;
+  nextPaymentDueAmount?: number | null;
+  notes?: string | null;
+  submissionId?: string | null;
+}
 
 export interface CreateOtherClientDealInput {
   clientName: string;
