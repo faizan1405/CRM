@@ -206,7 +206,12 @@ export function calculateDealMetrics(
 export function formatCurrency(amount: number | null | undefined, currency = "INR"): string {
   if (amount === null || amount === undefined) return "—";
   const num = Number(amount);
-  const symbol = currency === "INR" ? "₹" : `${currency} `;
+  let symbol = "₹";
+  if (currency === "USD" || currency?.toLowerCase() === "dollar") {
+    symbol = "$";
+  } else if (currency && currency !== "INR") {
+    symbol = `${currency} `;
+  }
   return `${symbol}${num.toLocaleString("en-IN")}`;
 }
 

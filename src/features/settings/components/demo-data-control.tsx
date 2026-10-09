@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, AlertTriangle, Check, X, Users, Trash2, Bomb } from "lucide-react";
+import { Sparkles, AlertTriangle, Check, X, Trash2, Bomb } from "lucide-react";
 import { populateDemoDataAction, clearDemoDataAction } from "@/app/actions/demo-data";
 import { deleteAllLeadsAction } from "@/app/actions/leads";
 
@@ -197,27 +197,29 @@ export function DemoDataControl({ onCreateDemoLeads, onClearDemoLeads }: DemoDat
         <button
           type="button"
           onClick={() => setModalMode("create")}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-2xs hover:bg-slate-50 active:bg-slate-100 transition-colors"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-blue-200/80 bg-blue-50/80 px-4 text-xs sm:text-sm font-semibold text-blue-700 shadow-2xs hover:bg-blue-100/80 active:bg-blue-200 transition-colors cursor-pointer"
         >
-          <Users size={16} className="text-blue-600" aria-hidden="true" />
+          <Sparkles size={15} className="text-blue-600" aria-hidden="true" />
           <span>Create Demo Leads (10)</span>
         </button>
 
         <button
           type="button"
           onClick={() => setModalMode("clear")}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-rose-700 shadow-2xs hover:bg-rose-50 active:bg-rose-100 transition-colors"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 text-xs sm:text-sm font-medium text-slate-700 shadow-2xs hover:bg-slate-50 active:bg-slate-100 transition-colors cursor-pointer"
         >
-          <Trash2 size={16} className="text-rose-600" aria-hidden="true" />
+          <Trash2 size={15} className="text-slate-500" aria-hidden="true" />
           <span>Clean Demo Leads</span>
         </button>
+
+        <span className="text-slate-300 hidden sm:inline">|</span>
 
         <button
           type="button"
           onClick={() => setModalMode("purge")}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 shadow-2xs hover:bg-red-50 active:bg-red-100 transition-colors"
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-rose-200/80 bg-rose-50/50 px-4 text-xs sm:text-sm font-medium text-rose-700 shadow-2xs hover:bg-rose-100 active:bg-rose-200 transition-colors cursor-pointer"
         >
-          <Bomb size={16} className="text-red-600" aria-hidden="true" />
+          <Bomb size={15} className="text-rose-600" aria-hidden="true" />
           <span>Purge All Leads</span>
         </button>
       </div>

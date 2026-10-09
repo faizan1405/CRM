@@ -3,7 +3,7 @@
 import { memo } from "react";
 import { ActionCard } from "@/components/action-card";
 import { Phone, MessageCircle, CalendarPlus, Trash2, FileText, Check, Star, Clock } from "lucide-react";
-import { formatCurrency } from "@/features/leads/formatters";
+import { cleanLeadName, formatCurrency } from "@/features/leads/formatters";
 import { getTelephoneHref } from "@/features/leads/contact-links";
 import { useWhatsApp } from "@/components/whatsapp-context";
 import { getCanonicalLeadTheme } from "@/features/leads/lead-card-theme";
@@ -56,7 +56,7 @@ export const LeadCard = memo(function LeadCard({
       {/* ROW 1: Name + Status */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-          <h3 className="truncate font-bold text-slate-950 text-[16px] tracking-tight leading-none">{lead.name}</h3>
+          <h3 className="truncate font-bold text-slate-950 text-[16px] tracking-tight leading-none">{cleanLeadName(lead.name)}</h3>
           <LeadStatusBadge status={lead.status} />
           {lead.staleInfo?.isStale && (
             <span

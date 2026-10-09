@@ -13,3 +13,12 @@ export function formatDate(value: string | null) {
   return `${Number(day)} ${m} ${year}`;
 }
 
+export function cleanLeadName(name: string | null | undefined): string {
+  if (!name) return "";
+  try {
+    return name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").trim();
+  } catch {
+    return name.trim();
+  }
+}
+

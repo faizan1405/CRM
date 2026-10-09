@@ -36,6 +36,7 @@ import { useToast } from "@/components/toast-provider";
 import { PaymentAnalytics } from "./payment-analytics";
 import { DealDetailPanel } from "./deal-detail-panel";
 import { AiNoteEditor } from "@/components/ui/ai-note-editor";
+import { cleanLeadName } from "@/features/leads/formatters";
 import {
   Receipt,
   Plus,
@@ -988,7 +989,7 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">
-                            {isCrm ? deal.lead?.name || deal.clientNameSnapshot : deal.clientNameSnapshot}
+                            {cleanLeadName(isCrm ? deal.lead?.name || deal.clientNameSnapshot : deal.clientNameSnapshot)}
                           </h3>
                           {renderSourceBadge(deal)}
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadgeClass(deal.paymentStatus)}`}>
@@ -1060,19 +1061,29 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
                   </div>
 
                   {/* Quick actions */}
-                  <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  <div className="flex items-center gap-2 mt-3.5 flex-wrap">
                     <button
                       type="button"
                       onClick={() => setActiveDealForPayment(deal)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer border border-blue-200"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
                     >
-                      <Plus size={13} />
+                      <Plus size={13} strokeWidth={2.5} />
                       Record Payment
                     </button>
                     <button
                       type="button"
+                      onClick={() => {
+                        setSelectedDealForDetail(deal);
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition-colors cursor-pointer border border-slate-200/80"
+                    >
+                      <Eye size={13} />
+                      Details
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setActiveDealForHistory(deal)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer border border-slate-200"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 text-slate-700 hover:bg-slate-100 text-xs font-semibold transition-colors cursor-pointer border border-slate-200/80"
                     >
                       <History size={13} />
                       History
@@ -1080,27 +1091,17 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
                     <button
                       type="button"
                       onClick={() => setActiveDealForEdit(deal)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer border border-slate-200"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 text-slate-700 hover:bg-slate-100 text-xs font-medium transition-colors cursor-pointer border border-slate-200/80"
                     >
-                      <Edit2 size={13} />
+                      <Edit2 size={12} />
                       Edit
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        setSelectedDealForDetail(deal);
-                      }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer border border-slate-200"
-                    >
-                      <Eye size={13} />
-                      Details
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => setActiveDealForDelete(deal)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer border border-rose-200"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs font-medium transition-colors cursor-pointer border border-rose-200/60"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={12} />
                       Delete
                     </button>
                   </div>

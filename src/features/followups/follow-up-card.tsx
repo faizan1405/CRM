@@ -7,6 +7,7 @@ import type { FollowUp } from "./types";
 import { formatFollowUpDate, formatTime, getFollowUpStatusInfo } from "./formatters";
 import { getTypeIcon, typeStyles } from "./follow-up-types";
 import { statusFromDatabase } from "@/features/leads/types";
+import { cleanLeadName } from "@/features/leads/formatters";
 
 const statusConfig: Record<
   string,
@@ -14,31 +15,31 @@ const statusConfig: Record<
 > = {
   Overdue: {
     label: "Overdue",
-    badgeClass: "bg-red-100 text-red-800 ring-red-200",
-    cardBg: "bg-red-50/50",
-    leftBorder: "border-l-4 border-l-red-500",
-    hoverBorder: "hover:border-red-300",
+    badgeClass: "bg-rose-50 text-rose-700 ring-1 ring-rose-300/70 border border-rose-200/60 font-semibold",
+    cardBg: "bg-white",
+    leftBorder: "border-l-[3.5px] border-l-rose-500",
+    hoverBorder: "hover:border-rose-300/80",
   },
   Today: {
     label: "Follow up now",
-    badgeClass: "bg-emerald-100 text-emerald-800 ring-emerald-200",
-    cardBg: "bg-emerald-50/50",
-    leftBorder: "border-l-4 border-l-emerald-500",
-    hoverBorder: "hover:border-emerald-300",
+    badgeClass: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-300/70 border border-emerald-200/60 font-semibold",
+    cardBg: "bg-white",
+    leftBorder: "border-l-[3.5px] border-l-emerald-500",
+    hoverBorder: "hover:border-emerald-300/80",
   },
   Upcoming: {
     label: "Future follow-up",
-    badgeClass: "bg-amber-100 text-amber-800 ring-amber-200",
-    cardBg: "bg-amber-50/50",
-    leftBorder: "border-l-4 border-l-amber-500",
-    hoverBorder: "hover:border-amber-300",
+    badgeClass: "bg-blue-50 text-blue-700 ring-1 ring-blue-300/70 border border-blue-200/60 font-semibold",
+    cardBg: "bg-white",
+    leftBorder: "border-l-[3.5px] border-l-blue-400",
+    hoverBorder: "hover:border-blue-300/80",
   },
   Cancelled: {
     label: "Cancelled",
-    badgeClass: "bg-slate-100 text-slate-600 ring-slate-200",
-    cardBg: "bg-slate-50/60",
-    leftBorder: "border-l-4 border-l-slate-300",
-    hoverBorder: "hover:border-slate-200",
+    badgeClass: "bg-slate-100 text-slate-600 ring-1 ring-slate-200 font-semibold",
+    cardBg: "bg-slate-50/40",
+    leftBorder: "border-l-[3.5px] border-l-slate-300",
+    hoverBorder: "hover:border-slate-300",
   },
 };
 
@@ -99,8 +100,8 @@ export function FollowUpCard({
     <ActionCard
       onActivate={onOpenLead}
       aria-label={`Open follow-up context for ${followUp.lead?.name || "lead"}`}
-      className={`rounded-xl border ${status.cardBg} ${status.leftBorder} ${status.hoverBorder} border-slate-200/80 p-3.5 sm:p-4 shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-all ${
-        isPast ? "opacity-90" : ""
+      className={`rounded-2xl border ${status.cardBg} ${status.leftBorder} ${status.hoverBorder} border-slate-200/90 p-4 shadow-sm hover:shadow-md transition-all duration-200 ${
+        isPast ? "opacity-95" : ""
       }`}
     >
       {/* Top: Lead name, timing badge, canonical status */}
@@ -124,8 +125,8 @@ export function FollowUpCard({
             </button>
           )}
           <div className="min-w-0 flex-1">
-            <h3 className="truncate font-semibold text-slate-900 text-[15px] leading-snug">
-              {followUp.lead?.name || "Unknown"}
+            <h3 className="truncate font-semibold text-slate-900 text-[15.5px] leading-snug">
+              {cleanLeadName(followUp.lead?.name) || "Unknown"}
             </h3>
             {followUp.lead?.business && (
               <p className="truncate text-xs text-slate-500 mt-0.5">
@@ -210,7 +211,7 @@ export function FollowUpCard({
               e.preventDefault();
               onCall();
             }}
-            className="flex-1 inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 active:bg-blue-200 transition-colors"
+            className="flex-1 inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl bg-blue-50/80 text-blue-700 text-xs font-semibold hover:bg-blue-100/90 active:bg-blue-200 transition-colors border border-blue-200/60 cursor-pointer"
             aria-label={`Call ${followUp.lead?.name || "lead"}`}
           >
             <Phone aria-hidden="true" size={13} />
@@ -222,7 +223,7 @@ export function FollowUpCard({
               e.preventDefault();
               onWhatsApp();
             }}
-            className="flex-1 inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100 active:bg-emerald-200 transition-colors"
+            className="flex-1 inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl bg-emerald-50/80 text-emerald-700 text-xs font-semibold hover:bg-emerald-100/90 active:bg-emerald-200 transition-colors border border-emerald-200/60 cursor-pointer"
             aria-label={`WhatsApp ${followUp.lead?.name || "lead"}`}
           >
             <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
@@ -236,7 +237,7 @@ export function FollowUpCard({
               e.preventDefault();
               onReschedule();
             }}
-            className="flex-1 inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-slate-200/90 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 active:bg-slate-100 transition-colors shadow-sm"
+            className="flex-1 inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-slate-200/90 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 active:bg-slate-100 transition-colors shadow-2xs cursor-pointer"
             aria-label={`Reschedule follow-up for ${followUp.lead?.name || "lead"}`}
           >
             <CalendarClock aria-hidden="true" size={13} className="text-slate-500" />

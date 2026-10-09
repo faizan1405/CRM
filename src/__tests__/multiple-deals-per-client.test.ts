@@ -396,16 +396,19 @@ describe.skipIf(!hasTestDb)("Multiple Deals Per CRM Client — Comprehensive Sui
       // Verify Deal C is deleted
       const checkC = await getDealById(dealCId);
       expect(checkC.success).toBe(true);
+      if (!checkC.success) return;
       expect(checkC.data).toBeNull();
 
       // Verify Deal A and Deal B still exist with their payments
       const checkA = await getDealById(dealAId);
       const checkB = await getDealById(dealBId);
       expect(checkA.success).toBe(true);
+      expect(checkB.success).toBe(true);
+      if (!checkA.success || !checkB.success) return;
+
       expect(checkA.data).not.toBeNull();
       expect(checkA.data?.payments).toHaveLength(1);
 
-      expect(checkB.success).toBe(true);
       expect(checkB.data).not.toBeNull();
       expect(checkB.data?.payments).toHaveLength(1);
 

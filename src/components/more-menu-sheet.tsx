@@ -32,25 +32,25 @@ export function MoreMenuSheet({
               key={item.href}
               href={item.href}
               onClick={onClose}
-              className={`flex items-center gap-4 rounded-xl px-4 py-3.5 text-base font-medium transition-colors ${
-                isActive ? "bg-slate-100 text-blue-600 font-bold" : "text-slate-700 hover:bg-slate-50"
+              className={`flex items-center gap-3.5 rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
+                isActive ? "bg-blue-50 text-blue-700 font-semibold" : "text-slate-700 hover:bg-slate-100/70"
               }`}
             >
-              <Icon size={22} className={isActive ? "text-blue-600" : "text-slate-500"} />
-              {item.label}
+              <Icon size={20} className={isActive ? "text-blue-600" : "text-slate-500"} />
+              <span>{item.label}</span>
             </Link>
           );
         })}
 
-        <div className="my-2 h-px w-full bg-slate-100" />
+        <div className="my-1.5 h-px w-full bg-slate-100" />
         
         <form action={logout}>
           <button 
             type="submit" 
-            className="flex w-full items-center gap-4 rounded-xl px-4 py-3.5 text-base font-medium text-red-600 hover:bg-red-50"
+            className="flex w-full items-center gap-3.5 rounded-xl px-4 py-3 text-sm font-medium text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
           >
-            <LogOut size={22} />
-            Logout
+            <LogOut size={20} />
+            <span>Logout</span>
           </button>
         </form>
       </div>
