@@ -129,7 +129,7 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
           isWaste: true,
           deletedAt: true,
           mergedIntoLeadId: true,
-          deal: { select: { finalAmount: true, status: true } },
+          deals: { select: { finalAmount: true, status: true } },
         },
       }),
       db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } } }),
@@ -221,9 +221,10 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
 
     const wonDealValueDecimal = calculateWonDealValue(wonLeadsList);
     const wonRevenue = decimalToNumber(wonDealValueDecimal);
-    const wonDealsWithAmountCount = wonLeadsList.filter(
-      (l) => l.deal && toDecimal(l.deal.finalAmount).gt(0)
-    ).length;
+    const wonDealsWithAmountCount = wonLeadsList.reduce(
+      (sum, l) => sum + (l.deals?.filter((d) => toDecimal(d.finalAmount).gt(0) && d.status !== "NEGOTIATING" && d.status !== "NO_DEAL").length || 0),
+      0
+    );
     const avgWonDeal = wonDealsWithAmountCount > 0
       ? decimalToNumber(wonDealValueDecimal.div(wonDealsWithAmountCount))
       : 0;

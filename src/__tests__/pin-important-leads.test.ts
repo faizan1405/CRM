@@ -349,13 +349,13 @@ describe("Pin / Star Important Leads - Targeted Verification", () => {
   it("Step 8: Pinning/unpinning does NOT modify status, follow-up, deal value, or priority score", async () => {
     const rawC = await db.lead.findUnique({
       where: { id: leadCId },
-      include: { deal: true, followUps: true },
+      include: { deals: true, followUps: true },
     });
 
     expect(rawC?.status).toBe(LeadStatus.QUALIFIED);
     expect(rawC?.budget?.toNumber()).toBe(75000);
     expect(rawC?.quotedAmount?.toNumber()).toBe(70000);
-    expect(rawC?.deal?.finalAmount.toNumber()).toBe(70000);
+    expect(rawC?.deals?.[0]?.finalAmount.toNumber()).toBe(70000);
     expect(rawC?.followUps).toHaveLength(1);
     expect(rawC?.followUps[0].status).toBe("PENDING");
   });

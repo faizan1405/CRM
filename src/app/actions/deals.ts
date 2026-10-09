@@ -16,6 +16,7 @@ import type {
   UpsertDealInput,
   RecordPaymentInput,
   CreateOtherClientDealInput,
+  CreateCrmClientDealInput,
 } from "@/features/deals/types";
 import {
   calculateTotalReceived,
@@ -93,6 +94,7 @@ function serializeDeal(
     nextPaymentDueAmount: Prisma.Decimal | null;
     createdAt: Date;
     updatedAt: Date;
+    submissionId?: string | null;
     payments?: Array<{
       id: string;
       dealId: string;
@@ -127,6 +129,7 @@ function serializeDeal(
     id: deal.id,
     source: (deal.source as DealSource) || "CRM_LEAD",
     leadId: deal.leadId,
+    submissionId: deal.submissionId ?? null,
     clientNameSnapshot: deal.clientNameSnapshot ?? null,
     companyNameSnapshot: deal.companyNameSnapshot ?? null,
     clientPhone: deal.clientPhone ?? null,
@@ -159,14 +162,15 @@ function serializeDeal(
 }
 
 /**
- * Fetch deal and payments for a specific lead.
+ * Fetch latest deal and payments for a specific lead.
  */
 export async function getLeadDeal(leadId: string): Promise<DealActionResult<SerializedDeal | null>> {
   try {
     await requireAuthenticatedUser();
 
-    const deal = await db.deal.findUnique({
+    const deal = await db.deal.findFirst({
       where: { leadId },
+      orderBy: { createdAt: "desc" },
       include: {
         payments: {
           orderBy: { paymentDate: "desc" },
@@ -186,6 +190,39 @@ export async function getLeadDeal(leadId: string): Promise<DealActionResult<Seri
 
     if (!deal) return { success: true, data: null };
     return { success: true, data: serializeDeal(deal) };
+  } catch (error) {
+    return { success: false, error: cleanError(error) };
+  }
+}
+
+/**
+ * Fetch all deals and payments for a specific lead (client).
+ */
+export async function getLeadDeals(leadId: string): Promise<DealActionResult<SerializedDeal[]>> {
+  try {
+    await requireAuthenticatedUser();
+
+    const deals = await db.deal.findMany({
+      where: { leadId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        payments: {
+          orderBy: { paymentDate: "desc" },
+        },
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            business: true,
+            phone: true,
+            email: true,
+            status: true,
+          },
+        },
+      },
+    });
+
+    return { success: true, data: deals.map(serializeDeal) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
   }
@@ -227,11 +264,15 @@ export async function getDealById(dealId: string): Promise<DealActionResult<Seri
 
 /**
  * Create a deal linked to an existing CRM Lead.
- * Returns the existing deal if one already exists (1:1 lead-deal relationship).
+ * Allows multiple deals/projects per client.
+ * Includes submission idempotency and rapid duplicate submission guarding.
  */
-export async function createCrmClientDeal(leadId: string): Promise<DealActionResult<SerializedDeal>> {
+export async function createCrmClientDeal(
+  leadId: string,
+  input?: Partial<CreateCrmClientDealInput>
+): Promise<DealActionResult<SerializedDeal>> {
   try {
-    await requireAuthenticatedUser();
+    const session = await requireAuthenticatedUser();
 
     const lead = await db.lead.findUnique({
       where: { id: leadId, deletedAt: null, mergedIntoLeadId: null },
@@ -242,17 +283,62 @@ export async function createCrmClientDeal(leadId: string): Promise<DealActionRes
       return { success: false, error: "Lead not found or has been deleted." };
     }
 
-    const existingDeal = await db.deal.findUnique({
-      where: { leadId: lead.id },
+    const finalAmountNum = Number(input?.finalAmount) || 0;
+    if (finalAmountNum < 0) {
+      return { success: false, error: "Final deal value cannot be negative." };
+    }
+
+    const projectNameVal = input?.projectName ? input.projectName.trim() : null;
+
+    // Idempotency check 1: Exact submissionId match
+    if (input?.submissionId) {
+      const existingDealBySubmission = await db.deal.findUnique({
+        where: { submissionId: input.submissionId },
+        include: {
+          payments: { orderBy: { paymentDate: "desc" } },
+          lead: { select: { id: true, name: true, business: true, phone: true, email: true, status: true } },
+        },
+      });
+      if (existingDealBySubmission) {
+        return { success: true, data: serializeDeal(existingDealBySubmission), alreadyExists: true };
+      }
+    }
+
+    // Idempotency check 2: Rapid duplicate click guard (identical project and amount within last 5 seconds)
+    const fiveSecondsAgo = new Date(Date.now() - 5000);
+    const recentDuplicate = await db.deal.findFirst({
+      where: {
+        leadId: lead.id,
+        projectName: projectNameVal,
+        finalAmount: new Prisma.Decimal(finalAmountNum),
+        createdAt: { gte: fiveSecondsAgo },
+      },
       include: {
         payments: { orderBy: { paymentDate: "desc" } },
         lead: { select: { id: true, name: true, business: true, phone: true, email: true, status: true } },
       },
     });
-
-    if (existingDeal) {
-      return { success: true, data: serializeDeal(existingDeal), alreadyExists: true };
+    if (recentDuplicate) {
+      return { success: true, data: serializeDeal(recentDuplicate), alreadyExists: true };
     }
+
+    let dueDate: Date | null = null;
+    if (input?.nextPaymentDueDate) {
+      dueDate = new Date(`${input.nextPaymentDueDate}T00:00:00.000Z`);
+      if (Number.isNaN(dueDate.getTime())) {
+        throw new UserFacingError("Invalid next payment due date.");
+      }
+    }
+
+    const quotedAmount =
+      input?.quotedAmount !== undefined && input?.quotedAmount !== null
+        ? new Prisma.Decimal(input.quotedAmount)
+        : null;
+    const nextPaymentDueAmount =
+      input?.nextPaymentDueAmount !== undefined && input?.nextPaymentDueAmount !== null
+        ? new Prisma.Decimal(input.nextPaymentDueAmount)
+        : null;
+    const notes = input?.notes ? input.notes.trim() : null;
 
     let deal;
     try {
@@ -260,13 +346,19 @@ export async function createCrmClientDeal(leadId: string): Promise<DealActionRes
         data: {
           source: "CRM_LEAD",
           leadId: lead.id,
+          submissionId: input?.submissionId || undefined,
           clientNameSnapshot: lead.name,
           companyNameSnapshot: lead.business || null,
           clientPhone: lead.phone || null,
           clientEmail: lead.email || null,
-          finalAmount: new Prisma.Decimal(0),
-          currency: "INR",
-          status: "NEGOTIATING",
+          projectName: projectNameVal,
+          quotedAmount,
+          finalAmount: new Prisma.Decimal(finalAmountNum),
+          currency: input?.currency || "INR",
+          status: (input?.status as PrismaDealStatus) || "NEGOTIATING",
+          nextPaymentDueDate: dueDate,
+          nextPaymentDueAmount,
+          notes,
         },
         include: {
           payments: { orderBy: { paymentDate: "desc" } },
@@ -275,10 +367,21 @@ export async function createCrmClientDeal(leadId: string): Promise<DealActionRes
       });
     } catch (err: unknown) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-        // Concurrent race: another request created the deal between our pre-check and insert.
-        // Return the existing deal without creating a duplicate UndoAction.
-        const existingDeal = await db.deal.findUnique({
+        if (input?.submissionId) {
+          const existingDeal = await db.deal.findUnique({
+            where: { submissionId: input.submissionId },
+            include: {
+              payments: { orderBy: { paymentDate: "desc" } },
+              lead: { select: { id: true, name: true, business: true, phone: true, email: true, status: true } },
+            },
+          });
+          if (existingDeal) {
+            return { success: true, data: serializeDeal(existingDeal), alreadyExists: true };
+          }
+        }
+        const existingDeal = await db.deal.findFirst({
           where: { leadId: lead.id },
+          orderBy: { createdAt: "desc" },
           include: {
             payments: { orderBy: { paymentDate: "desc" } },
             lead: { select: { id: true, name: true, business: true, phone: true, email: true, status: true } },
@@ -287,8 +390,6 @@ export async function createCrmClientDeal(leadId: string): Promise<DealActionRes
         if (existingDeal) {
           return { success: true, data: serializeDeal(existingDeal), alreadyExists: true };
         }
-        // Fallback: deal somehow disappeared between conflict and lookup
-        return { success: false, error: "A deal for this lead already exists but could not be retrieved." };
       }
       throw err;
     }
@@ -302,8 +403,8 @@ export async function createCrmClientDeal(leadId: string): Promise<DealActionRes
         leadId: deal.leadId,
         beforeSnapshot: null,
         afterSnapshot: deal,
-        description: `Create CRM deal for ${deal.lead?.name || lead.name}`,
-        userId: (await getSession())!.id as string,
+        description: `Create project "${deal.projectName || "Deal"}" for ${deal.lead?.name || lead.name}`,
+        userId: session.id as string,
       });
       undoId = undo.id;
     } catch (e) {
@@ -430,15 +531,16 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
       return { success: true, data: serializeDeal(deal), undoId };
     }
 
-    // Otherwise, create or update by leadId
+    // Otherwise, create or update by leadId (target latest deal, or create if none exists)
     const leadId = input.leadId!;
     const lead = await db.lead.findUnique({
       where: { id: leadId },
       select: { id: true, name: true, business: true, phone: true, email: true },
     });
 
-    const existingLeadDeal = await db.deal.findUnique({
+    const existingLeadDeal = await db.deal.findFirst({
       where: { leadId },
+      orderBy: { createdAt: "desc" },
       include: { payments: true },
     });
 
@@ -480,26 +582,47 @@ export async function upsertLeadDeal(input: UpsertDealInput): Promise<DealAction
       updateData.notes = input.notes ? input.notes.trim() : null;
     }
 
-    const deal = await db.deal.upsert({
-      where: { leadId },
-      create: data,
-      update: updateData,
-      include: {
-        payments: {
-          orderBy: { paymentDate: "desc" },
-        },
-        lead: {
-          select: {
-            id: true,
-            name: true,
-            business: true,
-            phone: true,
-            email: true,
-            status: true,
+    let deal;
+    if (existingLeadDeal) {
+      deal = await db.deal.update({
+        where: { id: existingLeadDeal.id },
+        data: updateData,
+        include: {
+          payments: {
+            orderBy: { paymentDate: "desc" },
+          },
+          lead: {
+            select: {
+              id: true,
+              name: true,
+              business: true,
+              phone: true,
+              email: true,
+              status: true,
+            },
           },
         },
-      },
-    });
+      });
+    } else {
+      deal = await db.deal.create({
+        data,
+        include: {
+          payments: {
+            orderBy: { paymentDate: "desc" },
+          },
+          lead: {
+            select: {
+              id: true,
+              name: true,
+              business: true,
+              phone: true,
+              email: true,
+              status: true,
+            },
+          },
+        },
+      });
+    }
 
     let undoId: string | undefined;
     try {

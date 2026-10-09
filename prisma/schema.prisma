@@ -72,7 +72,7 @@ model Lead {
   aiInsight        LeadAIInsight?
   lossEvents       LeadLossEvent[]
   notifications    SalesNotification[]
-  deal             Deal?
+  deals            Deal[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
@@ -416,8 +416,9 @@ enum DealSource {
 model Deal {
   id                   String        @id @default(uuid())
   source               DealSource    @default(CRM_LEAD)
-  leadId               String?       @unique
+  leadId               String?
   lead                 Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  submissionId         String?       @unique
   clientNameSnapshot   String?
   companyNameSnapshot  String?
   clientPhone          String?
@@ -437,6 +438,7 @@ model Deal {
   @@index([status])
   @@index([nextPaymentDueDate])
   @@index([source])
+  @@index([leadId])
 }
 
 model Payment {

@@ -22,7 +22,7 @@ function parseEnv(filePath: string): Record<string, string> {
 }
 
 const testEnv = parseEnv(".env.test");
-const testDbUrl = testEnv.TEST_DATABASE_URL;
+const testDbUrl = testEnv.TEST_DATABASE_URL_DIRECT || testEnv.TEST_DATABASE_URL.replace("-pooler", "");
 
 console.log("Setting up schema on test database...");
 execSync("npx prisma db push --accept-data-loss", {

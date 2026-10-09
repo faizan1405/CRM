@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { 
-  getLeadDeal, 
+  getLeadDeals, 
   upsertLeadDeal, 
+  createCrmClientDeal,
   addDealPayment, 
   updateDealPayment, 
   deleteDealPayment 
@@ -22,7 +23,7 @@ import {
 } from "../types";
 import { formatCurrency } from "../calculations";
 import { 
-  Receipt, 
+  Briefcase, 
   Plus, 
   Edit2, 
   Trash2, 
@@ -31,7 +32,10 @@ import {
   CheckCircle2, 
   Clock, 
   X,
-  CreditCard
+  CreditCard,
+  ChevronDown,
+  ChevronUp,
+  FileText
 } from "lucide-react";
 import { AiNoteEditor } from "@/components/ui/ai-note-editor";
 import { useToast } from "@/components/toast-provider";
@@ -42,23 +46,36 @@ interface LeadDealSectionProps {
 }
 
 export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionProps) {
-  const [deal, setDeal] = useState<SerializedDeal | null>(null);
+  const [deals, setDeals] = useState<SerializedDeal[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dealModalOpen, setDealModalOpen] = useState(false);
-  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  
+  // Modals state
+  const [createDealModalOpen, setCreateDealModalOpen] = useState(false);
+  const [editingDeal, setEditingDeal] = useState<SerializedDeal | null>(null);
+  
+  // Payment state
+  const [paymentModalDeal, setPaymentModalDeal] = useState<SerializedDeal | null>(null);
   const [editingPayment, setEditingPayment] = useState<SerializedPayment | null>(null);
   const [deletingPayment, setDeletingPayment] = useState<SerializedPayment | null>(null);
+  
+  // Accordion state for payment history per deal
+  const [expandedDealIds, setExpandedDealIds] = useState<Set<string>>(new Set());
+  
   const [saving, setSaving] = useState(false);
   const { showToast, showUndoToast } = useToast();
 
-  // Load deal
-  const loadDeal = async () => {
+  // Load all deals for this client
+  const loadDeals = async () => {
     try {
-      const res = await getLeadDeal(leadId);
+      const res = await getLeadDeals(leadId);
       if (res.success && res.data) {
-        setDeal(res.data);
+        setDeals(res.data);
+        // Expand deals by default if there's only 1 or 2
+        if (res.data.length <= 2) {
+          setExpandedDealIds(new Set(res.data.map(d => d.id)));
+        }
       } else {
-        setDeal(null);
+        setDeals([]);
       }
     } catch {
       // silently handle
@@ -68,37 +85,103 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
   };
 
   useEffect(() => {
-    loadDeal();
+    loadDeals();
   }, [leadId]);
 
-  const handleSaveDeal = async (e: React.FormEvent<HTMLFormElement>) => {
+  const toggleExpand = (dealId: string) => {
+    setExpandedDealIds(prev => {
+      const next = new Set(prev);
+      if (next.has(dealId)) {
+        next.delete(dealId);
+      } else {
+        next.add(dealId);
+      }
+      return next;
+    });
+  };
+
+  // Handler: Create New Deal / Project for this CRM Client
+  const handleCreateDeal = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
     const formData = new FormData(e.currentTarget);
-    const quoted = formData.get("quotedAmount") ? Number(formData.get("quotedAmount")) : null;
+    const projectName = formData.get("projectName") ? String(formData.get("projectName")).trim() : undefined;
     const finalAmount = Number(formData.get("finalAmount")) || 0;
+    const quotedAmount = formData.get("quotedAmount") ? Number(formData.get("quotedAmount")) : null;
     const currency = String(formData.get("currency") || "INR");
     const status = String(formData.get("status") || "NEGOTIATING") as DealStatus;
-    const nextDueDate = formData.get("nextPaymentDueDate") ? String(formData.get("nextPaymentDueDate")) : null;
-    const nextDueAmount = formData.get("nextPaymentDueAmount") ? Number(formData.get("nextPaymentDueAmount")) : null;
+    const nextPaymentDueDate = formData.get("nextPaymentDueDate") ? String(formData.get("nextPaymentDueDate")) : null;
+    const nextPaymentDueAmount = formData.get("nextPaymentDueAmount") ? Number(formData.get("nextPaymentDueAmount")) : null;
+    const notes = formData.get("notes") ? String(formData.get("notes")).trim() : undefined;
+    const submissionId = `crm_${leadId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-    const res = await upsertLeadDeal({
-      leadId,
-      quotedAmount: quoted,
+    const res = await createCrmClientDeal(leadId, {
+      projectName,
       finalAmount,
+      quotedAmount,
       currency,
       status,
-      nextPaymentDueDate: nextDueDate,
-      nextPaymentDueAmount: nextDueAmount,
+      nextPaymentDueDate,
+      nextPaymentDueAmount,
+      notes,
+      submissionId,
     });
 
     setSaving(false);
     if (res.success) {
-      setDeal(res.data);
-      setDealModalOpen(false);
+      await loadDeals();
+      setCreateDealModalOpen(false);
+      // Auto-expand the newly created deal
+      if (res.data?.id) {
+        setExpandedDealIds(prev => new Set([...prev, res.data.id]));
+      }
+      if (res.undoId) {
+        showUndoToast("New deal created successfully", res.undoId, () => {
+          void loadDeals();
+        });
+      } else {
+        showToast("New deal created successfully", "success");
+      }
+    } else {
+      showToast(res.error || "Failed to create deal", "error");
+    }
+  };
+
+  // Handler: Edit Deal / Project
+  const handleUpdateDeal = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingDeal) return;
+    setSaving(true);
+    const formData = new FormData(e.currentTarget);
+    const projectName = formData.get("projectName") ? String(formData.get("projectName")).trim() : undefined;
+    const finalAmount = Number(formData.get("finalAmount")) || 0;
+    const quotedAmount = formData.get("quotedAmount") ? Number(formData.get("quotedAmount")) : null;
+    const currency = String(formData.get("currency") || "INR");
+    const status = String(formData.get("status") || "NEGOTIATING") as DealStatus;
+    const nextPaymentDueDate = formData.get("nextPaymentDueDate") ? String(formData.get("nextPaymentDueDate")) : null;
+    const nextPaymentDueAmount = formData.get("nextPaymentDueAmount") ? Number(formData.get("nextPaymentDueAmount")) : null;
+    const notes = formData.get("notes") ? String(formData.get("notes")).trim() : undefined;
+
+    const res = await upsertLeadDeal({
+      dealId: editingDeal.id,
+      leadId,
+      projectName,
+      quotedAmount,
+      finalAmount,
+      currency,
+      status,
+      nextPaymentDueDate,
+      nextPaymentDueAmount,
+      notes,
+    });
+
+    setSaving(false);
+    if (res.success) {
+      await loadDeals();
+      setEditingDeal(null);
       if (res.undoId) {
         showUndoToast("Deal details updated", res.undoId, () => {
-          void loadDeal();
+          void loadDeals();
         });
       } else {
         showToast("Deal details updated", "success");
@@ -108,9 +191,10 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
     }
   };
 
+  // Handler: Add or Update Payment
   const handleSavePayment = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!deal) return;
+    if (!paymentModalDeal) return;
     setSaving(true);
     const formData = new FormData(e.currentTarget);
     const amount = Number(formData.get("amount"));
@@ -133,12 +217,12 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
       });
       setSaving(false);
       if (res.success) {
-        await loadDeal();
-        setPaymentModalOpen(false);
+        await loadDeals();
+        setPaymentModalDeal(null);
         setEditingPayment(null);
         if (res.undoId) {
           showUndoToast("Payment updated", res.undoId, () => {
-            void loadDeal();
+            void loadDeals();
           });
         } else {
           showToast("Payment updated", "success");
@@ -148,7 +232,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
       }
     } else {
       const res = await addDealPayment({
-        dealId: deal.id,
+        dealId: paymentModalDeal.id,
         amount,
         paymentDate,
         type,
@@ -159,11 +243,11 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
       });
       setSaving(false);
       if (res.success) {
-        await loadDeal();
-        setPaymentModalOpen(false);
+        await loadDeals();
+        setPaymentModalDeal(null);
         if (res.undoId) {
           showUndoToast("Payment recorded", res.undoId, () => {
-            void loadDeal();
+            void loadDeals();
           });
         } else {
           showToast("Payment recorded", "success");
@@ -174,17 +258,18 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
     }
   };
 
+  // Handler: Delete Payment
   const handleDeletePayment = async () => {
     if (!deletingPayment) return;
     setSaving(true);
     const res = await deleteDealPayment(deletingPayment.id);
     setSaving(false);
     if (res.success) {
-      await loadDeal();
+      await loadDeals();
       setDeletingPayment(null);
       if (res.undoId) {
         showUndoToast("Payment removed", res.undoId, () => {
-          void loadDeal();
+          void loadDeals();
         });
       } else {
         showToast("Payment removed", "info");
@@ -196,17 +281,17 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-4 text-center text-xs text-slate-400">
-        Loading deal information...
+      <div className="rounded-xl border border-slate-200 bg-white p-6 text-center text-xs text-slate-400">
+        Loading projects and deals...
       </div>
     );
   }
 
-  const finalAmount = deal ? deal.finalAmount : 0;
-  const totalReceived = deal ? deal.totalReceived : 0;
-  const remaining = deal ? deal.remainingBalance : 0;
-  const paymentStatus = deal ? deal.paymentStatus : "Unpaid";
-  const percentPaid = finalAmount > 0 ? Math.min(100, Math.round((totalReceived / finalAmount) * 100)) : 0;
+  // Client aggregated metrics across all projects
+  const totalContracted = deals.reduce((sum, d) => sum + d.finalAmount, 0);
+  const totalReceived = deals.reduce((sum, d) => sum + d.totalReceived, 0);
+  const totalOutstanding = deals.reduce((sum, d) => sum + d.remainingBalance, 0);
+  const overallPercentPaid = totalContracted > 0 ? Math.min(100, Math.round((totalReceived / totalContracted) * 100)) : 0;
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -221,235 +306,354 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
     }
   };
 
+  const getDealStatusBadge = (status: DealStatus) => {
+    switch (status) {
+      case "COMPLETED":
+        return "bg-emerald-100/70 text-emerald-800 border-emerald-200";
+      case "CONFIRMED":
+        return "bg-blue-100/70 text-blue-800 border-blue-200";
+      case "NEGOTIATING":
+        return "bg-amber-100/70 text-amber-800 border-amber-200";
+      default:
+        return "bg-slate-100 text-slate-700 border-slate-200";
+    }
+  };
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-sm">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3.5 bg-slate-50/70 border-b border-slate-100">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3.5 bg-slate-50/70 border-b border-slate-100">
         <div className="flex items-center gap-2">
-          <Receipt size={17} className="text-blue-600" />
-          <h3 className="text-sm font-bold text-slate-900">Deal &amp; Payments</h3>
-          {deal && (
-            <span className="text-[11px] font-medium text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-              {DEAL_STATUS_LABELS[deal.status]}
-            </span>
-          )}
+          <Briefcase size={17} className="text-blue-600" />
+          <h3 className="text-sm font-bold text-slate-900">Projects &amp; Deals</h3>
+          <span className="text-[11px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+            {deals.length} {deals.length === 1 ? "Project" : "Projects"}
+          </span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setDealModalOpen(true)}
-            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
-          >
-            <Edit2 size={12} /> {deal ? "Edit Deal" : "Create Deal"}
-          </button>
-          {deal && (
-            <button
-              type="button"
-              onClick={() => {
-                setEditingPayment(null);
-                setPaymentModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm cursor-pointer"
-            >
-              <Plus size={13} /> Add Payment
-            </button>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={() => setCreateDealModalOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 active:bg-blue-800 transition-colors shadow-sm cursor-pointer"
+        >
+          <Plus size={14} />
+          <span>{deals.length === 0 ? "Add Deal" : "+ Add Another Deal"}</span>
+        </button>
       </div>
 
-      {/* Main Metrics */}
-      {!deal ? (
-        <div className="p-6 text-center">
-          <p className="text-xs text-slate-500">No deal configured for this lead yet.</p>
+      {deals.length === 0 ? (
+        <div className="p-8 text-center">
+          <div className="mx-auto size-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
+            <Briefcase size={22} />
+          </div>
+          <p className="text-sm font-semibold text-slate-800">No deals or projects yet</p>
+          <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+            This client can have unlimited projects. Add their first project to track amounts and payment milestones.
+          </p>
           <button
             type="button"
-            onClick={() => setDealModalOpen(true)}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors cursor-pointer"
+            onClick={() => setCreateDealModalOpen(true)}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm cursor-pointer"
           >
-            <Plus size={14} /> Set Deal Value &amp; Track Payments
+            <Plus size={14} /> Create First Deal
           </button>
         </div>
       ) : (
         <div className="p-4 sm:p-5 space-y-4">
-          {/* Numbers Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Deal Value</span>
-              <span className="text-sm font-bold text-slate-900 mt-0.5 block">
-                {formatCurrency(finalAmount)}
+          {/* Client Aggregated Summary Bar */}
+          <div className="bg-gradient-to-br from-slate-50 to-blue-50/30 p-3.5 rounded-xl border border-slate-200/80">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                Client Financial Summary
               </span>
-              {deal.quotedAmount && deal.quotedAmount !== finalAmount && (
-                <span className="text-[10px] text-slate-400 line-through block mt-0.5">
-                  Quoted: {formatCurrency(deal.quotedAmount)}
+              <span className="text-xs font-semibold text-blue-700">
+                {overallPercentPaid}% collected
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-2.5">
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200/70">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Contracted</span>
+                <span className="text-sm font-bold text-slate-900 mt-0.5 block truncate">
+                  {formatCurrency(totalContracted)}
                 </span>
-              )}
-            </div>
-
-            <div className="bg-emerald-50/50 p-2.5 rounded-xl border border-emerald-100/70">
-              <span className="text-[10px] uppercase font-bold text-emerald-700/70 block">Received</span>
-              <span className="text-sm font-bold text-emerald-700 mt-0.5 block">
-                {formatCurrency(totalReceived)}
-              </span>
-              <span className="text-[10px] text-emerald-600 font-medium block mt-0.5">
-                {percentPaid}% of total
-              </span>
-            </div>
-
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Remaining</span>
-              <span className="text-sm font-bold text-slate-900 mt-0.5 block">
-                {formatCurrency(remaining)}
-              </span>
-              <span className="text-[10px] text-slate-400 block mt-0.5">
-                {remaining === 0 ? "Fully cleared" : "Outstanding"}
-              </span>
-            </div>
-
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Status</span>
-              <div className="mt-1">
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${getStatusBadge(paymentStatus)}`}>
-                  {paymentStatus === "Paid" && <CheckCircle2 size={12} />}
-                  {paymentStatus === "Overdue" && <AlertCircle size={12} />}
-                  {paymentStatus === "Partially Paid" && <Clock size={12} />}
-                  {paymentStatus}
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-emerald-100">
+                <span className="text-[10px] uppercase font-bold text-emerald-600/80 block">Total Received</span>
+                <span className="text-sm font-bold text-emerald-700 mt-0.5 block truncate">
+                  {formatCurrency(totalReceived)}
+                </span>
+              </div>
+              <div className="bg-white p-2.5 rounded-lg border border-slate-200/70">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Outstanding</span>
+                <span className="text-sm font-bold text-slate-900 mt-0.5 block truncate">
+                  {formatCurrency(totalOutstanding)}
                 </span>
               </div>
             </div>
-          </div>
 
-          {/* Progress Bar */}
-          <div className="space-y-1">
-            <div className="flex justify-between text-[11px] font-medium text-slate-500">
-              <span>Payment Progress</span>
-              <span>{percentPaid}% collected</span>
-            </div>
-            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+            {/* Overall Progress Bar */}
+            <div className="mt-2.5 h-1.5 w-full bg-slate-200/70 rounded-full overflow-hidden">
               <div 
                 className={`h-full transition-all duration-300 ${
-                  percentPaid >= 100 ? "bg-emerald-500" : percentPaid > 0 ? "bg-blue-600" : "bg-transparent"
+                  overallPercentPaid >= 100 ? "bg-emerald-500" : overallPercentPaid > 0 ? "bg-blue-600" : "bg-transparent"
                 }`}
-                style={{ width: `${percentPaid}%` }}
+                style={{ width: `${overallPercentPaid}%` }}
               />
             </div>
           </div>
 
-          {/* Next Due Date Banner if applicable */}
-          {deal.nextPaymentDueDate && remaining > 0 && (
-            <div className={`flex items-center justify-between p-2.5 rounded-lg border text-xs ${
-              deal.paymentStatus === "Overdue" 
-                ? "bg-rose-50/70 border-rose-200 text-rose-800" 
-                : "bg-blue-50/60 border-blue-100 text-blue-800"
-            }`}>
-              <div className="flex items-center gap-2">
-                <Calendar size={15} />
-                <span>
-                  Next Due: <strong>{deal.nextPaymentDueDate}</strong>
-                  {deal.nextPaymentDueAmount ? ` · ${formatCurrency(deal.nextPaymentDueAmount)}` : ""}
-                </span>
-              </div>
-              {deal.paymentStatus === "Overdue" && (
-                <span className="font-bold text-[10px] uppercase tracking-wider bg-rose-200/80 px-2 py-0.5 rounded text-rose-900">
-                  Overdue
-                </span>
-              )}
-            </div>
-          )}
+          {/* List of Projects / Deals */}
+          <div className="space-y-3">
+            {deals.map((d, index) => {
+              const dFinal = d.finalAmount;
+              const dReceived = d.totalReceived;
+              const dRemaining = d.remainingBalance;
+              const dPercent = dFinal > 0 ? Math.min(100, Math.round((dReceived / dFinal) * 100)) : 0;
+              const isExpanded = expandedDealIds.has(d.id);
+              const projectName = d.projectName?.trim() || `Project #${deals.length - index}`;
 
-          {/* Payment History */}
-          <div className="border-t border-slate-100 pt-3">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Payment History ({deal.payments.length})
-              </h4>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingPayment(null);
-                  setPaymentModalOpen(true);
-                }}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors inline-flex items-center gap-1 cursor-pointer"
-              >
-                <Plus size={12} /> Record
-              </button>
-            </div>
-
-            {deal.payments.length === 0 ? (
-              <p className="text-xs text-slate-400 py-2 italic text-center">No payment entries yet.</p>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {deal.payments.map((p) => (
-                  <div key={p.id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-900 text-sm">
-                          {formatCurrency(p.amount)}
+              return (
+                <div 
+                  key={d.id} 
+                  className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-xs hover:border-slate-300 transition-all"
+                >
+                  {/* Project Header */}
+                  <div className="p-3.5 sm:p-4 bg-slate-50/50 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-bold text-slate-900 truncate">
+                          {projectName}
+                        </h4>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border ${getDealStatusBadge(d.status)}`}>
+                          {DEAL_STATUS_LABELS[d.status]}
                         </span>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold">
-                          {p.type === "CUSTOM" && p.customType ? p.customType : PAYMENT_TYPE_LABELS[p.type]}
-                        </span>
-                        <span className="text-slate-400 text-[11px] font-medium">
-                          {PAYMENT_METHOD_LABELS[p.method]}
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border ${getStatusBadge(d.paymentStatus)}`}>
+                          {d.paymentStatus === "Paid" && <CheckCircle2 size={11} />}
+                          {d.paymentStatus === "Overdue" && <AlertCircle size={11} />}
+                          {d.paymentStatus === "Partially Paid" && <Clock size={11} />}
+                          {d.paymentStatus}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5 text-slate-500 text-[11px] flex-wrap">
-                        <span>{p.paymentDate}</span>
-                        {p.reference && (
-                          <span className="font-mono text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200">
-                            Ref: {p.reference}
-                          </span>
+                      <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400">
+                        <span>Created {new Date(d.createdAt).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}</span>
+                        {d.notes && (
+                          <span className="truncate max-w-[200px] italic text-slate-500">· “{d.notes}”</span>
                         )}
-                        {p.note && <span className="italic text-slate-600 font-medium">“{p.note}”</span>}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
+                    {/* Project Actions */}
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
                         onClick={() => {
-                          setEditingPayment(p);
-                          setPaymentModalOpen(true);
+                          setPaymentModalDeal(d);
+                          setEditingPayment(null);
                         }}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition-colors cursor-pointer"
-                        aria-label="Edit payment"
+                        className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700 transition-colors shadow-xs cursor-pointer"
                       >
-                        <Edit2 size={13} />
+                        <Plus size={12} /> Add Payment
                       </button>
                       <button
                         type="button"
-                        onClick={() => setDeletingPayment(p)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                        aria-label="Delete payment"
+                        onClick={() => setEditingDeal(d)}
+                        className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors cursor-pointer"
+                        title="Edit Project Details"
+                        aria-label={`Edit ${projectName}`}
                       >
-                        <Trash2 size={13} />
+                        <Edit2 size={13} />
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+
+                  {/* Project Numbers Grid */}
+                  <div className="p-3.5 sm:p-4 space-y-3">
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Contracted</span>
+                        <span className="text-sm font-bold text-slate-900 mt-0.5 block truncate">
+                          {formatCurrency(dFinal)}
+                        </span>
+                        {d.quotedAmount && d.quotedAmount !== dFinal && (
+                          <span className="text-[9px] text-slate-400 line-through block mt-0.5">
+                            Quoted: {formatCurrency(d.quotedAmount)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="bg-emerald-50/40 p-2 rounded-lg border border-emerald-100/60">
+                        <span className="text-[10px] uppercase font-bold text-emerald-700/70 block">Received</span>
+                        <span className="text-sm font-bold text-emerald-700 mt-0.5 block truncate">
+                          {formatCurrency(dReceived)}
+                        </span>
+                        <span className="text-[9px] text-emerald-600 font-medium block mt-0.5">
+                          {dPercent}% of project
+                        </span>
+                      </div>
+
+                      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Outstanding</span>
+                        <span className="text-sm font-bold text-slate-900 mt-0.5 block truncate">
+                          {formatCurrency(dRemaining)}
+                        </span>
+                        <span className="text-[9px] text-slate-400 block mt-0.5">
+                          {dRemaining === 0 ? "Fully cleared" : "Due"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-300 ${
+                          dPercent >= 100 ? "bg-emerald-500" : dPercent > 0 ? "bg-blue-600" : "bg-transparent"
+                        }`}
+                        style={{ width: `${dPercent}%` }}
+                      />
+                    </div>
+
+                    {/* Next Due Date Banner */}
+                    {d.nextPaymentDueDate && dRemaining > 0 && (
+                      <div className={`flex items-center justify-between p-2 rounded-lg border text-xs ${
+                        d.paymentStatus === "Overdue" 
+                          ? "bg-rose-50/70 border-rose-200 text-rose-800" 
+                          : "bg-blue-50/60 border-blue-100 text-blue-800"
+                      }`}>
+                        <div className="flex items-center gap-1.5">
+                          <Calendar size={13} />
+                          <span>
+                            Next Due: <strong>{d.nextPaymentDueDate}</strong>
+                            {d.nextPaymentDueAmount ? ` · ${formatCurrency(d.nextPaymentDueAmount)}` : ""}
+                          </span>
+                        </div>
+                        {d.paymentStatus === "Overdue" && (
+                          <span className="font-bold text-[9px] uppercase tracking-wider bg-rose-200/80 px-1.5 py-0.5 rounded text-rose-900">
+                            Overdue
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Payments Accordion Toggle */}
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(d.id)}
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                      >
+                        <span>Payment History ({d.payments.length})</span>
+                        {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaymentModalDeal(d);
+                          setEditingPayment(null);
+                        }}
+                        className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        <Plus size={12} /> Record
+                      </button>
+                    </div>
+
+                    {/* Payment History List (Expanded) */}
+                    {isExpanded && (
+                      <div className="pt-1">
+                        {d.payments.length === 0 ? (
+                          <p className="text-xs text-slate-400 py-2 italic text-center">No payment entries for this project yet.</p>
+                        ) : (
+                          <div className="divide-y divide-slate-100 border-t border-slate-100">
+                            {d.payments.map((p) => (
+                              <div key={p.id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-slate-900 text-sm">
+                                      {formatCurrency(p.amount)}
+                                    </span>
+                                    <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold">
+                                      {p.type === "CUSTOM" && p.customType ? p.customType : PAYMENT_TYPE_LABELS[p.type]}
+                                    </span>
+                                    <span className="text-slate-400 text-[11px] font-medium">
+                                      {PAYMENT_METHOD_LABELS[p.method]}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 mt-0.5 text-slate-500 text-[11px] flex-wrap">
+                                    <span>{p.paymentDate}</span>
+                                    {p.reference && (
+                                      <span className="font-mono text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.2 rounded border border-slate-200">
+                                        Ref: {p.reference}
+                                      </span>
+                                    )}
+                                    {p.note && <span className="italic text-slate-600 font-medium">“{p.note}”</span>}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPaymentModalDeal(d);
+                                      setEditingPayment(p);
+                                    }}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                                    aria-label="Edit payment"
+                                  >
+                                    <Edit2 size={13} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeletingPayment(p)}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                                    aria-label="Delete payment"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* MODAL: Deal Settings */}
-      {dealModalOpen && (
+      {/* MODAL: Create New Deal / Project */}
+      {createDealModalOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">
-                {deal ? "Edit Deal Details" : "Create Deal for Client"}
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Briefcase size={18} className="text-blue-600" />
+                Add New Project / Deal
               </h3>
               <button
                 type="button"
-                onClick={() => setDealModalOpen(false)}
+                onClick={() => setCreateDealModalOpen(false)}
                 className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveDeal} className="mt-4 space-y-3.5 text-xs">
+            <form onSubmit={handleCreateDeal} className="mt-4 space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Project Name *</label>
+                <input
+                  type="text"
+                  name="projectName"
+                  required
+                  placeholder="e.g., Website Redesign, Catalogue Design"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Final Deal Value (₹) *</label>
                 <input
@@ -458,7 +662,6 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                   step="0.01"
                   min="0"
                   required
-                  defaultValue={deal?.finalAmount ?? leadQuotedAmount ?? ""}
                   placeholder="30000"
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                 />
@@ -472,7 +675,6 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                     name="quotedAmount"
                     step="0.01"
                     min="0"
-                    defaultValue={deal?.quotedAmount ?? leadQuotedAmount ?? ""}
                     placeholder="35000"
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   />
@@ -482,23 +684,23 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                   <input
                     type="text"
                     name="currency"
-                    defaultValue={deal?.currency ?? "INR"}
+                    defaultValue="INR"
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Deal Status</label>
+                <label className="block font-semibold text-slate-700 mb-1">Status</label>
                 <select
                   name="status"
-                  defaultValue={deal?.status ?? "NEGOTIATING"}
+                  defaultValue="CONFIRMED"
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                 >
-                  <option value="NO_DEAL">No Deal</option>
-                  <option value="NEGOTIATING">Negotiating</option>
                   <option value="CONFIRMED">Confirmed</option>
+                  <option value="NEGOTIATING">Negotiating</option>
                   <option value="COMPLETED">Completed</option>
+                  <option value="NO_DEAL">No Deal</option>
                 </select>
               </div>
 
@@ -508,7 +710,6 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                   <input
                     type="date"
                     name="nextPaymentDueDate"
-                    defaultValue={deal?.nextPaymentDueDate ?? ""}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   />
                 </div>
@@ -519,17 +720,165 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                     name="nextPaymentDueAmount"
                     step="0.01"
                     min="0"
-                    defaultValue={deal?.nextPaymentDueAmount ?? ""}
+                    placeholder="10000"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Project Notes (optional)</label>
+                <textarea
+                  name="notes"
+                  rows={2}
+                  placeholder="Scope, deliverables, or milestone details..."
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none resize-none"
+                />
+              </div>
+
+              <div className="flex gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCreateDealModalOpen(false)}
+                  className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  aria-busy={saving}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+                >
+                  {saving && <span className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white shrink-0" aria-hidden="true" />}
+                  <span>{saving ? "Creating..." : "Create Deal"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Edit Existing Deal */}
+      {editingDeal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-base font-bold text-slate-900">
+                Edit Deal Details
+              </h3>
+              <button
+                type="button"
+                onClick={() => setEditingDeal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateDeal} className="mt-4 space-y-3.5 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Project Name</label>
+                <input
+                  type="text"
+                  name="projectName"
+                  defaultValue={editingDeal.projectName ?? ""}
+                  placeholder="e.g., Website Redesign"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Final Deal Value (₹) *</label>
+                <input
+                  type="number"
+                  name="finalAmount"
+                  step="0.01"
+                  min="0"
+                  required
+                  defaultValue={editingDeal.finalAmount}
+                  placeholder="30000"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Quoted Amount (₹)</label>
+                  <input
+                    type="number"
+                    name="quotedAmount"
+                    step="0.01"
+                    min="0"
+                    defaultValue={editingDeal.quotedAmount ?? ""}
+                    placeholder="35000"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Currency</label>
+                  <input
+                    type="text"
+                    name="currency"
+                    defaultValue={editingDeal.currency || "INR"}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Deal Status</label>
+                <select
+                  name="status"
+                  defaultValue={editingDeal.status}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="CONFIRMED">Confirmed</option>
+                  <option value="NEGOTIATING">Negotiating</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="NO_DEAL">No Deal</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Next Payment Due Date</label>
+                  <input
+                    type="date"
+                    name="nextPaymentDueDate"
+                    defaultValue={editingDeal.nextPaymentDueDate ?? ""}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Due Amount (₹)</label>
+                  <input
+                    type="number"
+                    name="nextPaymentDueAmount"
+                    step="0.01"
+                    min="0"
+                    defaultValue={editingDeal.nextPaymentDueAmount ?? ""}
                     placeholder="12000"
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   />
                 </div>
               </div>
 
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Project Notes (optional)</label>
+                <textarea
+                  name="notes"
+                  rows={2}
+                  defaultValue={editingDeal.notes ?? ""}
+                  placeholder="Add notes..."
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none resize-none"
+                />
+              </div>
+
               <div className="flex gap-2.5 pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setDealModalOpen(false)}
+                  onClick={() => setEditingDeal(null)}
                   className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
                 >
                   Cancel
@@ -550,18 +899,23 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
       )}
 
       {/* MODAL: Record / Edit Payment */}
-      {paymentModalOpen && (
+      {paymentModalDeal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-5 sm:p-6 shadow-2xl animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <CreditCard size={18} className="text-blue-600" />
-                {editingPayment ? "Edit Payment Entry" : "Record Client Payment"}
-              </h3>
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <CreditCard size={18} className="text-blue-600" />
+                  {editingPayment ? "Edit Payment Entry" : "Record Client Payment"}
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Project: <strong>{paymentModalDeal.projectName || "General Project"}</strong>
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => {
-                  setPaymentModalOpen(false);
+                  setPaymentModalDeal(null);
                   setEditingPayment(null);
                 }}
                 className="p-1 rounded-lg text-slate-400 hover:bg-slate-100 cursor-pointer"
@@ -579,7 +933,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                   step="0.01"
                   min="0.01"
                   required
-                  defaultValue={editingPayment?.amount ?? (remaining > 0 ? remaining : "")}
+                  defaultValue={editingPayment?.amount ?? (paymentModalDeal.remainingBalance > 0 ? paymentModalDeal.remainingBalance : "")}
                   placeholder="10000"
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                 />
@@ -618,7 +972,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                   <label className="block font-semibold text-slate-700 mb-1">Payment Type</label>
                   <select
                     name="type"
-                    defaultValue={editingPayment?.type ?? (totalReceived === 0 ? "ADVANCE" : remaining <= 0 ? "FINAL" : "PARTIAL")}
+                    defaultValue={editingPayment?.type ?? (paymentModalDeal.totalReceived === 0 ? "ADVANCE" : paymentModalDeal.remainingBalance <= 0 ? "FINAL" : "PARTIAL")}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-base sm:text-sm focus:border-blue-500 focus:outline-none"
                   >
                     <option value="ADVANCE">Advance</option>
@@ -657,7 +1011,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                   label="Payment Note"
                   labelClassName="block font-semibold text-slate-700 mb-1"
                   rows={2}
-                  placeholder="e.g. Advance received for homepage and admin panel"
+                  placeholder="e.g. Advance received for project"
                   textareaClassName="px-3 py-2 text-base sm:text-sm resize-none"
                   compact
                 />
@@ -667,7 +1021,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
                 <button
                   type="button"
                   onClick={() => {
-                    setPaymentModalOpen(false);
+                    setPaymentModalDeal(null);
                     setEditingPayment(null);
                   }}
                   className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
@@ -700,7 +1054,7 @@ export function LeadDealSection({ leadId, leadQuotedAmount }: LeadDealSectionPro
               {deletingPayment.paymentDate}?
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              Deal totals, received amounts, and remaining balance will be recalculated automatically.
+              Project totals, received amounts, and remaining balance will be recalculated automatically.
             </p>
             <div className="mt-5 flex gap-2.5">
               <button

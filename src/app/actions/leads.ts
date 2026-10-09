@@ -124,11 +124,14 @@ function leadData(formData: FormData) {
 
 const leadIncludeStandard = {
   aiInsight: true,
-  deal: {
+  deals: {
     select: {
+      id: true,
+      projectName: true,
       quotedAmount: true,
       finalAmount: true,
       currency: true,
+      status: true,
     },
   },
   followUps: {
@@ -211,6 +214,7 @@ function serializeLead(lead: {
   aiInsight?: import("@prisma/client").LeadAIInsight | null;
   activities?: { message: string; createdAt?: Date; type?: string }[];
   deal?: { quotedAmount: Prisma.Decimal | null; finalAmount: Prisma.Decimal; currency?: string } | null;
+  deals?: { quotedAmount: Prisma.Decimal | null; finalAmount: Prisma.Decimal; currency?: string }[];
 }): Lead {
   const latestNoteActivity = lead.activities?.find(a => a.type === ActivityType.NOTE_ADDED);
 
@@ -274,9 +278,20 @@ function serializeLead(lead: {
     })),
   });
 
-  const dealValue = lead.deal
-    ? (Number(lead.deal.finalAmount) > 0 ? Number(lead.deal.finalAmount) : (lead.deal.quotedAmount ? Number(lead.deal.quotedAmount) : null))
-    : (lead.quotedAmount ? Number(lead.quotedAmount) : null);
+  const deals = lead.deals || (lead.deal ? [lead.deal] : []);
+  let dealValue: number | null = null;
+  if (deals.length > 0) {
+    const totalFinal = deals.reduce((sum: number, d) => sum + (Number(d.finalAmount) || 0), 0);
+    if (totalFinal > 0) {
+      dealValue = totalFinal;
+    } else {
+      const totalQuoted = deals.reduce((sum: number, d) => sum + (Number(d.quotedAmount) || 0), 0);
+      dealValue = totalQuoted > 0 ? totalQuoted : null;
+    }
+  }
+  if (dealValue === null && lead.quotedAmount) {
+    dealValue = Number(lead.quotedAmount);
+  }
 
   const lastActivity = lead.activities?.[0] ? {
     message: lead.activities[0].message,
@@ -1045,7 +1060,7 @@ export async function deleteAllLeadsAction(): Promise<{
 
       // Ensure Deal snapshots before leads are purged
       const leadsWithDeals = await tx.lead.findMany({
-        where: { deal: { isNot: null } },
+        where: { deals: { some: {} } },
         select: { id: true, name: true, business: true },
       });
       for (const l of leadsWithDeals) {
@@ -1432,7 +1447,7 @@ export async function mergeLeadsAction(input: MergeLeadsInput): Promise<LeadActi
       const primaryLead = await tx.lead.findUnique({
         where: { id: primaryLeadId },
         include: {
-          deal: { include: { payments: true } },
+          deals: { include: { payments: true } },
           followUps: { where: { status: "PENDING" } },
         },
       });
@@ -1440,7 +1455,7 @@ export async function mergeLeadsAction(input: MergeLeadsInput): Promise<LeadActi
       const duplicateLead = await tx.lead.findUnique({
         where: { id: mergedLeadId },
         include: {
-          deal: { include: { payments: true } },
+          deals: { include: { payments: true } },
           followUps: true,
           activities: true,
         },
@@ -1488,31 +1503,16 @@ export async function mergeLeadsAction(input: MergeLeadsInput): Promise<LeadActi
         updateData.isPinned = true;
       }
 
-      // 2. Deal & Payments financial safety
+      // 2. Deal & Payments financial safety: All deals can now belong to the primary client
       let dealResolutionDetail = "No deals involved";
-      if (!primaryLead.deal && duplicateLead.deal) {
-        // Only duplicate lead has a Deal: safely reassign it to Primary Lead
-        await tx.deal.update({
-          where: { id: duplicateLead.deal.id },
+      if (duplicateLead.deals.length > 0) {
+        await tx.deal.updateMany({
+          where: { leadId: mergedLeadId },
           data: { leadId: primaryLeadId },
         });
-        dealResolutionDetail = `Reassigned Deal ${duplicateLead.deal.id} (${duplicateLead.deal.payments.length} payments) to Primary Lead`;
-      } else if (primaryLead.deal && duplicateLead.deal) {
-        // Both have deals: Primary keeps its deal; Duplicate's deal is safely detached as independent historical record
-        const snapshotNote = duplicateLead.deal.notes
-          ? `${duplicateLead.deal.notes}\n\n[Merged Lead Record] Formerly attached to merged lead "${duplicateLead.name}"`
-          : `[Merged Lead Record] Formerly attached to merged lead "${duplicateLead.name}"`;
-
-        await tx.deal.update({
-          where: { id: duplicateLead.deal.id },
-          data: {
-            leadId: null,
-            notes: snapshotNote,
-          },
-        });
-        dealResolutionDetail = `Primary Deal ${primaryLead.deal.id} retained. Duplicate Deal ${duplicateLead.deal.id} preserved as detached record.`;
-      } else if (primaryLead.deal && !duplicateLead.deal) {
-        dealResolutionDetail = `Primary Deal ${primaryLead.deal.id} unchanged`;
+        dealResolutionDetail = `Reassigned ${duplicateLead.deals.length} Deal(s) from merged lead to Primary Lead`;
+      } else if (primaryLead.deals.length > 0) {
+        dealResolutionDetail = `Primary Lead has ${primaryLead.deals.length} Deal(s)`;
       }
 
       // 3. Follow-up safety: Exactly one or zero active PENDING follow-ups after merge

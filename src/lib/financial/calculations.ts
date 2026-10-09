@@ -87,6 +87,14 @@ export function decimalToNumber(val: DecimalLike, decimalPlaces = 2): number {
   return Math.round(dec.toNumber() * factor) / factor;
 }
 
+export type DealSnapshotRecord = {
+  id?: string;
+  finalAmount?: DecimalLike;
+  quotedAmount?: DecimalLike;
+  status?: string | null;
+  createdAt?: Date | string | null;
+};
+
 export type LeadFinancialRecord = {
   id?: string;
   status: string;
@@ -94,10 +102,8 @@ export type LeadFinancialRecord = {
   deletedAt?: Date | string | null;
   mergedIntoLeadId?: string | null;
   quotedAmount?: DecimalLike;
-  deal?: {
-    finalAmount?: DecimalLike;
-    status?: string | null;
-  } | null;
+  deal?: DealSnapshotRecord | null;
+  deals?: DealSnapshotRecord[];
 };
 
 export type PaymentFinancialRecord = {
@@ -134,6 +140,9 @@ export function isValidActiveLead(lead: {
  * Total finalized contract value of WON CRM deals.
  * Only include WON leads that are active, non-waste, non-deleted, non-merged.
  * Strictly uses Deal.finalAmount (₹0 if lead has no deal or deal amount is zero).
+ * Project-specific lifecycle accounting:
+ * A deal contributes if its status is CONFIRMED or COMPLETED (or status unspecified).
+ * Deals still in NEGOTIATING or NO_DEAL do not contribute to Won Deal Value.
  */
 export function calculateWonDealValue(leads: LeadFinancialRecord[]): Prisma.Decimal {
   let total = new Prisma.Decimal(0);
@@ -141,10 +150,16 @@ export function calculateWonDealValue(leads: LeadFinancialRecord[]): Prisma.Deci
     if (lead.status !== "WON" || !isValidActiveLead(lead)) {
       continue;
     }
-    if (lead.deal && lead.deal.finalAmount !== undefined && lead.deal.finalAmount !== null) {
-      const dealAmount = toDecimal(lead.deal.finalAmount);
-      if (dealAmount.gt(0)) {
-        total = total.add(dealAmount);
+    const dealsList = lead.deals ?? (lead.deal ? [lead.deal] : []);
+    for (const d of dealsList) {
+      if (d && d.finalAmount !== undefined && d.finalAmount !== null) {
+        if (d.status === "NEGOTIATING" || d.status === "NO_DEAL") {
+          continue;
+        }
+        const dealAmount = toDecimal(d.finalAmount);
+        if (dealAmount.gt(0)) {
+          total = total.add(dealAmount);
+        }
       }
     }
   }
@@ -257,9 +272,7 @@ export function getOpportunityValue(
     mergedIntoLeadId?: string | null;
     quotedAmount?: DecimalLike;
   },
-  deal?: {
-    finalAmount?: DecimalLike;
-  } | null
+  deal?: DealSnapshotRecord | DealSnapshotRecord[] | null
 ): Prisma.Decimal {
   if (!isValidActiveLead(lead)) {
     return new Prisma.Decimal(0);
@@ -270,12 +283,21 @@ export function getOpportunityValue(
     return new Prisma.Decimal(0);
   }
 
+  const dealsList = Array.isArray(deal) ? deal : deal ? [deal] : [];
+
   // 1. Prefer associated Deal finalAmount if > 0
-  if (deal && deal.finalAmount !== undefined && deal.finalAmount !== null) {
-    const dealAmount = toDecimal(deal.finalAmount);
-    if (dealAmount.gt(0)) {
-      return dealAmount;
+  let dealsTotal = new Prisma.Decimal(0);
+  for (const d of dealsList) {
+    if (d && d.finalAmount !== undefined && d.finalAmount !== null) {
+      const dealAmount = toDecimal(d.finalAmount);
+      if (dealAmount.gt(0)) {
+        dealsTotal = dealsTotal.add(dealAmount);
+      }
     }
+  }
+
+  if (dealsTotal.gt(0)) {
+    return dealsTotal;
   }
 
   // 2. Fall back to Lead quotedAmount if > 0
@@ -296,7 +318,7 @@ export function getOpportunityValue(
 export function calculateOpenPipelineValue(leads: LeadFinancialRecord[]): Prisma.Decimal {
   let total = new Prisma.Decimal(0);
   for (const lead of leads) {
-    total = total.add(getOpportunityValue(lead, lead.deal));
+    total = total.add(getOpportunityValue(lead, lead.deals ?? lead.deal));
   }
   return total;
 }
