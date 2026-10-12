@@ -1,0 +1,154 @@
+{
+  "bytes": 387936,
+  "reports": [
+    "PDF Reports/01_CRM_Overview.pdf",
+    "PDF Reports/02_Sales_Report.pdf",
+    "PDF Reports/03_Finance_Report.pdf",
+    "PDF Reports/04_All_Leads.pdf",
+    "PDF Reports/05_Projects_and_Deals.pdf",
+    "PDF Reports/06_Followups_Report.pdf",
+    "PDF Reports/07_Activities_and_Notes.pdf",
+    "PDF Reports/08_Other_CRM_Records.pdf"
+  ],
+  "raw": [
+    "Raw Data/leads.csv",
+    "Raw Data/deals.csv",
+    "Raw Data/payments.csv",
+    "Raw Data/followups.csv",
+    "Raw Data/activities.csv",
+    "Raw Data/notes.csv",
+    "Raw Data/ai_insights.csv",
+    "Raw Data/loss_events.csv",
+    "Raw Data/sales_assets.csv",
+    "Raw Data/notifications.csv",
+    "Raw Data/daily_briefings.csv",
+    "Raw Data/users.csv",
+    "Raw Data/undo_actions.csv",
+    "Raw Data/mobile_alert_log.csv",
+    "Raw Data/complete_crm_export.json"
+  ],
+  "validationPassed": true,
+  "criticalFailures": [],
+  "warnings": [],
+  "categories": [
+    {
+      "key": "users",
+      "exported": 12,
+      "db": 12
+    },
+    {
+      "key": "leads",
+      "exported": 24,
+      "db": 24
+    },
+    {
+      "key": "deals",
+      "exported": 11,
+      "db": 11
+    },
+    {
+      "key": "payments",
+      "exported": 6,
+      "db": 6
+    },
+    {
+      "key": "followUps",
+      "exported": 2,
+      "db": 2
+    },
+    {
+      "key": "activities",
+      "exported": 18,
+      "db": 18
+    },
+    {
+      "key": "aiInsights",
+      "exported": 15,
+      "db": 15
+    },
+    {
+      "key": "lossEvents",
+      "exported": 0,
+      "db": 0
+    },
+    {
+      "key": "personalNotes",
+      "exported": 0,
+      "db": 0
+    },
+    {
+      "key": "packages",
+      "exported": 1,
+      "db": 1
+    },
+    {
+      "key": "samples",
+      "exported": 0,
+      "db": 0
+    },
+    {
+      "key": "templates",
+      "exported": 0,
+      "db": 0
+    },
+    {
+      "key": "notifications",
+      "exported": 0,
+      "db": 0
+    },
+    {
+      "key": "briefings",
+      "exported": 0,
+      "db": 0
+    },
+    {
+      "key": "undoActions",
+      "exported": 314,
+      "db": 314
+    },
+    {
+      "key": "mobileAlerts",
+      "exported": 0,
+      "db": 0
+    }
+  ],
+  "reconciliation": {
+    "contractedDealValue": 250000,
+    "moneyReceived": 82000,
+    "outstanding": 180000,
+    "collectionRate": 32.8,
+    "wonDealValue": 0,
+    "dealLevelReceivedSum": 82000,
+    "paymentLevelReceivedSum": 82000,
+    "dealLevelOutstandingSum": 180000,
+    "clientsWithMultipleDeals": 2,
+    "crmClientDeals": 1,
+    "otherClientDeals": 10
+  },
+  "snapshot": {
+    "mode": "transaction-repeatable-read",
+    "note": "All tables were read inside one PostgreSQL REPEATABLE READ transaction (single MVCC snapshot, SELECT-only).",
+    "batchSize": 500,
+    "batches": 9,
+    "crmSyncVersionAtStart": 529,
+    "crmSyncVersionAtEnd": 529,
+    "businessRecordsModifiedByExport": false
+  },
+  "progressTail": [
+    "80% reports Generating PDF reports — 8 of 8 (other records)",
+    "86% verifying Verifying record coverage, relationships and financial totals",
+    "91% packaging Packaging the backup archive",
+    "100% ready Backup ready — validating and preparing your download"
+  ],
+  "zipIntegrityValid": true,
+  "pages": {
+    "overview": 4,
+    "sales": 4,
+    "finance": 4,
+    "leads": 4,
+    "projects-deals": 4,
+    "followups": 2,
+    "activities-notes": 3,
+    "other-records": 19
+  }
+}

@@ -1,0 +1,10 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.0 [39m[90mC:/Users/Faizan/Downloads/Projects/CRM[39m
+
+ [32m✓[39m src/__tests__/backup-pdf-render.test.ts [2m([22m[2m5 tests[22m[2m)[22m[33m 324[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m5 passed[39m[22m[90m (5)[39m
+[2m   Start at [22m 02:06:20
+[2m   Duration [22m 618ms[2m (tests 62%, transform 18%, import 14%, setup 6%, worker 1%)[22m
+

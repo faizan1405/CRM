@@ -9,6 +9,7 @@ import { SalesAssetsWorkspace } from "@/features/sales-assets/components/sales-a
 import { GuideWorkspace } from "@/features/guide/guide-workspace";
 import { RecentlyDeletedWorkspace } from "@/features/recently-deleted/recently-deleted-workspace";
 import { ExportCenterWorkspace } from "@/features/export";
+import { CompleteBackupCard } from "./complete-backup-card";
 import { 
   markNotificationRead, 
   markNotificationResolved, 
@@ -208,7 +209,7 @@ export function SettingsWorkspace({
                 </div>
                 <h3 className="mt-3 text-sm font-bold text-slate-900">Export &amp; Reports</h3>
                 <p className="mt-1 text-xs text-slate-500 line-clamp-2">
-                  Download CSV / Excel backups of leads, deals, payments, and summary.
+                  One-click complete backup (PDF reports + raw data) plus CSV / Excel exports.
                 </p>
               </button>
             </div>
@@ -412,6 +413,7 @@ export function SettingsWorkspace({
       {/* TAB CONTENT: Export & Reports */}
       {currentTab === "export-reports" && (
         <div className="space-y-4">
+          <CompleteBackupCard />
           <ExportCenterWorkspace initialSummary={initialBusinessSummary} />
         </div>
       )}

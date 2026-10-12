@@ -1,0 +1,9 @@
+src/lib/backup/jobs.ts(100,31): error TS1005: ',' expected.
+src/lib/backup/jobs.ts(100,33): error TS1134: Variable declaration expected.
+src/lib/backup/jobs.ts(100,39): error TS1005: '>' expected.
+src/lib/backup/jobs.ts(100,63): error TS1005: ';' expected.
+src/lib/backup/jobs.ts(112,1): error TS1128: Declaration or statement expected.
+src/lib/backup/jobs.ts(112,3): error TS1005: 'try' expected.
+src/lib/backup/jobs.ts(115,1): error TS1128: Declaration or statement expected.
+src/lib/backup/jobs.ts(214,3): error TS1128: Declaration or statement expected.
+src/lib/backup/jobs.ts(216,1): error TS1128: Declaration or statement expected.
