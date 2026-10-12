@@ -59,7 +59,9 @@ describe("Groq Model Migration to openai/gpt-oss-120b", () => {
   describe("2. Minimal Completion & Model Parameter Verification", () => {
     it("passes openai/gpt-oss-120b model to groq chat completions create", async () => {
       const origApiKey = process.env.GROQ_API_KEY;
+      const origModel = process.env.GROQ_MODEL;
       process.env.GROQ_API_KEY = "gsk_test_mock_migration_key";
+      delete process.env.GROQ_MODEL;
 
       try {
         let passedModel: string | undefined;
@@ -91,6 +93,11 @@ describe("Groq Model Migration to openai/gpt-oss-120b", () => {
           process.env.GROQ_API_KEY = origApiKey;
         } else {
           delete process.env.GROQ_API_KEY;
+        }
+        if (origModel !== undefined) {
+          process.env.GROQ_MODEL = origModel;
+        } else {
+          delete process.env.GROQ_MODEL;
         }
       }
     });
