@@ -8,9 +8,13 @@ try {
   const regularMatch = envFile.match(/^TEST_DATABASE_URL=(.*)$/m);
 
   if (directMatch) {
-    process.env.TEST_DATABASE_URL = directMatch[1].trim();
+    const base = directMatch[1].trim();
+    const sep = base.includes("?") ? "&" : "?";
+    process.env.TEST_DATABASE_URL = `${base}${sep}connection_limit=5&connect_timeout=30&pool_timeout=30`;
   } else if (regularMatch) {
-    process.env.TEST_DATABASE_URL = regularMatch[1].trim() + "&pgbouncer=true";
+    const base = regularMatch[1].trim();
+    const sep = base.includes("?") ? "&" : "?";
+    process.env.TEST_DATABASE_URL = `${base}${sep}pgbouncer=true&connection_limit=5&connect_timeout=30&pool_timeout=30`;
   }
 
   // Ensure DATABASE_URL is different to pass the db.ts check

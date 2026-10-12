@@ -129,7 +129,7 @@ describe("Export Fetchers & Data Consistency (Zero Mutation & Backup Safety)", (
         finalAmount: 80000,
         currency: "INR",
         status: "CONFIRMED",
-        nextPaymentDueDate: new Date("2026-09-28T00:00:00Z"),
+        nextPaymentDueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
         nextPaymentDueAmount: 30000,
         createdAt: new Date("2026-09-05T10:00:00Z"),
         payments: [{ amount: 50000 }],

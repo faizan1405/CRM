@@ -457,12 +457,12 @@ describe("Duplicate Lead Detection + Safe Merge - Comprehensive Verification", (
     expect(reloadedDealA?.leadId).toBe(leadA.id);
     expect(Number(reloadedDealA?.finalAmount)).toBe(90000); // Deal amounts NOT summed
 
-    // Verify Deal B is safely detached (leadId = null) and NOT deleted
+    // Verify Deal B is safely reassigned to Primary Lead (multiple deals per client) and NOT deleted
     const reloadedDealB = await db.deal.findUnique({ where: { id: dealB.id } });
     expect(reloadedDealB).toBeDefined();
-    expect(reloadedDealB?.leadId).toBeNull();
+    expect(reloadedDealB?.leadId).toBe(leadA.id);
+    expect(Number(reloadedDealB?.finalAmount)).toBe(45000);
     expect(reloadedDealB?.clientNameSnapshot).toBe("Deal Duplicate");
-    expect(reloadedDealB?.notes).toContain("[Merged Lead Record]");
 
     // Verify payment on Deal B is completely intact
     const reloadedPaymentB = await db.payment.findUnique({ where: { id: paymentB.id } });
