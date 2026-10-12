@@ -4,17 +4,11 @@ import type { ColumnDefinition } from "./types";
  * Escapes a cell value for RFC 4180 compliant CSV.
  */
 function escapeCsvCell(value: unknown): string {
-  // Neutralize formula-starting characters to prevent spreadsheet formula injection.
-  // Excel/Sheets interpret cells starting with =, +, -, @, (, or # as formulas.
-  const formulaTriggerChars = /^[=\+\@\#\s]/;
-  const neutralized = formulaTriggerChars.test(str) ? " " + str : str;
-
-  // If string contains comma, quote, or newline, wrap in quotes and escape quotes
-  const workingStr = neutralized;
-  if (/[\",\r\n]/.test(workingStr)) {
-    return `"${workingStr.replace(/\"/g, '\"\"')}"`;
+  if (value === null || value === undefined) {
+    return "";
   }
-  return workingStr;
+  const str = String(value);
+  // If string contains comma, quote, or newline, wrap in quotes and escape quotes
   if (/[",\r\n]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;
   }
