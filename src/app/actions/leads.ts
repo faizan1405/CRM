@@ -160,6 +160,37 @@ const leadIncludeStandard = {
   },
 } as const;
 
+const leadIncludeForList = {
+  ...leadIncludeStandard,
+  aiInsight: {
+    select: {
+      score: true,
+      priority: true,
+      scoreReason: true,
+      recommendedAction: true,
+      recommendedActionType: true,
+      lastAnalyzedAt: true,
+      needsRefresh: true,
+    },
+  },
+  followUps: {
+    where: { status: "PENDING" as const },
+    orderBy: { scheduledAt: "asc" as const },
+    take: 1,
+    select: {
+      id: true,
+      leadId: true,
+      scheduledAt: true,
+      type: true,
+      status: true,
+      note: true,
+      completedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  },
+} as const;
+
 export async function getLeadQuickOptions(): Promise<Array<{ id: string; name: string }>> {
   try {
     await requireAuthenticatedUser();
@@ -211,7 +242,15 @@ function serializeLead(lead: {
   mergedAt?: Date | null;
   mergedInto?: { id: string; name: string; phone: string; status: PrismaLeadStatus } | null;
   followUps?: { id?: string; scheduledAt: Date; type?: string; status: string; note?: string | null; completedAt?: Date | null; createdAt?: Date; updatedAt?: Date }[];
-  aiInsight?: import("@prisma/client").LeadAIInsight | null;
+  aiInsight?: {
+    score: number;
+    priority: string;
+    scoreReason: string;
+    recommendedAction: string;
+    recommendedActionType?: string | null;
+    lastAnalyzedAt?: Date | string;
+    needsRefresh?: boolean;
+  } | import("@prisma/client").LeadAIInsight | null;
   activities?: { message: string; createdAt?: Date; type?: string }[];
   deal?: { quotedAmount: Prisma.Decimal | null; finalAmount: Prisma.Decimal; currency?: string } | null;
   deals?: { quotedAmount: Prisma.Decimal | null; finalAmount: Prisma.Decimal; currency?: string }[];
@@ -344,7 +383,7 @@ export async function getLeads(filter?: import('@/features/leads/types').LeadOpe
     }
     const leads = await db.lead.findMany({
       where: { ...where, deletedAt: null, mergedIntoLeadId: null },
-      include: leadIncludeStandard,
+      include: leadIncludeForList,
       orderBy: { createdAt: "desc" },
     });
     let serialized = leads.map(serializeLead);

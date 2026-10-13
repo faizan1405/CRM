@@ -7,12 +7,21 @@ import { LeadsSkeleton } from "@/components/skeletons";
 
 export const metadata: Metadata = { title: "Leads" };
 
-export default async function LeadsPage() {
+async function LeadsContent() {
   const result = await getLeads();
   if (!result.success && result.error.includes("signed in")) redirect("/login");
   return (
+    <LeadsWorkspace
+      initialLeads={result.success ? result.data : []}
+      initialError={result.success ? null : result.error}
+    />
+  );
+}
+
+export default function LeadsPage() {
+  return (
     <Suspense fallback={<LeadsSkeleton />}>
-      <LeadsWorkspace initialLeads={result.success ? result.data : []} initialError={result.success ? null : result.error} />
+      <LeadsContent />
     </Suspense>
   );
 }
