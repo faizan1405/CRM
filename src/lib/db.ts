@@ -7,13 +7,26 @@ const globalForPrisma = globalThis as unknown as {
 let db: PrismaClient;
 
 function getDatasourceUrl(): string | undefined {
-  const url = process.env.DATABASE_URL;
-  if (!url) return undefined;
-  if (url.includes("-pooler.") && !url.includes("pgbouncer=true")) {
-    const sep = url.includes("?") ? "&" : "?";
-    return `${url}${sep}pgbouncer=true&connection_limit=10&connect_timeout=15`;
+  const raw = process.env.DATABASE_URL;
+  if (!raw) return undefined;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.hostname.includes("-pooler.")) {
+      if (!parsed.searchParams.has("pgbouncer")) {
+        parsed.searchParams.set("pgbouncer", "true");
+      }
+      if (!parsed.searchParams.has("connection_limit")) {
+        parsed.searchParams.set("connection_limit", "10");
+      }
+      if (!parsed.searchParams.has("connect_timeout")) {
+        parsed.searchParams.set("connect_timeout", "15");
+      }
+      return parsed.toString();
+    }
+    return raw;
+  } catch {
+    return raw;
   }
-  return url;
 }
 
 if (process.env.NODE_ENV === "test") {

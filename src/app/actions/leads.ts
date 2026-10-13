@@ -55,20 +55,11 @@ async function requireAuthenticatedUser() {
   return session;
 }
 
-const validUserIdCache = new Map<string, { valid: boolean; expiresAt: number }>();
-
 async function resolveValidUserId(userId: unknown): Promise<string | null> {
   if (!userId || typeof userId !== "string") return null;
-  const now = Date.now();
-  const cached = validUserIdCache.get(userId);
-  if (cached && cached.expiresAt > now) {
-    return cached.valid ? userId : null;
-  }
   try {
     const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
-    const isValid = Boolean(user?.id);
-    validUserIdCache.set(userId, { valid: isValid, expiresAt: now + 60_000 });
-    return isValid ? userId : null;
+    return user ? user.id : null;
   } catch {
     return null;
   }

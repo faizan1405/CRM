@@ -86,23 +86,37 @@ async function runBenchmark(name: string, fn: () => Promise<any>, runs = 5): Pro
 
 describe("Phase 1: Real Performance Baseline Measurements", () => {
   let sampleLeadId: string = "";
-  let sampleLeadStatus: string = "";
 
   beforeAll(async () => {
+    // Production write guard: Never run mutation benchmarks against production!
+    if (process.env.NODE_ENV === "production" && !process.env.ALLOW_TEST_MUTATIONS) {
+      throw new Error("Mutation benchmarks are strictly disabled in production environment.");
+    }
+
     const { db } = await import("@/lib/db");
-    const user = await db.user.upsert({
+    await db.user.upsert({
       where: { id: mockUser.id },
       create: { ...mockUser, passwordHash: "dummy" },
       update: {},
     });
-    const lead = await db.lead.findFirst({
-      where: { deletedAt: null, mergedIntoLeadId: null, isWaste: false },
-      select: { id: true, status: true },
+
+    const FIXTURE_LEAD_ID = "11111111-2222-4333-8444-555555555555";
+    // Create a controlled fixture in the isolated test database
+    const fixture = await db.lead.upsert({
+      where: { id: FIXTURE_LEAD_ID },
+      create: {
+        id: FIXTURE_LEAD_ID,
+        name: "Benchmark Controlled Fixture",
+        phone: "+919999123456",
+        email: "perf-bench@scale-flow.test",
+        business: "Benchmark Corp",
+        status: "NEW",
+      },
+      update: {
+        status: "NEW",
+      },
     });
-    if (lead) {
-      sampleLeadId = lead.id;
-      sampleLeadStatus = lead.status;
-    }
+    sampleLeadId = fixture.id;
   });
 
   it("1. Measures Dashboard Initial Load (getDashboardData)", async () => {
@@ -151,22 +165,27 @@ describe("Phase 1: Real Performance Baseline Measurements", () => {
   });
 
   it("7. Measures Opening Lead Detail Panel (getLead)", async () => {
-    if (!sampleLeadId) return;
+    expect(sampleLeadId).toBeTruthy();
+    let detailRes: any;
     const res = await runBenchmark("Lead Detail Panel", async () => {
-      return await getLead(sampleLeadId);
+      detailRes = await getLead(sampleLeadId);
+      return detailRes;
     }, 5);
+    expect(detailRes.success).toBe(true);
     expect(res.rawRuns.length).toBe(5);
   });
 
-  it("8. Measures Lead Status Update (changeLeadStatus)", async () => {
-    if (!sampleLeadId) return;
-    const target = sampleLeadStatus === "CONTACTED" ? "Qualified" : "Contacted";
-    const revert = sampleLeadStatus === "CONTACTED" ? "Contacted" : "Qualified";
+  it("8. Measures Lead Status Update (single changeLeadStatus mutation)", async () => {
+    expect(sampleLeadId).toBeTruthy();
+    let toggle = false;
+    let mutationRes: any;
     const res = await runBenchmark("Lead Status Update", async () => {
-      const r = await changeLeadStatus(sampleLeadId, target as any);
-      await changeLeadStatus(sampleLeadId, revert as any);
-      return r;
+      toggle = !toggle;
+      const target = toggle ? "Contacted" : "Qualified";
+      mutationRes = await changeLeadStatus(sampleLeadId, target as any);
+      return mutationRes;
     }, 3);
+    expect(mutationRes.success).toBe(true);
     expect(res.rawRuns.length).toBe(3);
   });
 
@@ -177,7 +196,20 @@ describe("Phase 1: Real Performance Baseline Measurements", () => {
     expect(res.rawRuns.length).toBe(5);
   });
 
-  afterAll(() => {
+  afterAll(async () => {
+    // Reliably clean up the controlled benchmark fixture
+    try {
+      const { db } = await import("@/lib/db");
+      if (sampleLeadId) {
+        await db.leadActivity.deleteMany({ where: { leadId: sampleLeadId } });
+        await db.leadAIInsight.deleteMany({ where: { leadId: sampleLeadId } });
+        await db.undoAction.deleteMany({ where: { leadId: sampleLeadId } });
+        await db.lead.deleteMany({ where: { id: sampleLeadId } });
+      }
+      await db.user.deleteMany({ where: { id: mockUser.id } });
+    } catch {
+      // Safe cleanup
+    }
     console.log("\n================================================================================");
     console.log("PHASE 1 BASELINE MEASUREMENTS TABLE");
     console.log("================================================================================");

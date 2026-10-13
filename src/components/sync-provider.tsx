@@ -252,6 +252,14 @@ export function SyncProvider({
     [checkHasDirtyDrafts, pathname, pendingUpdates, router]
   );
 
+  const tabIdRef = useRef<string>("");
+  useEffect(() => {
+    tabIdRef.current =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+  }, []);
+
   const mutationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const applyPendingUpdates = useCallback(async () => {
@@ -259,44 +267,70 @@ export function SyncProvider({
   }, [triggerSync]);
 
   const notifyDataMutated = useCallback(() => {
-    // Local mutation happened: update local version and notify peer tabs without full router refresh on current tab
     if (mutationTimeoutRef.current) {
       clearTimeout(mutationTimeoutRef.current);
     }
     mutationTimeoutRef.current = setTimeout(async () => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setSyncState("offline");
+        return;
+      }
+
       try {
         const res = await fetch("/api/crm/sync-state", {
           method: "GET",
           headers: { Accept: "application/json" },
           cache: "no-store",
         });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success && data.version) {
-            const newVersion = String(data.version);
-            serverVersionRef.current = newVersion;
-            setServerVersion(newVersion);
-            setLastSyncTime(new Date());
-            setPendingUpdates(false);
-            setSyncState("synced");
+        if (!res.ok) {
+          throw new Error("Sync state HTTP " + res.status);
+        }
+        const data = await res.json();
+        if (!data.success || data.version === undefined) {
+          throw new Error(data.error || "Failed to get sync state");
+        }
 
-            // Broadcast to other tabs so they refresh
-            try {
-              broadcastChannelRef.current?.postMessage({
-                type: "MUTATION",
-                serverVersion: newVersion,
-                serverTime: new Date().toISOString(),
-              });
-            } catch {
-              // ignore
-            }
-          }
+        const newVersion = String(data.version);
+        const syncTime = new Date();
+
+        const isDirty = checkHasDirtyDrafts();
+        if (isDirty) {
+          setPendingUpdates(true);
+          setSyncState("updates_available");
+        } else {
+          await new Promise<void>((resolve) => {
+            startTransition(() => {
+              router.refresh();
+              resolve();
+            });
+          });
+          serverVersionRef.current = newVersion;
+          setServerVersion(newVersion);
+          setLastSyncTime(syncTime);
+          setPendingUpdates(false);
+          setSyncState("synced");
+        }
+
+        // Broadcast to other tabs so they refresh
+        try {
+          broadcastChannelRef.current?.postMessage({
+            type: "MUTATION",
+            senderTabId: tabIdRef.current,
+            serverVersion: newVersion,
+            serverTime: syncTime.toISOString(),
+          });
+        } catch {
+          // ignore broadcast failure
         }
       } catch {
-        // Safe: non-blocking
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          setSyncState("offline");
+        } else {
+          setSyncState("error");
+        }
       }
     }, 150);
-  }, []);
+  }, [checkHasDirtyDrafts, router]);
 
   // Initial sync & BroadcastChannel setup
   useEffect(() => {
@@ -312,6 +346,11 @@ export function SyncProvider({
           const data = event.data;
           if (!data || typeof data !== "object") return;
 
+          // Ignore self-broadcasted messages from same tab
+          if (data.senderTabId && data.senderTabId === tabIdRef.current) {
+            return;
+          }
+
           if (data.type === "SYNC_SUCCESS" || data.type === "MUTATION") {
             const isDirty = checkHasDirtyDrafts();
             if (isDirty) {
@@ -321,7 +360,11 @@ export function SyncProvider({
               startTransition(() => {
                 router.refresh();
               });
-              if (data.serverVersion) setServerVersion(data.serverVersion);
+              if (data.serverVersion) {
+                const newVer = String(data.serverVersion);
+                serverVersionRef.current = newVer;
+                setServerVersion(newVer);
+              }
               if (data.serverTime) setLastSyncTime(new Date(data.serverTime));
               setPendingUpdates(false);
               setSyncState("synced");

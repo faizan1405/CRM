@@ -148,7 +148,6 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
           lead: { select: { id: true, name: true, phone: true, business: true, status: true } },
         },
         orderBy: { scheduledAt: "asc" },
-        take: 10,
       }),
       db.followUp.findMany({
         where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } },
@@ -164,7 +163,7 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
       }),
       db.leadActivity.findMany({
         where: { lead: { deletedAt: null, mergedIntoLeadId: null } },
-        take: 5,
+        take: 8,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -201,7 +200,7 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
           aiInsight: true,
         },
         orderBy: { updatedAt: "desc" },
-        take: 8,
+        take: 25,
       }),
       getStaleLeadsCount()
     ]);
