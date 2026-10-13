@@ -259,14 +259,44 @@ export function SyncProvider({
   }, [triggerSync]);
 
   const notifyDataMutated = useCallback(() => {
-    // Local mutation happened: debounce sync by 100ms so rapid updates coalesce
+    // Local mutation happened: update local version and notify peer tabs without full router refresh on current tab
     if (mutationTimeoutRef.current) {
       clearTimeout(mutationTimeoutRef.current);
     }
-    mutationTimeoutRef.current = setTimeout(() => {
-      triggerSync({ forceRefresh: true });
-    }, 100);
-  }, [triggerSync]);
+    mutationTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/crm/sync-state", {
+          method: "GET",
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.version) {
+            const newVersion = String(data.version);
+            serverVersionRef.current = newVersion;
+            setServerVersion(newVersion);
+            setLastSyncTime(new Date());
+            setPendingUpdates(false);
+            setSyncState("synced");
+
+            // Broadcast to other tabs so they refresh
+            try {
+              broadcastChannelRef.current?.postMessage({
+                type: "MUTATION",
+                serverVersion: newVersion,
+                serverTime: new Date().toISOString(),
+              });
+            } catch {
+              // ignore
+            }
+          }
+        }
+      } catch {
+        // Safe: non-blocking
+      }
+    }, 150);
+  }, []);
 
   // Initial sync & BroadcastChannel setup
   useEffect(() => {

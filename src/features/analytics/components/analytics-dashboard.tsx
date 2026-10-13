@@ -1,15 +1,40 @@
+import dynamic from "next/dynamic";
 import { Info } from "lucide-react";
 import type { AnalyticsData, AnalyticsDateRange } from "../types";
 import { AnalyticsDateFilter } from "./analytics-date-filter";
 import { AnalyticsKpis } from "./analytics-kpis";
 import { FollowUpPerformance } from "./follow-up-performance";
-import { LeadTrend } from "./lead-trend";
 import { PipelineHealth } from "./pipeline-health";
-import { RevenueTrend } from "./revenue-trend";
 import { SalesFunnel } from "./sales-funnel";
-import { WinLossCard } from "./win-loss-card";
 import { LostReasonsAnalytics } from "@/features/lost-reasons/lost-reasons-analytics";
 import type { LostReasonsAnalyticsData } from "@/features/lost-reasons/types";
+
+const LeadTrend = dynamic(
+  () => import("./lead-trend").then((m) => m.LeadTrend),
+  {
+    loading: () => (
+      <div className="h-64 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs animate-pulse" />
+    ),
+  }
+);
+
+const RevenueTrend = dynamic(
+  () => import("./revenue-trend").then((m) => m.RevenueTrend),
+  {
+    loading: () => (
+      <div className="h-64 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs animate-pulse" />
+    ),
+  }
+);
+
+const WinLossCard = dynamic(
+  () => import("./win-loss-card").then((m) => m.WinLossCard),
+  {
+    loading: () => (
+      <div className="h-64 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs animate-pulse" />
+    ),
+  }
+);
 
 export function AnalyticsDashboard({
   data,

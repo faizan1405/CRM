@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { recordUndoAction } from "@/features/undo/services/undo-engine";
+import { touchCrmSync } from "@/lib/crm-sync";
 import {
   statusFromDatabase,
   statusToDatabase,
@@ -54,11 +55,20 @@ async function requireAuthenticatedUser() {
   return session;
 }
 
+const validUserIdCache = new Map<string, { valid: boolean; expiresAt: number }>();
+
 async function resolveValidUserId(userId: unknown): Promise<string | null> {
   if (!userId || typeof userId !== "string") return null;
+  const now = Date.now();
+  const cached = validUserIdCache.get(userId);
+  if (cached && cached.expiresAt > now) {
+    return cached.valid ? userId : null;
+  }
   try {
     const user = await db.user.findUnique({ where: { id: userId }, select: { id: true } });
-    return user?.id ?? null;
+    const isValid = Boolean(user?.id);
+    validUserIdCache.set(userId, { valid: isValid, expiresAt: now + 60_000 });
+    return isValid ? userId : null;
   } catch {
     return null;
   }
@@ -161,7 +171,6 @@ const leadIncludeStandard = {
 } as const;
 
 const leadIncludeForList = {
-  ...leadIncludeStandard,
   aiInsight: {
     select: {
       score: true,
@@ -171,6 +180,16 @@ const leadIncludeForList = {
       recommendedActionType: true,
       lastAnalyzedAt: true,
       needsRefresh: true,
+    },
+  },
+  deals: {
+    select: {
+      id: true,
+      projectName: true,
+      quotedAmount: true,
+      finalAmount: true,
+      currency: true,
+      status: true,
     },
   },
   followUps: {
@@ -188,6 +207,11 @@ const leadIncludeForList = {
       createdAt: true,
       updatedAt: true,
     },
+  },
+  activities: {
+    orderBy: { createdAt: "desc" as const },
+    take: 1,
+    select: { id: true, type: true, message: true, createdAt: true },
   },
 } as const;
 
@@ -399,11 +423,11 @@ export async function getLeads(filter?: import('@/features/leads/types').LeadOpe
 export async function getLead(id: string): Promise<LeadActionResult<Lead>> {
   try {
     await requireAuthenticatedUser();
-    const lead = await db.lead.findFirst({
-      where: { id: readLeadId(id), deletedAt: null },
+    const lead = await db.lead.findUnique({
+      where: { id: readLeadId(id) },
       include: leadIncludeStandard,
     });
-    if (!lead) return { success: false, error: "Lead not found." };
+    if (!lead || lead.deletedAt) return { success: false, error: "Lead not found." };
     return { success: true, data: serializeLead(lead) };
   } catch (error) {
     return { success: false, error: cleanError(error) };
@@ -667,40 +691,48 @@ export async function updateLead(id: string, formData: FormData): Promise<LeadAc
       if (oldLead.business !== updatedLead.business) changed.push("business");
       if (oldLead.status !== updatedLead.status) changed.push("status");
       
+      const postOps: [Promise<any>, Promise<any>?, Promise<any>?, Promise<any>?] = [
+        recordUndoAction(tx, {
+          actionType: "LEAD_UPDATE",
+          entityType: "LEAD",
+          entityId: leadId,
+          leadId,
+          beforeSnapshot: oldLead,
+          afterSnapshot: updatedLead,
+          expectedUpdatedAt: updatedLead.updatedAt,
+          description: `Lead details updated for ${updatedLead.name}`,
+          createdByUserId: validUserId,
+        }),
+      ];
+
       if (changed.length > 0) {
         if (oldLead.name !== updatedLead.name || oldLead.business !== updatedLead.business) {
-          await tx.deal.updateMany({
-            where: { leadId },
-            data: {
-              clientNameSnapshot: updatedLead.name,
-              companyNameSnapshot: updatedLead.business,
-            },
-          });
+          postOps.push(
+            tx.deal.updateMany({
+              where: { leadId },
+              data: {
+                clientNameSnapshot: updatedLead.name,
+                companyNameSnapshot: updatedLead.business,
+              },
+            })
+          );
         }
 
-        await tx.leadActivity.create({
-          data: {
-            leadId,
-            type: ActivityType.LEAD_UPDATED,
-            message: `Lead details updated: changed ${changed.join(", ")}`,
-            metadata: { changes: changed },
-            createdByUserId: validUserId,
-          },
-        });
-        await markLeadAIInsightNeedsRefresh(leadId, tx);
+        postOps.push(
+          tx.leadActivity.create({
+            data: {
+              leadId,
+              type: ActivityType.LEAD_UPDATED,
+              message: `Lead details updated: changed ${changed.join(", ")}`,
+              metadata: { changes: changed },
+              createdByUserId: validUserId,
+            },
+          }),
+          markLeadAIInsightNeedsRefresh(leadId, tx)
+        );
       }
 
-      const undoRecord = await recordUndoAction(tx, {
-        actionType: "LEAD_UPDATE",
-        entityType: "LEAD",
-        entityId: leadId,
-        leadId,
-        beforeSnapshot: oldLead,
-        afterSnapshot: updatedLead,
-        expectedUpdatedAt: updatedLead.updatedAt,
-        description: `Lead details updated for ${updatedLead.name}`,
-        createdByUserId: validUserId,
-      });
+      const [undoRecord] = await Promise.all(postOps);
 
       return { lead: updatedLead, undoId: undoRecord.id };
     }, {
@@ -794,37 +826,44 @@ export async function changeLeadStatus(
       const updatedLead = await tx.lead.update({
         where: { id: leadId },
         data: updatePayload,
-        include: leadIncludeStandard,
+        include: leadIncludeForList,
       });
       
+      const postOps: [Promise<any>, Promise<any>, Promise<any>?, Promise<any>?] = [
+        touchCrmSync(tx),
+        recordUndoAction(tx, {
+          actionType: "LEAD_STATUS_CHANGE",
+          entityType: "LEAD",
+          entityId: leadId,
+          leadId,
+          beforeSnapshot: { status: oldLead.status, quickStatus: oldLead.quickStatus },
+          afterSnapshot: { status: databaseStatus, quickStatus: updatedLead.quickStatus },
+          expectedUpdatedAt: updatedLead.updatedAt,
+          description: `Status changed to ${status}`,
+          createdByUserId: validUserId,
+        }),
+      ];
+
       if (oldLead.status !== databaseStatus) {
-        await tx.leadActivity.create({
-          data: {
-            leadId,
-            type: ActivityType.STATUS_CHANGED,
-            message: `Status changed from ${statusFromDatabase[oldLead.status as DatabaseLeadStatus]} to ${status}`,
-            metadata: {
-              oldStatus: oldLead.status,
-              newStatus: databaseStatus,
-              ...(lossReasonInput ? { lossReason: lossReasonInput, lossNote: lossNoteInput } : {}),
+        postOps.push(
+          tx.leadActivity.create({
+            data: {
+              leadId,
+              type: ActivityType.STATUS_CHANGED,
+              message: `Status changed from ${statusFromDatabase[oldLead.status as DatabaseLeadStatus]} to ${status}`,
+              metadata: {
+                oldStatus: oldLead.status,
+                newStatus: databaseStatus,
+                ...(lossReasonInput ? { lossReason: lossReasonInput, lossNote: lossNoteInput } : {}),
+              },
+              createdByUserId: validUserId,
             },
-            createdByUserId: validUserId,
-          },
-        });
-        await markLeadAIInsightNeedsRefresh(leadId, tx);
+          }),
+          markLeadAIInsightNeedsRefresh(leadId, tx)
+        );
       }
 
-      const undoRecord = await recordUndoAction(tx, {
-        actionType: "LEAD_STATUS_CHANGE",
-        entityType: "LEAD",
-        entityId: leadId,
-        leadId,
-        beforeSnapshot: { status: oldLead.status, quickStatus: oldLead.quickStatus },
-        afterSnapshot: { status: databaseStatus, quickStatus: updatedLead.quickStatus },
-        expectedUpdatedAt: updatedLead.updatedAt,
-        description: `Status changed to ${status}`,
-        createdByUserId: validUserId,
-      });
+      const [, undoRecord] = await Promise.all(postOps);
 
       return { lead: updatedLead, undoId: undoRecord.id };
     }, {

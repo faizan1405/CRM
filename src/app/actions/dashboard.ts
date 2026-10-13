@@ -99,16 +99,15 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
     const startOfTodayIST = new Date(Date.UTC(y, m - 1, d, -5, -30, 0, 0));
     const endOfTodayIST = new Date(Date.UTC(y, m - 1, d, 18, 29, 59, 999));
 
-    // Parallel aggregate queries
+    // Parallel aggregate queries (consolidated to eliminate redundant round-trips)
     const [
       pinnedLeadsCount,
       statusCounts,
       activeAndWonLeads,
       overdueFollowUpsCount,
+      todayFollowUpsCount,
       todayFollowUpsList,
       overdueFollowUpsList,
-      proposalsPendingList,
-      newLeadsList,
       recentActivities,
       activeLeadsWithAI,
       staleLeadsCount
@@ -124,15 +123,21 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
         },
         select: {
           id: true,
+          name: true,
+          phone: true,
+          business: true,
           status: true,
           quotedAmount: true,
           isWaste: true,
           deletedAt: true,
           mergedIntoLeadId: true,
+          createdAt: true,
+          updatedAt: true,
           deals: { select: { finalAmount: true, status: true } },
         },
       }),
       db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } } }),
+      db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } } }),
       db.followUp.findMany({
         where: { status: FollowUpStatus.PENDING, scheduledAt: { gte: startOfTodayIST, lte: endOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } },
         select: {
@@ -142,7 +147,8 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
           type: true,
           lead: { select: { id: true, name: true, phone: true, business: true, status: true } },
         },
-        orderBy: { scheduledAt: "asc" }
+        orderBy: { scheduledAt: "asc" },
+        take: 10,
       }),
       db.followUp.findMany({
         where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } },
@@ -156,21 +162,9 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
         orderBy: { scheduledAt: "asc" },
         take: 5
       }),
-      db.lead.findMany({
-        where: { isWaste: false, deletedAt: null, mergedIntoLeadId: null, status: LeadStatus.PROPOSAL_SENT },
-        select: { id: true, name: true, phone: true, business: true, status: true },
-        orderBy: { updatedAt: "desc" },
-        take: 5
-      }),
-      db.lead.findMany({
-        where: { isWaste: false, deletedAt: null, mergedIntoLeadId: null, status: LeadStatus.NEW },
-        select: { id: true, name: true, phone: true, business: true, status: true },
-        orderBy: { createdAt: "desc" },
-        take: 5
-      }),
       db.leadActivity.findMany({
         where: { lead: { deletedAt: null, mergedIntoLeadId: null } },
-        take: 8,
+        take: 5,
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -207,14 +201,24 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
           aiInsight: true,
         },
         orderBy: { updatedAt: "desc" },
-        take: 25,
+        take: 8,
       }),
       getStaleLeadsCount()
     ]);
 
+    // Derive proposal and new lead priorities directly from in-memory activeAndWonLeads (eliminating 2 DB round-trips)
+    const proposalsPendingList = activeAndWonLeads
+      .filter((l) => l.status === LeadStatus.PROPOSAL_SENT)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+      .slice(0, 5);
+
+    const newLeadsList = activeAndWonLeads
+      .filter((l) => l.status === LeadStatus.NEW)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 5);
+
     const statusMap = Object.fromEntries(statusCounts.map(s => [s.status, s._count]));
     const totalLeads = statusCounts.reduce((sum, s) => sum + s._count, 0);
-    const todayFollowUpsCount = todayFollowUpsList.length;
     const wonLeadsList = activeAndWonLeads.filter(l => l.status === LeadStatus.WON);
     const activeOpportunitiesList = activeAndWonLeads.filter(l => l.status !== LeadStatus.WON);
     const getCount = (status: LeadStatus) => statusMap[status] || 0;

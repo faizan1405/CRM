@@ -583,12 +583,9 @@ export async function calculateSalesAnalytics(
 
     // ─── 9. Data Coverage ─────────────────────────────────────────────────────
     const activityStart = earliestActivity?.createdAt ?? null;
-    let legacyLeadCount = 0;
-    if (activityStart) {
-      legacyLeadCount = await db.lead.count({
-        where: { isWaste: false, deletedAt: null, createdAt: { lt: activityStart } },
-      });
-    }
+    const legacyLeadCount = activityStart
+      ? allActiveLeads.filter((lead) => lead.createdAt < activityStart).length
+      : 0;
 
     const dataCoverage: DataCoverage = {
       analysisStart: start ? start.toISOString() : null,

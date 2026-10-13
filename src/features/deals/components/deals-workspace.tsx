@@ -33,7 +33,13 @@ import {
 } from "@/app/actions/deals";
 import { useLeadNavigation } from "@/features/leads/lead-navigation-provider";
 import { useToast } from "@/components/toast-provider";
-import { PaymentAnalytics } from "./payment-analytics";
+import dynamic from "next/dynamic";
+const PaymentAnalytics = dynamic(
+  () => import("./payment-analytics").then((mod) => mod.PaymentAnalytics),
+  {
+    loading: () => <div className="h-44 animate-pulse rounded-2xl border border-slate-100 bg-slate-50/50" />
+  }
+);
 import { DealDetailPanel } from "./deal-detail-panel";
 import { AiNoteEditor } from "@/components/ui/ai-note-editor";
 import { cleanLeadName } from "@/features/leads/formatters";
@@ -1002,11 +1008,8 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
                             </span>
                           )}
                         </div>
-                        {isCrm && deal.lead?.business && (
-                          <p className="text-xs text-slate-500 mt-0.5 truncate">{deal.lead.business}</p>
-                        )}
-                        {isOther && deal.companyNameSnapshot && (
-                          <p className="text-xs text-slate-500 mt-0.5 truncate">{deal.companyNameSnapshot}</p>
+                        {(deal.lead?.business || deal.companyNameSnapshot) && (
+                          <p className="text-xs text-slate-500 mt-0.5 truncate">{deal.lead?.business || deal.companyNameSnapshot}</p>
                         )}
                         {deal.projectName && (
                           <p className="text-xs text-slate-400 mt-0.5 truncate">{deal.projectName}</p>
