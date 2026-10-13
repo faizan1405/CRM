@@ -25,7 +25,7 @@ export interface SyncContextValue {
   applyPendingUpdates: () => Promise<void>;
   registerDraft: (id: string, isDirty: boolean) => void;
   unregisterDraft: (id: string) => void;
-  notifyDataMutated: () => void;
+  notifyDataMutated: (options?: { immediate?: boolean }) => Promise<void> | void;
 }
 
 export const SyncContext = createContext<SyncContextValue | null>(null);
@@ -35,12 +35,37 @@ export const CrmSyncProvider = SyncProvider;
 const SYNC_CHANNEL_NAME = "scale_flow_crm_sync_channel";
 const POLLING_INTERVAL_MS = 10_000;
 
+export interface SyncRouter {
+  refresh: () => void | Promise<void>;
+}
+
 export interface SyncProviderProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   initialSyncState?: SyncState;
   initialLastSyncTime?: Date | null;
   initialServerVersion?: string | null;
   autoSync?: boolean;
+  router?: SyncRouter;
+}
+
+export function isStrictlyNewerVersion(
+  incoming: string | number | null | undefined,
+  current: string | number | null | undefined
+): boolean {
+  if (incoming === null || incoming === undefined) return false;
+  if (current === null || current === undefined) return true;
+
+  const incomingClean = String(incoming).replace(/^v/i, "").trim();
+  const currentClean = String(current).replace(/^v/i, "").trim();
+
+  const incNum = Number(incomingClean);
+  const curNum = Number(currentClean);
+
+  if (!Number.isNaN(incNum) && !Number.isNaN(curNum)) {
+    return incNum > curNum;
+  }
+
+  return incomingClean !== currentClean;
 }
 
 function isUserActivelyTyping(): boolean {
@@ -48,7 +73,7 @@ function isUserActivelyTyping(): boolean {
   const active = document.activeElement;
   if (!active) return false;
 
-  const tagName = active.tagName.toLowerCase();
+  const tagName = active.tagName?.toLowerCase();
   if (tagName === "textarea") {
     const val = (active as HTMLTextAreaElement).value;
     return Boolean(val && val.length > 0);
@@ -56,7 +81,7 @@ function isUserActivelyTyping(): boolean {
 
   if (tagName === "input") {
     const inputEl = active as HTMLInputElement;
-    const type = inputEl.type.toLowerCase();
+    const type = inputEl.type?.toLowerCase();
     if (["text", "search", "tel", "email", "url", "number", "password"].includes(type)) {
       const val = inputEl.value;
       return Boolean(val && val.length > 0);
@@ -72,9 +97,23 @@ export function SyncProvider({
   initialLastSyncTime = null,
   initialServerVersion = null,
   autoSync = true,
+  router: customRouter,
 }: SyncProviderProps) {
-  const router = useRouter();
-  const pathname = usePathname();
+  let defaultRouter: SyncRouter | null = null;
+  try {
+    defaultRouter = useRouter();
+  } catch {
+    defaultRouter = { refresh: () => {} };
+  }
+  const router = customRouter || defaultRouter;
+
+  let pathname = "/";
+  try {
+    pathname = usePathname() || "/";
+  } catch {
+    pathname = "/";
+  }
+
   const [, startTransition] = useTransition();
 
   const [syncState, setSyncState] = useState<SyncState>(initialSyncState);
@@ -86,7 +125,7 @@ export function SyncProvider({
   const draftsRef = useRef<Map<string, boolean>>(new Map());
   const [hasUnsavedDrafts, setHasUnsavedDrafts] = useState<boolean>(false);
 
-  const serverVersionRef = useRef<string | null>(null);
+  const serverVersionRef = useRef<string | null>(initialServerVersion);
   serverVersionRef.current = serverVersion;
 
   const isSyncingRef = useRef<boolean>(false);
@@ -121,6 +160,41 @@ export function SyncProvider({
     return false;
   }, []);
 
+  // Executes router.refresh inside startTransition and only commits fresh server state
+  // once the refresh has actually completed.
+  const executeRefresh = useCallback(
+    async (targetVersion: string, syncTime: Date): Promise<boolean> => {
+      setSyncState("syncing");
+      try {
+        await new Promise<void>((resolve, reject) => {
+          startTransition(async () => {
+            try {
+              const res = router.refresh();
+              if (res && typeof (res as Promise<unknown>).then === "function") {
+                await res;
+              }
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          });
+        });
+
+        // Fresh server data has settled! Commit state.
+        serverVersionRef.current = targetVersion;
+        setServerVersion(targetVersion);
+        setLastSyncTime(syncTime);
+        setPendingUpdates(false);
+        setSyncState("synced");
+        return true;
+      } catch {
+        setSyncState("error");
+        return false;
+      }
+    },
+    [router]
+  );
+
   // Perform a sync check or full refresh
   const triggerSync = useCallback(
     async (options?: { forceRefresh?: boolean; manual?: boolean }): Promise<boolean> => {
@@ -147,17 +221,8 @@ export function SyncProvider({
           const syncTime = res.serverTime ? new Date(res.serverTime) : new Date();
           const newVersion = res.serverVersion || "v0";
 
-          await new Promise<void>((resolve) => {
-            startTransition(() => {
-              router.refresh();
-              resolve();
-            });
-          });
-
-          setServerVersion(newVersion);
-          setLastSyncTime(syncTime);
-          setPendingUpdates(false);
-          setSyncState("synced");
+          const ok = await executeRefresh(newVersion, syncTime);
+          if (!ok) return false;
 
           // Notify other tabs
           try {
@@ -184,7 +249,9 @@ export function SyncProvider({
           });
           if (!res.ok) throw new Error("Sync state HTTP " + res.status);
           const data = await res.json();
-          if (!data.success) throw new Error(data.error || "Failed to get sync state");
+          if (!data.success || data.version === undefined) {
+            throw new Error(data.error || "Failed to get sync state");
+          }
           newVersion = String(data.version);
           syncTime = new Date(); // Record time immediately after successful fetch
         } catch {
@@ -192,7 +259,7 @@ export function SyncProvider({
           if (!status.success) {
             throw new Error(status.error || "Failed to query server sync state");
           }
-          newVersion = status.serverVersion;
+          newVersion = String(status.serverVersion);
           syncTime = new Date(); // Record time immediately after successful action
         }
 
@@ -200,6 +267,7 @@ export function SyncProvider({
 
         if (currentKnownVersion === null) {
           // Initial hydration sync
+          serverVersionRef.current = newVersion;
           setServerVersion(newVersion);
           setLastSyncTime(syncTime);
           setPendingUpdates(false);
@@ -207,7 +275,7 @@ export function SyncProvider({
           return true;
         }
 
-        if (newVersion !== currentKnownVersion) {
+        if (isStrictlyNewerVersion(newVersion, currentKnownVersion)) {
           // Newer mutation detected remotely!
           const isDirty = checkHasDirtyDrafts();
           if (isDirty) {
@@ -215,17 +283,7 @@ export function SyncProvider({
             setPendingUpdates(true);
             setSyncState("updates_available");
           } else {
-            // Safe to refresh data
-            await new Promise<void>((resolve) => {
-              startTransition(() => {
-                router.refresh();
-                resolve();
-              });
-            });
-            setServerVersion(newVersion);
-            setLastSyncTime(syncTime);
-            setPendingUpdates(false);
-            setSyncState("synced");
+            return await executeRefresh(newVersion, syncTime);
           }
         } else {
           // No remote change: update lastSyncTime to confirm server verification
@@ -249,7 +307,7 @@ export function SyncProvider({
         isSyncingRef.current = false;
       }
     },
-    [checkHasDirtyDrafts, pathname, pendingUpdates, router]
+    [checkHasDirtyDrafts, executeRefresh, pathname, pendingUpdates]
   );
 
   const tabIdRef = useRef<string>("");
@@ -266,15 +324,17 @@ export function SyncProvider({
     await triggerSync({ forceRefresh: true });
   }, [triggerSync]);
 
-  const notifyDataMutated = useCallback(() => {
-    if (mutationTimeoutRef.current) {
-      clearTimeout(mutationTimeoutRef.current);
+  const runMutationSync = useCallback(async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setSyncState("offline");
+      return;
     }
-    mutationTimeoutRef.current = setTimeout(async () => {
-      if (typeof navigator !== "undefined" && !navigator.onLine) {
-        setSyncState("offline");
-        return;
-      }
+
+    setSyncState("syncing");
+
+    try {
+      let newVersion: string;
+      let syncTime: Date;
 
       try {
         const res = await fetch("/api/crm/sync-state", {
@@ -289,48 +349,61 @@ export function SyncProvider({
         if (!data.success || data.version === undefined) {
           throw new Error(data.error || "Failed to get sync state");
         }
-
-        const newVersion = String(data.version);
-        const syncTime = new Date();
-
-        const isDirty = checkHasDirtyDrafts();
-        if (isDirty) {
-          setPendingUpdates(true);
-          setSyncState("updates_available");
-        } else {
-          await new Promise<void>((resolve) => {
-            startTransition(() => {
-              router.refresh();
-              resolve();
-            });
-          });
-          serverVersionRef.current = newVersion;
-          setServerVersion(newVersion);
-          setLastSyncTime(syncTime);
-          setPendingUpdates(false);
-          setSyncState("synced");
-        }
-
-        // Broadcast to other tabs so they refresh
-        try {
-          broadcastChannelRef.current?.postMessage({
-            type: "MUTATION",
-            senderTabId: tabIdRef.current,
-            serverVersion: newVersion,
-            serverTime: syncTime.toISOString(),
-          });
-        } catch {
-          // ignore broadcast failure
-        }
+        newVersion = String(data.version);
+        syncTime = new Date();
       } catch {
-        if (typeof navigator !== "undefined" && !navigator.onLine) {
-          setSyncState("offline");
-        } else {
-          setSyncState("error");
+        const status = await getSyncStatusAction();
+        if (!status.success) {
+          throw new Error(status.error || "Failed to query server sync state");
         }
+        newVersion = String(status.serverVersion);
+        syncTime = new Date();
       }
-    }, 150);
-  }, [checkHasDirtyDrafts, router]);
+
+      const isDirty = checkHasDirtyDrafts();
+      if (isDirty) {
+        setPendingUpdates(true);
+        setSyncState("updates_available");
+      } else {
+        const ok = await executeRefresh(newVersion, syncTime);
+        if (!ok) return;
+      }
+
+      // Broadcast to other tabs so they refresh
+      try {
+        broadcastChannelRef.current?.postMessage({
+          type: "MUTATION",
+          senderTabId: tabIdRef.current,
+          serverVersion: newVersion,
+          serverTime: syncTime.toISOString(),
+        });
+      } catch {
+        // ignore broadcast failure
+      }
+    } catch {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        setSyncState("offline");
+      } else {
+        setSyncState("error");
+      }
+    }
+  }, [checkHasDirtyDrafts, executeRefresh]);
+
+  const notifyDataMutated = useCallback(
+    (options?: { immediate?: boolean }) => {
+      if (mutationTimeoutRef.current) {
+        clearTimeout(mutationTimeoutRef.current);
+        mutationTimeoutRef.current = null;
+      }
+
+      if (options?.immediate) {
+        return runMutationSync();
+      }
+
+      mutationTimeoutRef.current = setTimeout(runMutationSync, 100);
+    },
+    [runMutationSync]
+  );
 
   // Initial sync & BroadcastChannel setup
   useEffect(() => {
@@ -342,7 +415,7 @@ export function SyncProvider({
         const channel = new BroadcastChannel(SYNC_CHANNEL_NAME);
         broadcastChannelRef.current = channel;
 
-        channel.onmessage = (event) => {
+        channel.onmessage = async (event) => {
           const data = event.data;
           if (!data || typeof data !== "object") return;
 
@@ -352,23 +425,23 @@ export function SyncProvider({
           }
 
           if (data.type === "SYNC_SUCCESS" || data.type === "MUTATION") {
+            const incomingVer = data.serverVersion ? String(data.serverVersion) : null;
+            const currentVer = serverVersionRef.current;
+
+            // Enforce version ordering: only process if strictly newer
+            if (!isStrictlyNewerVersion(incomingVer, currentVer)) {
+              return;
+            }
+
             const isDirty = checkHasDirtyDrafts();
             if (isDirty) {
               setPendingUpdates(true);
               setSyncState("updates_available");
-            } else {
-              startTransition(() => {
-                router.refresh();
-              });
-              if (data.serverVersion) {
-                const newVer = String(data.serverVersion);
-                serverVersionRef.current = newVer;
-                setServerVersion(newVer);
-              }
-              if (data.serverTime) setLastSyncTime(new Date(data.serverTime));
-              setPendingUpdates(false);
-              setSyncState("synced");
+              return;
             }
+
+            const syncTime = data.serverTime ? new Date(data.serverTime) : new Date();
+            await executeRefresh(incomingVer!, syncTime);
           }
         };
       } catch {
@@ -418,7 +491,7 @@ export function SyncProvider({
       clearInterval(intervalId);
       broadcastChannelRef.current?.close();
     };
-  }, [checkHasDirtyDrafts, router, triggerSync]);
+  }, [autoSync, checkHasDirtyDrafts, executeRefresh, triggerSync]);
 
   const value: SyncContextValue = {
     syncState,

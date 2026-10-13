@@ -1,4 +1,9 @@
 import { afterAll, vi } from "vitest";
+import { assertIsolatedTestDatabase } from "@/lib/test-db-guard";
+
+// Fail-closed test database isolation check before any test execution
+assertIsolatedTestDatabase(process.env.TEST_DATABASE_URL);
+
 import { db } from "@/lib/db";
 
 // Global mock for next/navigation so component/page rendering in node environment doesn't throw

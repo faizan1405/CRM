@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { assertIsolatedTestDatabase } from "./test-db-guard";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -30,12 +31,7 @@ function getDatasourceUrl(): string | undefined {
 }
 
 if (process.env.NODE_ENV === "test") {
-  if (!process.env.TEST_DATABASE_URL) {
-    throw new Error("TEST_DATABASE_URL is required when NODE_ENV=test");
-  }
-  if (process.env.TEST_DATABASE_URL === process.env.DATABASE_URL) {
-    throw new Error("TEST_DATABASE_URL cannot be the same as DATABASE_URL to avoid data contamination");
-  }
+  assertIsolatedTestDatabase(process.env.TEST_DATABASE_URL);
   
   db = globalForPrisma.prisma ?? new PrismaClient({
     datasourceUrl: process.env.TEST_DATABASE_URL,
