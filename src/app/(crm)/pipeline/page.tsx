@@ -8,15 +8,19 @@ import { PipelineSkeleton } from "@/components/skeletons";
 
 export const metadata: Metadata = { title: "Sales Pipeline" };
 
-export default async function PipelinePage() {
+async function PipelineContent() {
   const result = await getLeads();
-  
+
   if (!result.success && result.error.includes("signed in")) {
     redirect("/login");
   }
 
   const initialLeads = result.success ? result.data : [];
 
+  return <PipelineBoard initialLeads={initialLeads} />;
+}
+
+export default function PipelinePage() {
   return (
     <div className="flex w-full min-w-0 flex-col space-y-6">
       <div className="shrink-0">
@@ -27,7 +31,7 @@ export default async function PipelinePage() {
       </div>
       <div className="w-full min-w-0 flex-1">
         <Suspense fallback={<PipelineSkeleton includeHeader={false} />}>
-          <PipelineBoard initialLeads={initialLeads} />
+          <PipelineContent />
         </Suspense>
       </div>
     </div>

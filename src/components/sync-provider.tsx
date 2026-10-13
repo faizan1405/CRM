@@ -33,7 +33,7 @@ export const SyncContext = createContext<SyncContextValue | null>(null);
 export const CrmSyncProvider = SyncProvider;
 
 const SYNC_CHANNEL_NAME = "scale_flow_crm_sync_channel";
-const POLLING_INTERVAL_MS = 3000;
+const POLLING_INTERVAL_MS = 10_000;
 
 export interface SyncProviderProps {
   children: React.ReactNode;
@@ -134,7 +134,9 @@ export function SyncProvider({
       }
 
       isSyncingRef.current = true;
-      setSyncState("syncing");
+      if (options?.manual || options?.forceRefresh) {
+        setSyncState("syncing");
+      }
 
       try {
         if (options?.forceRefresh) {
