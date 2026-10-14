@@ -376,10 +376,19 @@ export async function getDailySalesBriefingData(options?: {
     const candidateDeals = await db.deal.findMany({
       where: {
         status: { in: ["CONFIRMED", "COMPLETED"] },
-        lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null },
+        OR: [
+          {
+            lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null },
+          },
+          {
+            source: "OTHER_CLIENT",
+            leadId: null,
+          },
+        ],
       },
       select: {
         id: true,
+        source: true,
         leadId: true,
         finalAmount: true,
         nextPaymentDueAmount: true,

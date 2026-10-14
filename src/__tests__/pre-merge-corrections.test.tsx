@@ -340,12 +340,16 @@ describe("Final Pre-Merge Corrections — PR #13 Verification", () => {
 
       const result = await getDailySalesBriefingData({ userId: "test-user" });
 
-      // 1. Verify findMany query structure: MUST NOT have 'take' limitation
+      // 1. Verify findMany query structure: MUST NOT have 'take' limitation and includes OR for OTHER_CLIENT
       expect(dealSpy).toHaveBeenCalledTimes(1);
       const queryArgs = dealSpy.mock.calls[0][0];
       expect(queryArgs).toBeDefined();
       expect(queryArgs).not.toHaveProperty("take");
       expect(queryArgs?.where?.status).toEqual({ in: ["CONFIRMED", "COMPLETED"] });
+      expect(queryArgs?.where?.OR).toEqual([
+        { lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } },
+        { source: "OTHER_CLIENT", leadId: null },
+      ]);
       expect(queryArgs?.select?.finalAmount).toBe(true);
       expect(queryArgs?.select?.payments).toBeDefined();
 
@@ -357,6 +361,82 @@ describe("Final Pre-Merge Corrections — PR #13 Verification", () => {
       expect(result.paymentToChase?.isOverdue).toBe(true);
 
       // Restore spies
+      dealSpy.mockRestore();
+      leadSpy.mockRestore();
+      followUpSpy.mockRestore();
+      briefingSpy.mockRestore();
+    });
+
+    it("service-level: getDailySalesBriefingData includes standalone OTHER_CLIENT deals without a linked lead and uses snapshots", async () => {
+      const standaloneOverdueDate = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000); // 3 days ago
+
+      const candidateDeals = [
+        // 1. Regular active deal, upcoming in 5 days (not overdue)
+        {
+          id: "deal-active-crm",
+          source: "CRM_LEAD",
+          leadId: "lead-crm-1",
+          finalAmount: 100000,
+          nextPaymentDueAmount: 50000,
+          nextPaymentDueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+          clientNameSnapshot: null,
+          companyNameSnapshot: null,
+          lead: {
+            id: "lead-crm-1",
+            name: "CRM Client",
+            business: "CRM Corp",
+          },
+          payments: [{ amount: 50000 }],
+        },
+        // 2. Standalone OTHER_CLIENT deal with NO linked lead (leadId: null), overdue unpaid balance
+        {
+          id: "deal-standalone-other",
+          source: "OTHER_CLIENT",
+          leadId: null,
+          finalAmount: 120000,
+          nextPaymentDueAmount: 60000,
+          nextPaymentDueDate: standaloneOverdueDate,
+          clientNameSnapshot: "Independent Director",
+          companyNameSnapshot: "Independent Studio",
+          lead: null,
+          payments: [{ amount: 40000 }], // 80000 outstanding, next due 60000, OVERDUE!
+        },
+      ];
+
+      const dealSpy = vi.spyOn(db.deal, "findMany").mockResolvedValueOnce(candidateDeals as any);
+      const leadSpy = vi.spyOn(db.lead, "findMany").mockResolvedValueOnce([]);
+      const followUpSpy = vi.spyOn(db.followUp, "findMany").mockResolvedValueOnce([]);
+      const briefingSpy = vi.spyOn(db.dailySalesBriefing, "findUnique").mockResolvedValueOnce({
+        id: "briefing-standalone-test",
+        userId: "test-user-standalone",
+        briefingDate: "2026-10-14",
+        summary: "Standalone deal test",
+        metadata: { keyPoints: [], recommendation: "Review deals" },
+        generatedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+
+      const result = await getDailySalesBriefingData({ userId: "test-user-standalone" });
+
+      // 1. Verify query filters for both active leads and standalone OTHER_CLIENT deals
+      expect(dealSpy).toHaveBeenCalledTimes(1);
+      const queryArgs = dealSpy.mock.calls[0][0];
+      expect(queryArgs?.where?.status).toEqual({ in: ["CONFIRMED", "COMPLETED"] });
+      expect(queryArgs?.where?.OR).toEqual([
+        { lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } },
+        { source: "OTHER_CLIENT", leadId: null },
+      ]);
+
+      // 2. Verify standalone deal is prioritized due to overdue status and uses snapshots
+      expect(result.paymentToChase).not.toBeNull();
+      expect(result.paymentToChase?.dealId).toBe("deal-standalone-other");
+      expect(result.paymentToChase?.leadId).toBeNull();
+      expect(result.paymentToChase?.clientName).toBe("Independent Director");
+      expect(result.paymentToChase?.companyName).toBe("Independent Studio");
+      expect(result.paymentToChase?.amount).toBe(60000);
+      expect(result.paymentToChase?.isOverdue).toBe(true);
+
       dealSpy.mockRestore();
       leadSpy.mockRestore();
       followUpSpy.mockRestore();
