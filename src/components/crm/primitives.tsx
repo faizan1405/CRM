@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Phone, MessageCircle, ArrowUpRight, ArrowDownRight } from "lucide-react";
