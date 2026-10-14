@@ -36,6 +36,7 @@ export type PriorityItem = {
 };
 
 export type DashboardData = {
+  userName?: string;
   kpis: {
     totalLeads: number;
     newLeads: number;
@@ -150,7 +151,8 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
       activeLeadsWithAI,
       staleLeadsCount,
       pinnedLeadsListRaw,
-      activeDealsWithPayments
+      activeDealsWithPayments,
+      userRecord,
     ] = await Promise.all([
       db.lead.count({ where: { isPinned: true, isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
       db.lead.groupBy({ by: ["status"], _count: true, where: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
@@ -272,6 +274,10 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
             select: { amount: true },
           },
         },
+      }),
+      db.user.findUnique({
+        where: { id: session.id },
+        select: { name: true },
       }),
     ]);
 
@@ -557,6 +563,7 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
     return {
       success: true,
       data: {
+        userName: userRecord?.name || "Faizan",
         kpis: {
           totalLeads,
           newLeads: getCount(LeadStatus.NEW),
