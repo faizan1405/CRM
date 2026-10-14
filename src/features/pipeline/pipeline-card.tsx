@@ -1,13 +1,12 @@
 import { memo } from "react";
 import { ActionCard } from "@/components/action-card";
 import type { DraggableProvidedDragHandleProps } from "@hello-pangea/dnd";
-import { Building2, Phone, MessageCircle, CalendarPlus, GripVertical, Star, Clock } from "lucide-react";
+import { GripVertical, Star, CalendarClock } from "lucide-react";
 import type { Lead } from "@/features/leads/types";
 import { AIScoreBadge, deriveAIAttention } from "@/features/ai-attention";
-import { QuickStatusChip } from "@/features/leads/quick-status-chip";
-import { getLeadCardTheme } from "@/features/leads/lead-card-theme";
-import { formatLeadAge, formatLastContacted, formatNextFollowUp } from "@/lib/date-utils";
-import { CopyContactButton } from "@/components/copy-contact-button";
+import { formatNextFollowUp } from "@/lib/date-utils";
+import { formatCurrency, cleanLeadName } from "@/features/leads/formatters";
+import { cn } from "@/lib/utils";
 
 export const PipelineCard = memo(function PipelineCard({
   lead,
@@ -21,78 +20,76 @@ export const PipelineCard = memo(function PipelineCard({
   dragHandleProps?: DraggableProvidedDragHandleProps | null;
 }) {
   const ai = lead.aiAttention || deriveAIAttention(lead);
-  const notesText = lead.latestNote || lead.notes || "";
-  const theme = getLeadCardTheme(lead);
+  const displayName = cleanLeadName(lead.name);
+  const amount = lead.quotedAmount ?? lead.budget ?? 0;
 
   return (
     <ActionCard
       onActivate={onClick}
       aria-label={`Open lead ${lead.name}`}
-      className={`group relative flex flex-col gap-1.5 rounded-xl border ${theme.cardBg} ${theme.borderBase} ${theme.leftBorder} ${theme.hoverBorder} p-3 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] active:shadow-sm transition-[transform,box-shadow,border-color] duration-200 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer`}
+      className="card-surface card-hover group relative flex flex-col gap-2 p-3 text-left transition-all duration-200 active:scale-[0.98] cursor-pointer"
     >
-      <div className="flex justify-between items-start gap-1 sm:gap-2">
-        <div 
-          {...dragHandleProps} 
-          className="shrink-0 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing -ml-1 mt-0.5 p-1 touch-none"
+      <div className="flex items-start justify-between gap-1.5">
+        <div
+          {...dragHandleProps}
+          className="shrink-0 text-subtle hover:text-foreground cursor-grab active:cursor-grabbing -ml-1 mt-0.5 p-0.5 touch-none"
+          title="Drag lead"
         >
-          <GripVertical size={16} />
+          <GripVertical size={15} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <h4 className="font-semibold text-slate-900 text-[15px] truncate">{lead.name}</h4>
+            <h4 className="font-medium text-foreground text-[13.5px] truncate leading-tight">
+              {displayName}
+            </h4>
+            {lead.isPinned && (
+              <Star size={12} className="fill-warning text-warning shrink-0" />
+            )}
             <AIScoreBadge score={ai.score} category={ai.scoreCategory} size="sm" showLabel={false} />
           </div>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[12px] font-medium text-slate-600 truncate">{lead.phone}</span>
-            <CopyContactButton name={lead.name} phone={lead.phone} />
-          </div>
+          <p className="text-[12px] text-muted-foreground truncate mt-0.5">
+            {lead.business || lead.phone}
+          </p>
         </div>
-        <div className="flex flex-col items-end shrink-0 gap-1">
-          <div className="flex items-center gap-1">
-            {onTogglePin && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onTogglePin(lead);
-                }}
-                aria-label={lead.isPinned ? `Unpin ${lead.name}` : `Pin ${lead.name}`}
-                title={lead.isPinned ? "Unpin lead" : "Pin lead"}
-                className="p-1 rounded hover:bg-amber-50 active:scale-95 transition-all min-h-[32px] min-w-[32px] flex items-center justify-center cursor-pointer"
-              >
-                <Star
-                  size={15}
-                  className={lead.isPinned ? "fill-amber-400 text-amber-500" : "text-slate-300 hover:text-amber-500"}
-                />
-              </button>
-            )}
-            <span className="text-[10px] font-bold text-slate-400 bg-slate-100/80 px-1.5 py-0.5 rounded-md">
-              Age {formatLeadAge(lead.createdAt)}
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            {lead.staleInfo?.isStale && (
-              <span
-                role="status"
-                title={lead.staleInfo.staleLabel}
-                className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
-              >
-                <Clock size={10} className="text-amber-600 shrink-0" />
-                <span>{lead.staleInfo.staleLabel}</span>
-              </span>
-            )}
-            <QuickStatusChip quickStatus={lead.quickStatus} leadStatus={lead.status} readOnly size="sm" />
-          </div>
-        </div>
+
+        {onTogglePin && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onTogglePin(lead);
+            }}
+            aria-label={lead.isPinned ? `Unpin ${lead.name}` : `Pin ${lead.name}`}
+            title={lead.isPinned ? "Unpin lead" : "Pin lead"}
+            className="press p-1 rounded-md text-subtle hover:text-warning shrink-0 cursor-pointer"
+          >
+            <Star
+              size={14}
+              className={lead.isPinned ? "fill-warning text-warning" : "text-subtle hover:text-warning"}
+            />
+          </button>
+        )}
       </div>
 
-      <div className="text-[11px] sm:text-[12px] leading-tight text-slate-500 line-clamp-1 italic bg-white/50 rounded p-1 -mx-1 mt-0.5">
-        {notesText || "No notes"}
+      <div className="flex items-baseline gap-1.5 pt-0.5">
+        <span className="text-[14.5px] font-semibold tabular text-foreground">
+          {amount > 0 ? formatCurrency(amount) : "—"}
+        </span>
+        <span className="text-[11px] text-subtle">
+          {lead.quotedAmount ? "quoted" : lead.budget ? "budget" : ""}
+        </span>
       </div>
 
-      <div className="flex justify-between items-center text-[10px] sm:text-[11px] mt-1 border-t border-slate-100 pt-1.5">
-        <span className="text-slate-500 font-medium">Last: <span className="text-slate-700">{formatLastContacted(lead.lastContactDate)}</span></span>
-        <span className="text-slate-500 font-medium">Next: <span className="font-bold text-blue-700">{formatNextFollowUp(lead.nextFollowUpDate)}</span></span>
+      <div className="flex items-center justify-between gap-2 border-t border-dashed pt-2 text-[11.5px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1 tabular truncate">
+          <CalendarClock className="h-3 w-3 shrink-0 text-subtle" />
+          <span>{lead.nextFollowUpDate ? formatNextFollowUp(lead.nextFollowUpDate) : "No follow-up"}</span>
+        </span>
+        {lead.status && (
+          <span className="text-[10.5px] font-medium text-subtle shrink-0">
+            {lead.status}
+          </span>
+        )}
       </div>
     </ActionCard>
   );
