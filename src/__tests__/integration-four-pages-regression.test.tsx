@@ -67,8 +67,8 @@ describe("Four Redesign Pages Unified Integration Test", () => {
     },
     needsAttention: {
       overdueFollowUps: 2,
-      staleLeads: 3,
-      uncontactedNewLeads: 5,
+      proposalsPending: 3,
+      leadsNotContacted: 5,
     },
     priorities: [
       {
@@ -84,6 +84,7 @@ describe("Four Redesign Pages Unified Integration Test", () => {
         business: "Sharma Tech",
       },
     ],
+    attentionLeads: [],
     pipeline: {
       new: 12,
       contacted: 8,
@@ -145,7 +146,7 @@ describe("Four Redesign Pages Unified Integration Test", () => {
         leadName: "Rahul Sharma",
         type: "Call",
         message: "Called client about deal",
-        timestamp: "2 hours ago",
+        createdAt: "2 hours ago",
       },
     ],
   };
@@ -219,11 +220,14 @@ describe("Four Redesign Pages Unified Integration Test", () => {
             id: "act-1",
             leadId: "lead-1",
             leadName: "Rahul Sharma",
-            title: "Follow up on proposal",
-            timeFormatted: "11:00 AM",
-            priority: "HIGH",
+            title: "Rahul Sharma",
+            subtitle: "Follow up on proposal",
+            dueTime: "11:00 AM",
+            priority: "Critical",
             isDone: false,
             phone: "+91 98765 43210",
+            reason: "High intent",
+            recommendedAction: "Call client to confirm terms",
           },
         ]}
         initialCalls={[
