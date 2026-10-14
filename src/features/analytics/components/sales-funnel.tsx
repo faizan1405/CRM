@@ -16,13 +16,16 @@ export function SalesFunnel({
   stages: FunnelStage[];
   lostCount?: number;
 }) {
-  const tr = transitions(stages);
-  const bn = bottleneck(stages);
+  const topCount = stages?.[0]?.reached ?? 0;
+  const totalReached = stages?.reduce((sum, s) => sum + s.reached, 0) ?? 0;
+  const hasData = Boolean(stages && stages.length > 0 && topCount > 0 && totalReached > 0);
+
+  const tr = hasData ? transitions(stages) : [];
+  const bn = hasData ? bottleneck(stages) : null;
   const [active, setActive] = useState<number>(bn?.index ?? 1);
   const sel = tr.find((t) => t.index === active) ?? tr[0] ?? null;
-  const top = stages[0]?.reached || 1;
 
-  if (!stages || stages.length === 0 || top === 0) {
+  if (!hasData) {
     return (
       <AnalyticsCard className="xl:col-span-2">
         <CardHead
@@ -33,13 +36,15 @@ export function SalesFunnel({
           <div>
             <p className="font-medium text-foreground">No funnel activity yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Stage movement will appear as leads progress.
+              Stage movement will appear as leads enter and progress through the pipeline.
             </p>
           </div>
         </div>
       </AnalyticsCard>
     );
   }
+
+  const top = topCount;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">

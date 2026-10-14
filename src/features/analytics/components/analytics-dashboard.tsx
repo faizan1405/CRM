@@ -153,6 +153,7 @@ export function AnalyticsDashboard({
           data={data.kpis}
           revenueTrend={data.revenueTrend}
           leadTrend={data.leadTrend?.points ?? []}
+          completionRate={data.followUpPerformance?.completionRate}
         />
         <div className="mt-4">
           <LeadTrend data={data.leadTrend?.points ?? []} kpis={data.kpis} />

@@ -130,19 +130,19 @@ function RevenueBreakdown({ k }: { k: CoreMetrics }) {
     {
       label: "Won deal value",
       v: k.wonRevenue,
-      note: "Quoted value of leads won in range",
+      note: "Finalized contract value of leads won in range",
       color: "var(--primary)",
     },
     {
       label: "Open pipeline",
       v: k.openPipelineValue,
-      note: "Current snapshot of active stages",
+      note: "Current snapshot of active stages (all-time)",
       color: "var(--chart-4)",
     },
     {
       label: "Money received",
       v: k.moneyReceived ?? 0,
-      note: "Payments actually collected",
+      note: "Cash collected in selected period",
       color: "var(--chart-2)",
     },
   ];
@@ -214,9 +214,12 @@ export function RevenueTrend({
   const contracted = kpis ? kpis.wonRevenue : total;
   const received = kpis?.moneyReceived ?? 0;
   const outstanding = kpis?.totalOutstanding ?? Math.max(0, contracted - received);
-  const collectionRate =
-    kpis?.collectionRate ??
-    (contracted > 0 ? Math.round((received / contracted) * 100) : 0);
+
+  // When contracted is 0, collection rate is not applicable
+  const hasContracted = contracted > 0;
+  const collectionRate = hasContracted
+    ? Math.min(100, (received / contracted) * 100)
+    : 0;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -255,13 +258,15 @@ export function RevenueTrend({
         <AnalyticsCard>
           <CardHead
             title="Collection overview"
-            subtitle="Deals confirmed in this range"
+            subtitle="Contracted in range vs money received"
           />
           <div className="flex items-baseline justify-between">
             <span className="tabular text-[26px] font-semibold tracking-tight text-foreground">
-              {collectionRate.toFixed(1)}%
+              {hasContracted ? `${collectionRate.toFixed(1)}%` : "—"}
             </span>
-            <span className="text-[12px] text-muted-foreground">collected</span>
+            <span className="text-[12px] text-muted-foreground">
+              {hasContracted ? "collected" : "no contracted deals"}
+            </span>
           </div>
           <div
             className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-warning-soft"
@@ -271,15 +276,15 @@ export function RevenueTrend({
             <motion.div
               className="h-full rounded-full bg-primary"
               initial={{ width: 0 }}
-              animate={{ width: `${Math.min(100, collectionRate)}%` }}
+              animate={{ width: `${hasContracted ? collectionRate : 0}%` }}
               transition={{ duration: 0.9, ease: EASE }}
             />
           </div>
           <dl className="mt-3.5 space-y-1.5 text-[12.5px]">
             {[
-              ["Contracted value", contracted, "bg-foreground/70"],
-              ["Money received", received, "bg-primary"],
-              ["Outstanding", outstanding, "bg-warning"],
+              ["Contracted (in range)", contracted, "bg-foreground/70"],
+              ["Money received (in range)", received, "bg-primary"],
+              ["Outstanding (all active deals)", outstanding, "bg-warning"],
             ].map(([l, v, cls]) => (
               <div
                 key={l as string}

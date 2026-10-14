@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 
 const SERIES = [
   { key: "completed", label: "Completed", color: "var(--primary)" },
-  { key: "pending", label: "Pending", color: "var(--chart-2)" },
+  { key: "pendingNotOverdue", label: "Pending (on time)", color: "var(--chart-2)" },
   { key: "overdue", label: "Overdue", color: "var(--warning)" },
 ] as const;
 
@@ -39,15 +39,30 @@ export function FollowUpPerformance({
 }) {
   const [hidden, setHidden] = useState<SKey[]>([]);
 
-  const chartData = data.byType.map((t) => ({
-    ...t,
-    name:
-      (followUpTypeLabel as Record<string, string>)[t.type] || t.type,
-  }));
+  // Canonical rule: Overdue follow-ups are a subset of pending follow-ups.
+  // To avoid double-counting in stacked charts and share bars, categories must be mutually exclusive:
+  // - Completed: completed
+  // - Pending (on time): pending - overdue
+  // - Overdue: overdue
+  // Total evaluated = completed + pendingNotOverdue + overdue = completed + pending
+  const pendingNotOverdue = Math.max(0, data.pending - data.overdue);
+  const activeTotal = data.completed + data.pending;
+
+  const chartData = data.byType.map((t) => {
+    const pNotOverdue = Math.max(0, t.pending - t.overdue);
+    const totalActive = t.completed + t.pending;
+    return {
+      ...t,
+      name: (followUpTypeLabel as Record<string, string>)[t.type] || t.type,
+      completed: t.completed,
+      pendingNotOverdue: pNotOverdue,
+      overdue: t.overdue,
+      totalActive,
+    };
+  });
 
   const r = 52;
   const c = 2 * Math.PI * r;
-  const active = data.completed + data.pending + data.overdue;
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
@@ -57,10 +72,10 @@ export function FollowUpPerformance({
           title="Follow-up discipline"
           info={{
             meaning:
-              "Cancelled follow-ups are excluded because they were abandoned, not outstanding.",
-            formula: "Completed ÷ (Completed + Pending + Overdue)",
-            scope: "Selected range",
-            kind: "Period metric",
+              "Execution rate across active leads. Cancelled follow-ups are excluded because they were abandoned, not outstanding.",
+            formula: "Completed ÷ (Completed + Pending)",
+            scope: "Current active leads",
+            kind: "Current snapshot",
           }}
         />
         <div className="flex items-center gap-5">
@@ -109,53 +124,94 @@ export function FollowUpPerformance({
                 {data.created}
               </dd>
             </div>
-            {SERIES.map((s) => (
-              <div key={s.key} className="flex justify-between">
-                <dt className="flex items-center gap-1.5 text-muted-foreground">
-                  <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ background: s.color }}
-                  />
-                  {s.label}
-                </dt>
-                <dd
-                  className={cn(
-                    "tabular font-semibold text-foreground",
-                    s.key === "overdue" && data.overdue > 0 && "text-warning"
-                  )}
-                >
-                  {data[s.key]}
-                </dd>
-              </div>
-            ))}
+            <div className="flex justify-between">
+              <dt className="flex items-center gap-1.5 text-muted-foreground">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: "var(--primary)" }}
+                />
+                Completed
+              </dt>
+              <dd className="tabular font-semibold text-foreground">
+                {data.completed}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="flex items-center gap-1.5 text-muted-foreground">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: "var(--chart-2)" }}
+                />
+                Pending (on time)
+              </dt>
+              <dd className="tabular font-semibold text-foreground">
+                {pendingNotOverdue}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="flex items-center gap-1.5 text-muted-foreground">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ background: "var(--warning)" }}
+                />
+                Overdue
+              </dt>
+              <dd
+                className={cn(
+                  "tabular font-semibold text-foreground",
+                  data.overdue > 0 && "text-warning"
+                )}
+              >
+                {data.overdue}
+              </dd>
+            </div>
           </dl>
         </div>
 
+        {/* Mutually Exclusive Share Bar */}
         <div
           className="mt-4 flex h-2 overflow-hidden rounded-full bg-muted"
           role="img"
-          aria-label="Completed, pending and overdue share"
+          aria-label="Completed, pending on-time, and overdue share"
         >
-          {SERIES.map((s) => (
-            <motion.div
-              key={s.key}
-              className="h-full border-r border-card last:border-0"
-              style={{ background: s.color }}
-              initial={{ width: 0 }}
-              animate={{
-                width: `${((data[s.key] || 0) / (active || 1)) * 100}%`,
-              }}
-              transition={{ duration: 0.8, ease: EASE }}
-            />
-          ))}
+          <motion.div
+            title={`Completed: ${data.completed}`}
+            className="h-full border-r border-card last:border-0"
+            style={{ background: "var(--primary)" }}
+            initial={{ width: 0 }}
+            animate={{
+              width: `${(data.completed / (activeTotal || 1)) * 100}%`,
+            }}
+            transition={{ duration: 0.8, ease: EASE }}
+          />
+          <motion.div
+            title={`Pending (on time): ${pendingNotOverdue}`}
+            className="h-full border-r border-card last:border-0"
+            style={{ background: "var(--chart-2)" }}
+            initial={{ width: 0 }}
+            animate={{
+              width: `${(pendingNotOverdue / (activeTotal || 1)) * 100}%`,
+            }}
+            transition={{ duration: 0.8, ease: EASE, delay: 0.05 }}
+          />
+          <motion.div
+            title={`Overdue: ${data.overdue}`}
+            className="h-full border-r border-card last:border-0"
+            style={{ background: "var(--warning)" }}
+            initial={{ width: 0 }}
+            animate={{
+              width: `${(data.overdue / (activeTotal || 1)) * 100}%`,
+            }}
+            transition={{ duration: 0.8, ease: EASE, delay: 0.1 }}
+          />
         </div>
       </AnalyticsCard>
 
-      {/* Right: By Follow-up Type with Interactive Legend Filter */}
+      {/* Right: By Follow-up Type with Mutually Exclusive Stacked Bars */}
       <AnalyticsCard>
         <CardHead
           title="By follow-up type"
-          subtitle="Tap a legend item to filter series"
+          subtitle="Mutually exclusive breakdown · tap legend to filter series"
           action={
             <div className="flex flex-wrap gap-1">
               {SERIES.map((s) => {
@@ -210,16 +266,28 @@ export function FollowUpPerformance({
                     ? (payload?.[0]?.payload as (typeof chartData)[number] | undefined)
                     : undefined;
                   if (!row) return null;
-                  const den = row.completed + row.pending + row.overdue || 1;
+                  const den = row.totalActive || 1;
                   return (
                     <TipShell
                       title={row.name}
-                      rows={SERIES.map((s) => ({
-                        label: s.label,
-                        value: `${row[s.key]} · ${pct(row[s.key] / den)}`,
-                        color: s.color,
-                      }))}
-                      foot={`${row.total} created · ${pct(
+                      rows={[
+                        {
+                          label: "Completed",
+                          value: `${row.completed} · ${pct(row.completed / den)}`,
+                          color: "var(--primary)",
+                        },
+                        {
+                          label: "Pending (on time)",
+                          value: `${row.pendingNotOverdue} · ${pct(row.pendingNotOverdue / den)}`,
+                          color: "var(--chart-2)",
+                        },
+                        {
+                          label: "Overdue",
+                          value: `${row.overdue} · ${pct(row.overdue / den)}`,
+                          color: "var(--warning)",
+                        },
+                      ]}
+                      foot={`${row.totalActive} active · ${pct(
                         row.completed / den,
                         1
                       )} completion`}

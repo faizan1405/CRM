@@ -54,13 +54,19 @@ function Spark({ data, id }: { data: { v: number }[]; id: string }) {
   );
 }
 
-function Ring({ value }: { value: number }) {
+function Ring({
+  value,
+  color = "var(--primary)",
+}: {
+  value: number;
+  color?: string;
+}) {
   const r = 18;
   const c = 2 * Math.PI * r;
   const val = Math.min(1, Math.max(0, value));
 
   return (
-    <svg viewBox="0 0 44 44" className="h-11 w-11 -rotate-90" aria-hidden>
+    <svg viewBox="0 0 44 44" className="h-11 w-11 -rotate-90 shrink-0" aria-hidden>
       <circle
         cx="22"
         cy="22"
@@ -74,7 +80,7 @@ function Ring({ value }: { value: number }) {
         cy="22"
         r={r}
         fill="none"
-        stroke="var(--primary)"
+        stroke={color}
         strokeWidth="5"
         strokeLinecap="round"
         strokeDasharray={c}
@@ -101,13 +107,19 @@ export function AnalyticsKpis({
   data,
   revenueTrend = [],
   leadTrend = [],
+  completionRate,
 }: {
   data: CoreMetrics;
   revenueTrend?: TrendPoint[];
   leadTrend?: LeadTrendPoint[];
+  completionRate?: number;
 }) {
   const k = data;
   const scope = "Selected range";
+
+  // Use canonical completion rate passed from followUpPerformance
+  const canonicalCompletionRate =
+    completionRate ?? (k.followUpsCompleted / Math.max(k.followUpsCreated, 1));
 
   const primary: Primary[] = [
     {
@@ -119,8 +131,8 @@ export function AnalyticsKpis({
       sub: `${k.wonLeads} won deals · avg ${inrCompact(k.avgWonDeal)}`,
       info: {
         meaning:
-          "Total quoted value of leads marked Won. This is contracted value, not cash received.",
-        formula: "Σ quotedAmount of WON leads",
+          "Total finalized contract value of WON deals (Deal.finalAmount). Quoted amount is not used for won deals.",
+        formula: "Σ Deal.finalAmount of WON leads in range (₹0 if no deal)",
         scope,
         kind: "Period metric",
       },
@@ -139,18 +151,19 @@ export function AnalyticsKpis({
       format: fmtInr,
       sub: `${(k.collectionRate ?? 0).toFixed(1)}% collected · ${inrCompact(
         k.totalOutstanding ?? 0
-      )} outstanding`,
+      )} all-time outstanding`,
       info: {
         meaning:
-          "Actual payments recorded against deals. Differs from Won Deal Value.",
-        formula: "Σ Payment.amount (active payments)",
+          "Actual cash payment transactions recorded in the CRM within the selected date range.",
+        formula: "Σ Payment.amount where paymentDate in range (active payments)",
         scope,
         kind: "Period metric",
       },
+      // Genuine non-temporal visual: animated collection rate progress ring (no fake time series)
       visual: (
-        <Spark
-          id="sp-recv"
-          data={revenueTrend.map((t) => ({ v: t.revenue * 0.7 }))}
+        <Ring
+          value={k.collectionRate ? Math.min(1, Math.max(0, k.collectionRate / 100)) : 0}
+          color="var(--chart-2)"
         />
       ),
     },
@@ -163,7 +176,7 @@ export function AnalyticsKpis({
       sub: `${k.wonLeads} won · ${k.lostLeads} lost`,
       info: {
         meaning:
-          "Share of decided leads that were won. Open leads are excluded.",
+          "Share of closed leads created in range that were won. Active/open leads are excluded.",
         formula: "Won ÷ (Won + Lost)",
         scope,
         kind: "Period metric",
@@ -178,7 +191,7 @@ export function AnalyticsKpis({
       format: fmtInt,
       sub: `${k.newLeads} still new · ${k.qualifiedLeads} qualified`,
       info: {
-        meaning: "Leads created within the selected range.",
+        meaning: "Leads created within the selected range (waste excluded).",
         formula: "count(Lead) where createdAt in range",
         scope,
         kind: "Period metric",
@@ -210,7 +223,7 @@ export function AnalyticsKpis({
           value: k.newLeads,
           format: fmtInt,
           info: {
-            meaning: "Leads created in range that are still in New.",
+            meaning: "Leads created in range that are currently in New stage.",
             formula: "count(status = NEW)",
             scope,
             kind: "Period metric",
@@ -221,7 +234,7 @@ export function AnalyticsKpis({
           value: k.qualifiedLeads,
           format: fmtInt,
           info: {
-            meaning: "Leads created in range currently in Qualified.",
+            meaning: "Leads created in range currently in Qualified stage.",
             formula: "count(status = QUALIFIED)",
             scope,
             kind: "Period metric",
@@ -232,7 +245,7 @@ export function AnalyticsKpis({
           value: k.wonLeads,
           format: fmtInt,
           info: {
-            meaning: "Leads created in range currently Won.",
+            meaning: "Leads created in range that reached Won stage.",
             formula: "count(status = WON)",
             scope,
             kind: "Period metric",
@@ -244,7 +257,7 @@ export function AnalyticsKpis({
           format: fmtPct(1),
           info: {
             meaning: "Won leads out of total leads created in period.",
-            formula: "Won ÷ total leads × 100",
+            formula: "Won ÷ total leads in cohort × 100",
             scope,
             kind: "Period metric",
           },
@@ -261,10 +274,10 @@ export function AnalyticsKpis({
           attention: true,
           info: {
             meaning:
-              "Unpaid balance on active deals. Not the same as pipeline value.",
-            formula: "Σ max(finalAmount − payments, 0)",
-            scope,
-            kind: "Period metric",
+              "Current unpaid balance across all active deals in the CRM. Not restricted to date range.",
+            formula: "Σ max(Deal.finalAmount − payments, 0) across all active deals",
+            scope: "Current all-time snapshot",
+            kind: "Current snapshot",
           },
         },
         {
@@ -273,9 +286,9 @@ export function AnalyticsKpis({
           format: fmtInr,
           info: {
             meaning:
-              "Value of leads still in active stages. Current snapshot across all leads.",
-            formula: "Σ deal or quoted amount, active stages",
-            scope: "Current, all leads",
+              "Estimated value of opportunities currently in active sales stages (New, Contacted, Qualified, Proposal Sent).",
+            formula: "Σ (Deal.finalAmount || Lead.quotedAmount) for active leads",
+            scope: "Current all-time snapshot",
             kind: "Current snapshot",
           },
         },
@@ -284,8 +297,8 @@ export function AnalyticsKpis({
           value: k.avgWonDeal,
           format: fmtInr,
           info: {
-            meaning: "Average quoted value per won lead.",
-            formula: "Won value ÷ won leads with amount",
+            meaning: "Average finalized contract value per won deal with an amount in this period.",
+            formula: "Won Deal Value ÷ count(Won deals with finalAmount > 0)",
             scope,
             kind: "Period metric",
           },
@@ -295,9 +308,9 @@ export function AnalyticsKpis({
           value: k.collectionRate ?? 0,
           format: fmtPct(1),
           info: {
-            meaning: "Share of contracted value received as payments.",
-            formula: "Received ÷ contracted × 100",
-            scope,
+            meaning: "Share of contracted deal value received as payments.",
+            formula: "Money Received ÷ Total Contracted Deal Value × 100",
+            scope: "Collections vs active deals",
             kind: "Period metric",
           },
         },
@@ -311,10 +324,10 @@ export function AnalyticsKpis({
           value: k.followUpsCreated,
           format: fmtInt,
           info: {
-            meaning: "All follow-ups scheduled in range, any status.",
-            formula: "count(FollowUp)",
-            scope,
-            kind: "Period metric",
+            meaning: "All follow-ups scheduled on currently active leads.",
+            formula: "count(FollowUp) on active leads",
+            scope: "Current active leads",
+            kind: "Current snapshot",
           },
         },
         {
@@ -322,10 +335,10 @@ export function AnalyticsKpis({
           value: k.followUpsCompleted,
           format: fmtInt,
           info: {
-            meaning: "Follow-ups marked completed.",
-            formula: "count(status = COMPLETED)",
-            scope,
-            kind: "Period metric",
+            meaning: "Follow-ups marked completed on currently active leads.",
+            formula: "count(status = COMPLETED) on active leads",
+            scope: "Current active leads",
+            kind: "Current snapshot",
           },
         },
         {
@@ -336,28 +349,20 @@ export function AnalyticsKpis({
           info: {
             meaning: "Pending follow-ups past their scheduled time.",
             formula: "PENDING and scheduledAt < now",
-            scope: "Current",
+            scope: "Current snapshot",
             kind: "Current snapshot",
           },
         },
         {
           label: "Completion Rate",
-          value:
-            k.followUpsCreated > 0
-              ? (k.followUpsCompleted /
-                  Math.max(
-                    k.followUpsCompleted + (k.followUpsCreated - k.followUpsCompleted),
-                    1
-                  )) *
-                100
-              : 0,
+          value: canonicalCompletionRate * 100,
           format: fmtPct(1),
           info: {
             meaning:
-              "Share of follow-ups executed without abandoning.",
-            formula: "Completed ÷ (Completed + Pending + Overdue)",
-            scope,
-            kind: "Period metric",
+              "Share of active follow-ups completed without abandoning. Cancelled follow-ups are excluded.",
+            formula: "Completed ÷ (Completed + Pending), Cancelled excluded",
+            scope: "Current active leads",
+            kind: "Current snapshot",
           },
         },
       ],
@@ -394,12 +399,12 @@ export function AnalyticsKpis({
                   format={p.format}
                   className="truncate text-[21px] font-semibold tracking-tight text-foreground sm:text-[28px]"
                 />
-                {p.key === "win" && p.visual}
+                {(p.key === "win" || p.key === "recv") && p.visual}
               </div>
               <p className="mt-1 line-clamp-2 text-[11.5px] text-muted-foreground sm:text-[12px]">
                 {p.sub}
               </p>
-              {p.key !== "win" && (
+              {p.key !== "win" && p.key !== "recv" && (
                 <div className="mt-auto pt-2 opacity-80 transition-opacity group-hover:opacity-100">
                   {p.visual}
                 </div>

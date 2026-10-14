@@ -15,6 +15,9 @@ export type Transition = {
 
 export function transitions(stages: FunnelStage[]): Transition[] {
   if (!stages || stages.length <= 1) return [];
+  const top = stages[0]?.reached ?? 0;
+  if (top <= 0) return [];
+
   return stages.slice(1).map((s, i) => {
     const prev = stages[i]!;
     const c = s.conversionFromPrev;
@@ -30,10 +33,14 @@ export function transitions(stages: FunnelStage[]): Transition[] {
   });
 }
 
-/** Largest drop-off among transitions with verified history. */
+/** Largest drop-off among transitions with verified history. Returns null if zero leads or no drop-off. */
 export function bottleneck(stages: FunnelStage[]): Transition | null {
+  if (!stages || stages.length <= 1) return null;
+  const top = stages[0]?.reached ?? 0;
+  if (top <= 0) return null;
+
   const list = transitions(stages);
-  const valid = list.filter((t) => t.dropOff !== null && t.fromCount >= 1);
+  const valid = list.filter((t) => t.dropOff !== null && t.dropOff > 0 && t.fromCount >= 1);
   if (!valid.length) return null;
   return valid.sort((a, b) => b.dropOff! - a.dropOff!)[0] ?? null;
 }
@@ -77,7 +84,7 @@ export function deriveInsights(
       tone: "attention",
       value: String(f.overdue),
       title: `${f.overdue} follow-up${f.overdue === 1 ? " is" : "s are"} overdue.`,
-      detail: `Pending follow-ups past their scheduled time. Completion rate is ${pct(f.completionRate, 1)} excluding cancelled.`,
+      detail: `Pending follow-ups past their scheduled time. Completion rate is ${pct(f.completionRate, 1)} (cancelled excluded).`,
     });
   }
 
@@ -90,7 +97,7 @@ export function deriveInsights(
       tone: "neutral",
       value: String(topType.total),
       title: `${typeName} has the highest follow-up volume.`,
-      detail: `${topType.total} of ${f.created} follow-ups in this period.`,
+      detail: `${topType.total} of ${f.created} follow-ups across active leads.`,
     });
   }
 
@@ -101,8 +108,8 @@ export function deriveInsights(
       kind: "revenue",
       tone: "attention",
       value: inr(outstanding),
-      title: `Outstanding collections total ${inr(outstanding)}.`,
-      detail: `${(data.kpis.collectionRate ?? 0).toFixed(1)}% of contracted value from deals in this period has been received.`,
+      title: `Outstanding balance totals ${inr(outstanding)}.`,
+      detail: `Unpaid balance across active deals. Current all-time snapshot.`,
     });
   }
 
