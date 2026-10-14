@@ -1,13 +1,24 @@
 "use client";
 
-import { Phone, MessageCircle, CalendarPlus, Star, Clock, IndianRupee, Activity, FileText } from "lucide-react";
+import {
+  Phone,
+  MessageCircle,
+  CalendarPlus,
+  Star,
+  Clock,
+  Activity,
+  FileText,
+  ArrowUpDown,
+} from "lucide-react";
 import { formatCurrency } from "@/features/leads/formatters";
 import { formatNextFollowUp, formatLastContacted } from "@/lib/date-utils";
 import { LeadStatusBadge } from "@/features/leads/lead-status-badge";
 import { useWhatsApp } from "@/components/whatsapp-context";
 import { useCall } from "@/components/call-context";
 import { CopyContactButton } from "@/components/copy-contact-button";
+import { Avatar } from "@/components/crm/primitives";
 import type { Lead, LeadSortOption } from "@/features/leads/types";
+import { cn } from "@/lib/utils";
 
 type PinnedLeadsViewProps = {
   leads: Lead[];
@@ -31,50 +42,67 @@ export function PinnedLeadsView({
 
   if (leads.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center">
-        <div className="flex size-12 items-center justify-center rounded-full bg-amber-50 text-amber-500">
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card p-12 text-center shadow-xs">
+        <div className="flex size-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-500">
           <Star className="size-6 fill-amber-400 text-amber-500" />
         </div>
-        <h3 className="mt-3 text-base font-bold text-slate-900">No pinned leads yet</h3>
-        <p className="mt-1 max-w-sm text-sm text-slate-500">
-          Star important leads from Leads, Pipeline, Follow-ups, or Lead Detail to maintain your focused shortlist.
+        <h3 className="mt-3.5 text-base font-semibold text-foreground">No pinned leads yet</h3>
+        <p className="mt-1 max-w-sm text-[13px] text-muted-foreground">
+          Star important leads from the Leads table, Pipeline, or Lead Details to maintain your priority shortlist.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3.5">
+      {/* Top Header Summary & Sorting */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-          {leads.length} {leads.length === 1 ? "Prospect Shortlisted" : "Prospects Shortlisted"}
-        </p>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-amber-600 font-medium hidden sm:inline">★ Priority Focus</span>
-          {onSortByChange && (
-            <label className="inline-flex items-center gap-1.5 text-xs text-slate-500">
-              <span className="sr-only">Sort pinned leads</span>
-              <select
-                value={sortBy}
-                onChange={(e) => onSortByChange(e.target.value as LeadSortOption)}
-                className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-100"
-                aria-label="Sort pinned leads"
-              >
-                <option value="default">Sort: Default</option>
-                <option value="name_asc">Name A → Z</option>
-                <option value="name_desc">Name Z → A</option>
-                <option value="most_stale">Most Stale First</option>
-              </select>
-            </label>
-          )}
+          <span className="tabular text-[13px] font-semibold text-foreground">
+            {leads.length} {leads.length === 1 ? "lead" : "leads"} shortlisted
+          </span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+            <Star className="size-3 fill-current" /> Priority Shortlist
+          </span>
         </div>
+
+        {onSortByChange && (
+          <div className="flex items-center gap-1.5">
+            <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="sr-only">Sort pinned leads</span>
+              <div className="relative">
+                <select
+                  value={sortBy}
+                  onChange={(e) => onSortByChange(e.target.value as LeadSortOption)}
+                  className="h-8 rounded-lg bg-card pl-2.5 pr-7 text-[12px] font-medium text-foreground shadow-[inset_0_0_0_1px_var(--input)] outline-none transition-shadow hover:shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--foreground)_20%,var(--input))] focus:shadow-[inset_0_0_0_1px_var(--ring),0_0_0_2px_color-mix(in_oklab,var(--ring)_15%,transparent)] cursor-pointer"
+                  aria-label="Sort pinned leads"
+                  data-testid="pinned-sort-select"
+                >
+                  <option value="default">Newest</option>
+                  <option value="value">Highest Value</option>
+                  <option value="followup">Earliest Follow-up</option>
+                  <option value="name_asc">Name A → Z</option>
+                  <option value="name_desc">Name Z → A</option>
+                  <option value="most_stale">Most Stale</option>
+                </select>
+                <ArrowUpDown className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-subtle" />
+              </div>
+            </label>
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {/* Lovable-Fidelity Pinned Cards Grid */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
         {leads.map((lead) => {
           const notesText = lead.latestNote || lead.notes || "";
-          const dealAmount = lead.dealValue ?? lead.quotedAmount ?? null;
-          const lastActivityText = lead.lastActivity?.message || (lead.lastContactDate ? `Contacted: ${formatLastContacted(lead.lastContactDate)}` : "Lead created");
+          const dealAmount = lead.dealValue ?? lead.quotedAmount ?? lead.budget ?? null;
+          const lastActivityText =
+            lead.lastActivity?.message ||
+            (lead.lastContactDate
+              ? `Contacted: ${formatLastContacted(lead.lastContactDate)}`
+              : "Lead created");
 
           return (
             <div
@@ -89,91 +117,99 @@ export function PinnedLeadsView({
                   onSelect(lead);
                 }
               }}
-              className="group relative flex flex-col justify-between rounded-xl border border-amber-200/80 bg-gradient-to-b from-amber-50/20 to-white p-3.5 shadow-sm transition-all duration-150 hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+              className="card-surface group relative flex flex-col justify-between rounded-xl p-4 shadow-[var(--shadow-card)] transition-all duration-150 hover:shadow-md cursor-pointer border border-border"
             >
-              {/* Header: Name, Phone, Status & Unpin Action */}
               <div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="truncate text-[15px] font-bold text-slate-900 tracking-tight">
-                        {lead.name}
-                      </h3>
-                      <LeadStatusBadge status={lead.status} />
-                      {lead.staleInfo?.isStale && (
-                        <span
-                          role="status"
-                          aria-label={lead.staleInfo.staleLabel}
-                          title={lead.staleInfo.staleLabel}
-                          className="inline-flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
-                        >
-                          <Clock size={10} className="text-amber-600 shrink-0" />
-                          <span>{lead.staleInfo.staleLabel}</span>
-                        </span>
-                      )}
+                {/* Header: Avatar, Name, Status & Unpin Action */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <Avatar name={lead.name} className="h-9 w-9 text-[11px]" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="truncate text-[14.5px] font-semibold text-foreground tracking-tight">
+                          {lead.name}
+                        </h3>
+                        <LeadStatusBadge status={lead.status} />
+                        {lead.staleInfo?.isStale && (
+                          <span
+                            role="status"
+                            aria-label={lead.staleInfo.staleLabel}
+                            title={lead.staleInfo.staleLabel}
+                            className="inline-flex items-center gap-1 rounded bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning"
+                          >
+                            <Clock size={10} className="shrink-0" />
+                            <span>{lead.staleInfo.staleLabel}</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="truncate text-[12px] text-muted-foreground mt-0.5">
+                        {[lead.business, lead.industry].filter(Boolean).join(" · ") || "No business added"}
+                      </p>
                     </div>
-                    {lead.business && (
-                      <p className="truncate text-xs text-slate-500 mt-0.5">{lead.business}</p>
-                    )}
                   </div>
 
+                  {/* Unpin button */}
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onTogglePin(lead);
                     }}
-                    className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center gap-1 rounded-lg border border-amber-200 bg-amber-50/80 px-2 py-1 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100 hover:text-amber-900 active:scale-95 shrink-0"
+                    className="press inline-flex h-8 items-center gap-1 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground hover:bg-muted transition-colors shrink-0 cursor-pointer"
                     title="Unpin lead"
                     aria-label={`Unpin ${lead.name}`}
                   >
                     <Star className="size-3.5 fill-amber-400 text-amber-500" />
-                    <span className="hidden sm:inline text-[11px]">Unpin</span>
+                    <span className="text-[11.5px] text-muted-foreground">Unpin</span>
                   </button>
                 </div>
 
-                {/* Phone & Deal Value */}
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100/90 pt-2 text-xs">
-                  <div className="flex items-center gap-1.5 text-slate-700 font-medium">
-                    <Phone className="size-3.5 text-slate-400" />
-                    <span>{lead.phone}</span>
+                {/* Phone & Value Pill */}
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5 text-xs">
+                  <div className="flex items-center gap-1.5 text-foreground font-mono">
+                    <Phone className="size-3.5 text-subtle shrink-0" />
+                    <span className="tabular">{lead.phone}</span>
                     <CopyContactButton name={lead.name} phone={lead.phone} />
                   </div>
 
                   {dealAmount !== null && (
-                    <div className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700 text-[11px]">
-                      <span>Deal: {formatCurrency(dealAmount)}</span>
+                    <div className="inline-flex items-center gap-1 rounded-md bg-accent px-2 py-0.5 font-semibold text-accent-foreground text-[11px] tabular">
+                      <span>{lead.quotedAmount ? "Quoted" : "Value"}: {formatCurrency(dealAmount)}</span>
                     </div>
                   )}
                 </div>
 
-                {/* Latest Meaningful Note */}
-                <div className="mt-2 rounded-lg bg-slate-50 p-2 text-xs text-slate-600">
-                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
-                    <FileText className="size-3 text-slate-400" />
+                {/* Latest Note Box */}
+                <div className="mt-2.5 rounded-lg bg-muted/50 p-2.5 text-[12px] text-foreground/80">
+                  <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                    <FileText className="size-3 text-subtle shrink-0" />
                     <span>Latest Note</span>
                   </div>
                   <p className="line-clamp-2 leading-relaxed">
-                    {notesText ? notesText : <span className="italic text-slate-400">No notes recorded</span>}
+                    {notesText ? (
+                      notesText
+                    ) : (
+                      <span className="italic text-muted-foreground">No notes recorded</span>
+                    )}
                   </p>
                 </div>
 
-                {/* Timings: Next follow-up & Last activity */}
-                <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-500">
+                {/* Timings: Next Follow-up & Last Activity */}
+                <div className="mt-2.5 grid grid-cols-2 gap-2 text-[11.5px] text-muted-foreground">
                   <div className="flex flex-col">
-                    <span className="flex items-center gap-1 font-medium text-slate-400 text-[10px] uppercase">
-                      <Clock className="size-3" /> Next Follow-up
+                    <span className="flex items-center gap-1 font-medium text-subtle text-[10px] uppercase tracking-wide">
+                      <Clock className="size-3 shrink-0" /> Next Follow-up
                     </span>
-                    <span className="font-semibold text-blue-700 mt-0.5">
+                    <span className="font-semibold text-primary mt-0.5 tabular">
                       {formatNextFollowUp(lead.nextFollowUpDate)}
                     </span>
                   </div>
 
                   <div className="flex flex-col text-right">
-                    <span className="flex items-center justify-end gap-1 font-medium text-slate-400 text-[10px] uppercase">
-                      <Activity className="size-3" /> Last Activity
+                    <span className="flex items-center justify-end gap-1 font-medium text-subtle text-[10px] uppercase tracking-wide">
+                      <Activity className="size-3 shrink-0" /> Last Activity
                     </span>
-                    <span className="truncate text-slate-700 font-medium mt-0.5" title={lastActivityText}>
+                    <span className="truncate text-foreground font-medium mt-0.5" title={lastActivityText}>
                       {lastActivityText}
                     </span>
                   </div>
@@ -182,16 +218,17 @@ export function PinnedLeadsView({
 
               {/* Bottom Actions: Call, WhatsApp, Follow-up */}
               <div
-                className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-2.5"
+                className="mt-3.5 flex items-center gap-2 border-t border-border/60 pt-3"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
                   type="button"
                   onClick={() => openCallModal(lead)}
-                  className="flex-1 inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-blue-50 text-blue-700 text-xs font-semibold hover:bg-blue-100 active:bg-blue-200 transition-colors"
+                  className="flex-1 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-card border border-border text-foreground text-xs font-semibold hover:bg-muted active:scale-98 transition-all cursor-pointer"
                   aria-label={`Call ${lead.name}`}
                 >
-                  <Phone size={14} /> Call
+                  <Phone size={13} className="text-muted-foreground" />
+                  <span>Call</span>
                 </button>
                 <button
                   type="button"
@@ -199,18 +236,20 @@ export function PinnedLeadsView({
                     e.preventDefault();
                     openWhatsApp(lead);
                   }}
-                  className="flex-1 inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg bg-[#25d366]/10 text-[#20bd5a] text-xs font-semibold hover:bg-[#25d366]/20 active:bg-[#25d366]/30 transition-colors"
+                  className="flex-1 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-whatsapp text-whatsapp-foreground text-xs font-semibold hover:opacity-90 active:scale-98 transition-all cursor-pointer"
                   aria-label={`Message ${lead.name} on WhatsApp`}
                 >
-                  <MessageCircle size={14} /> WhatsApp
+                  <MessageCircle size={13} />
+                  <span>WhatsApp</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => onAddFollowUp(lead)}
-                  className="flex-1 inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 active:bg-slate-100 transition-colors shadow-sm"
+                  className="flex-1 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-border bg-card text-foreground text-xs font-semibold hover:bg-muted active:scale-98 transition-all cursor-pointer"
                   aria-label={`Schedule follow-up for ${lead.name}`}
                 >
-                  <CalendarPlus size={14} /> Follow-up
+                  <CalendarPlus size={13} className="text-muted-foreground" />
+                  <span>Follow-up</span>
                 </button>
               </div>
             </div>
