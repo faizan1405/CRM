@@ -23,6 +23,7 @@ import {
   transformPersonalNoteAction,
   improvePersonalNote,
 } from "@/app/actions/personal-notes";
+import { PageHeader } from "@/components/crm/primitives";
 import { useToast } from "@/components/toast-provider";
 
 export function NotesWorkspace({
@@ -281,46 +282,36 @@ export function NotesWorkspace({
   return (
     <div className="mx-auto w-full max-w-6xl space-y-6 pb-16">
       {/* Workspace Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-950">
-              Personal Notes
-            </h1>
-            <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
-              {notes.length}
-            </span>
-          </div>
-          <p className="mt-1 text-xs sm:text-sm text-slate-500">
-            Private workspace for ideas, reminders, and sales thoughts.
-          </p>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleCreateNew}
-          className="inline-flex min-h-11 w-full sm:w-auto items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-xs hover:bg-blue-700 active:bg-blue-800 transition-colors"
-          aria-label="Create new personal note"
-        >
-          <Plus size={18} aria-hidden="true" />
-          <span>New Note</span>
-        </button>
-      </div>
+      <PageHeader
+        title="Personal Notes"
+        description="Private to you · your private playbook, ideas and reminders."
+        actions={
+          <button
+            type="button"
+            onClick={handleCreateNew}
+            className="press inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-ink px-4 text-[13px] font-medium text-ink-foreground shadow-sm hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
+            aria-label="Create new personal note"
+          >
+            <Plus size={15} aria-hidden="true" />
+            <span>New Note</span>
+          </button>
+        }
+      />
 
       {/* Error Message Banner */}
       {errorMessage && (
         <div
           role="alert"
-          className="flex items-center justify-between gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-900"
+          className="flex items-center justify-between gap-2.5 rounded-xl border border-destructive/20 bg-danger-soft p-3.5 text-xs text-destructive"
         >
           <div className="flex items-center gap-2">
-            <AlertCircle size={16} className="text-rose-600 shrink-0" />
+            <AlertCircle size={16} className="text-destructive shrink-0" />
             <span className="font-medium">{errorMessage}</span>
           </div>
           <button
             type="button"
             onClick={() => setErrorMessage(null)}
-            className="text-rose-500 hover:text-rose-700"
+            className="text-destructive/70 hover:text-destructive cursor-pointer"
             aria-label="Dismiss error"
           >
             <X size={14} />
@@ -334,8 +325,8 @@ export function NotesWorkspace({
           Search personal notes
         </label>
         <Search
-          size={16}
-          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+          size={15}
+          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
           aria-hidden="true"
         />
         <input
@@ -344,16 +335,16 @@ export function NotesWorkspace({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search notes, ideas, reminders..."
-          className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-10 text-base sm:text-sm text-slate-900 placeholder:text-slate-400 shadow-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+          className="h-10 w-full rounded-xl border border-border bg-card pl-9 pr-9 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground shadow-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
         />
         {searchQuery && (
           <button
             type="button"
             onClick={() => setSearchQuery("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 grid size-6 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            className="press absolute right-3 top-1/2 -translate-y-1/2 grid size-6 place-items-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
             aria-label="Clear search"
           >
-            <X size={14} aria-hidden="true" />
+            <X size={13} aria-hidden="true" />
           </button>
         )}
       </div>

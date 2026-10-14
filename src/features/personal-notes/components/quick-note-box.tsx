@@ -109,10 +109,10 @@ export function QuickNoteBox({ onSave, className = "", onImproveNote, saving = f
 
   return (
     <div
-      className={`rounded-2xl border transition-all duration-150 ${
+      className={`card-surface rounded-2xl border transition-all duration-200 ${
         isFocused
-          ? "border-blue-500 bg-white shadow-md ring-2 ring-blue-100"
-          : "border-slate-200 bg-white shadow-xs hover:border-slate-300"
+          ? "border-primary bg-card ring-2 ring-primary/20 shadow-sm"
+          : "border-border bg-card hover:border-border/80"
       } ${className}`}
     >
       <form onSubmit={handleSubmit} className="p-3 sm:p-4">
@@ -129,24 +129,24 @@ export function QuickNoteBox({ onSave, className = "", onImproveNote, saving = f
             if (!content.trim()) setIsFocused(false);
           }}
           onKeyDown={handleKeyDown}
-          placeholder="Write anything... (e.g. need call rakesh tomorrow, check ad results)"
+          placeholder="Write anything... (e.g. need to call client tomorrow, check campaign results)"
           rows={isFocused || content ? 3 : 1}
-          className="w-full resize-none border-0 bg-transparent text-base sm:text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-0 leading-relaxed"
+          className="w-full resize-none border-0 bg-transparent text-base sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0 leading-relaxed"
         />
 
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleImprove}
               disabled={!content.trim() || isImproving}
               title={!content.trim() ? "Write a note first." : "Improve note with AI"}
-              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:text-indigo-600 active:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+              className="press inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-xs font-medium text-foreground hover:bg-muted active:bg-muted disabled:cursor-not-allowed disabled:opacity-40 transition-colors cursor-pointer"
               aria-label="Improve quick note"
             >
               <Sparkles
                 size={13}
-                className={isImproving ? "animate-spin text-indigo-600" : "text-indigo-600"}
+                className={isImproving ? "animate-spin text-sidebar-primary" : "text-sidebar-primary"}
                 aria-hidden="true"
               />
               <span>{isImproving ? "Improving..." : "✨ Improve"}</span>
@@ -156,31 +156,31 @@ export function QuickNoteBox({ onSave, className = "", onImproveNote, saving = f
               <button
                 type="button"
                 onClick={handleUndo}
-                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors"
+                className="press inline-flex h-8 items-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/60 px-2.5 text-xs font-medium text-foreground hover:bg-muted transition-colors cursor-pointer"
                 aria-label="Undo improvement"
               >
                 <RotateCcw size={12} aria-hidden="true" />
-                <span>Undo improvement</span>
+                <span>Undo</span>
               </button>
             )}
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
-            <span className="hidden sm:inline text-[11px] text-slate-400">
-              Press <kbd className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[10px] text-slate-600">Ctrl+Enter</kbd> to save
+            <span className="hidden sm:inline text-[11px] text-muted-foreground">
+              Press <kbd className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl+Enter</kbd> to save
             </span>
 
             <button
               type="submit"
               disabled={!content.trim() || saving}
               aria-busy={saving}
-              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-blue-700 active:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-40"
+              className="press inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-ink px-3 text-xs font-medium text-ink-foreground shadow-xs transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
               aria-label="Save quick note"
             >
               {saving ? (
-                <span className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white shrink-0" aria-hidden="true" />
+                <span className="size-3.5 animate-spin rounded-full border-2 border-ink-foreground/30 border-t-ink-foreground shrink-0" aria-hidden="true" />
               ) : (
-                <Plus size={15} aria-hidden="true" />
+                <Plus size={14} aria-hidden="true" />
               )}
               <span>{saving ? "Saving..." : "Save Note"}</span>
             </button>

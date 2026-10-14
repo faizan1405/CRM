@@ -40,9 +40,32 @@ const PaymentAnalytics = dynamic(
     loading: () => <div className="h-44 animate-pulse rounded-2xl border border-slate-100 bg-slate-50/50" />
   }
 );
+import { Card, PageHeader, Pill } from "@/components/crm/primitives";
 import { DealDetailPanel } from "./deal-detail-panel";
 import { AiNoteEditor } from "@/components/ui/ai-note-editor";
 import { cleanLeadName } from "@/features/leads/formatters";
+
+function DealRing({ pct, danger }: { pct: number; danger?: boolean }) {
+  const r = 15;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg viewBox="0 0 36 36" className="h-10 w-10 shrink-0 -rotate-90" aria-label={`${pct}% paid`}>
+      <circle cx="18" cy="18" r={r} fill="none" stroke="var(--border)" strokeWidth="3" />
+      <circle
+        cx="18"
+        cy="18"
+        r={r}
+        fill="none"
+        stroke={danger ? "var(--destructive)" : "var(--primary)"}
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={c * (1 - pct / 100)}
+        className="transition-[stroke-dashoffset] duration-700"
+      />
+    </svg>
+  );
+}
 import {
   Receipt,
   Plus,
@@ -756,44 +779,98 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-16">
       {/* ─── Header with Title and Add Deal Button ───────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
-            <Receipt className="text-blue-600" size={26} />
-            Deals &amp; Payments
-          </h1>
-          <p className="mt-1 text-xs sm:text-sm text-slate-500">
-            Track deals, milestone payments, collections, and outstanding balances.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
+      <PageHeader
+        title="Deals & Payments"
+        description={`${deals.length} deals · collections overview`}
+        actions={
           <button
             type="button"
             onClick={() => openAddDealFlow(activeTab === "other" ? "other" : "crm")}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 text-xs sm:text-sm font-semibold transition-colors shadow-sm cursor-pointer"
+            className="press inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-ink px-4 text-[13px] font-medium text-ink-foreground shadow-sm hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
           >
-            <Plus size={16} />
+            <Plus size={15} />
             <span>Add Deal</span>
           </button>
+        }
+      />
+
+      {/* ─── Lovable Hero Collection Overview Card ──────────────────────── */}
+      <Card className="rise overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+          <div className="p-5 sm:p-6">
+            <div className="eyebrow">Total deal value</div>
+            <div className="mt-2 text-[32px] font-semibold leading-none tracking-[-0.035em] tabular sm:text-[38px] text-foreground">
+              {formatCurrency(metrics.totalDealValue)}
+            </div>
+            <div className="mt-6 flex h-2 gap-[3px] overflow-hidden rounded-full bg-muted">
+              <div
+                className="grow-x bg-primary"
+                style={{
+                  width: `${metrics.totalDealValue ? Math.min(100, ((metrics.totalReceived ?? 0) / metrics.totalDealValue) * 100) : 0}%`,
+                }}
+              />
+              <div
+                className="grow-x bg-chart-2"
+                style={{
+                  width: `${metrics.totalDealValue ? Math.min(100, (Math.max(0, (metrics.totalOutstanding ?? 0) - (metrics.overdueAmount ?? 0)) / metrics.totalDealValue) * 100) : 0}%`,
+                }}
+              />
+              <div
+                className="grow-x bg-destructive"
+                style={{
+                  width: `${metrics.totalDealValue ? Math.min(100, ((metrics.overdueAmount ?? 0) / metrics.totalDealValue) * 100) : 0}%`,
+                }}
+              />
+            </div>
+            <div className="mt-2.5 text-[12px] text-muted-foreground tabular">
+              {metrics.collectionRate ?? (metrics.totalDealValue ? Math.round(((metrics.totalReceived ?? 0) / metrics.totalDealValue) * 100) : 0)}% collected · Across {metrics.totalDealsCount} {metrics.totalDealsCount === 1 ? "deal" : "deals"}
+            </div>
+          </div>
+          <dl className="grid grid-cols-3 border-t md:grid-cols-1 md:border-l md:border-t-0">
+            <div className="flex min-w-0 flex-col justify-center p-4 md:flex-row md:items-center md:justify-between md:px-6">
+              <dt className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <span className="h-2 w-2 rounded-sm bg-primary" />
+                Received
+              </dt>
+              <dd className="mt-1 truncate text-[15px] font-semibold tabular md:mt-0 md:text-[17px] text-foreground">
+                {formatCurrency(metrics.totalReceived)}
+              </dd>
+            </div>
+            <div className="flex min-w-0 flex-col justify-center p-4 md:flex-row md:items-center md:justify-between md:px-6 border-l md:border-l-0 md:border-t">
+              <dt className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <span className="h-2 w-2 rounded-sm bg-chart-2" />
+                Outstanding
+              </dt>
+              <dd className="mt-1 truncate text-[15px] font-semibold tabular md:mt-0 md:text-[17px] text-foreground">
+                {formatCurrency(metrics.totalOutstanding)}
+              </dd>
+            </div>
+            <div className="flex min-w-0 flex-col justify-center p-4 md:flex-row md:items-center md:justify-between md:px-6 border-l md:border-l-0 md:border-t">
+              <dt className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                <span className="h-2 w-2 rounded-sm bg-destructive" />
+                Overdue
+              </dt>
+              <dd className="mt-1 truncate text-[15px] font-semibold tabular md:mt-0 md:text-[17px] text-destructive">
+                {formatCurrency(metrics.overdueAmount)}
+              </dd>
+            </div>
+          </dl>
         </div>
-      </div>
+      </Card>
 
       {/* ─── TOP-LEVEL TABS ───────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-1 overflow-x-auto">
+      <div className="flex items-center gap-1 rounded-[10px] bg-muted p-1 w-max overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab("all")}
-          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 border whitespace-nowrap ${
+          className={`press inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-all cursor-pointer whitespace-nowrap ${
             activeTab === "all"
-              ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+              ? "bg-card text-foreground shadow-[var(--shadow-card)] font-semibold"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <span>All Deals</span>
-          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-            activeTab === "all" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
-          }`}>
+          <span className="tabular text-[11px] text-subtle px-1.5 py-0.2 rounded-full">
             {allCount}
           </span>
         </button>
@@ -801,16 +878,14 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
         <button
           type="button"
           onClick={() => setActiveTab("crm")}
-          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 border whitespace-nowrap ${
+          className={`press inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-all cursor-pointer whitespace-nowrap ${
             activeTab === "crm"
-              ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+              ? "bg-card text-foreground shadow-[var(--shadow-card)] font-semibold"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <span>CRM Clients</span>
-          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-            activeTab === "crm" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
-          }`}>
+          <span className="tabular text-[11px] text-subtle px-1.5 py-0.2 rounded-full">
             {crmCount}
           </span>
         </button>
@@ -818,90 +893,17 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
         <button
           type="button"
           onClick={() => setActiveTab("other")}
-          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 border whitespace-nowrap ${
+          className={`press inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-all cursor-pointer whitespace-nowrap ${
             activeTab === "other"
-              ? "bg-blue-600 text-white border-blue-600 shadow-sm"
-              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900"
+              ? "bg-card text-foreground shadow-[var(--shadow-card)] font-semibold"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <span>Other Clients</span>
-          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
-            activeTab === "other" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"
-          }`}>
+          <span className="tabular text-[11px] text-subtle px-1.5 py-0.2 rounded-full">
             {otherCount}
           </span>
         </button>
-      </div>
-
-      {/* ─── TAB-SCOPED SUMMARY METRICS CARDS ────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-            Total Deal Value
-          </span>
-          <span className="mt-1 text-lg sm:text-2xl font-bold text-slate-900 block">
-            {formatCurrency(metrics.totalDealValue)}
-          </span>
-          <span className="mt-1 text-xs text-slate-400 block font-medium">
-            Across {metrics.totalDealsCount} {activeTab === "crm" ? "CRM" : activeTab === "other" ? "Other Client" : "active"} {metrics.totalDealsCount === 1 ? "deal" : "deals"}
-          </span>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wider block">
-            Total Received
-          </span>
-          <span className="mt-1 text-lg sm:text-2xl font-bold text-emerald-700 block">
-            {formatCurrency(metrics.totalReceived)}
-          </span>
-          <span className="mt-1 text-xs text-emerald-600/80 block font-medium">
-            Real payments received
-          </span>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm col-span-2 sm:col-span-1">
-          <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider block">
-            Collection Rate
-          </span>
-          <span className="mt-1 text-lg sm:text-2xl font-bold text-blue-700 block">
-            {metrics.collectionRate ?? ((metrics.totalDealValue ?? 0) > 0 ? Math.round(((metrics.totalReceived ?? 0) / (metrics.totalDealValue ?? 1)) * 10000) / 100 : 0)}%
-          </span>
-          <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-blue-600 transition-all"
-              style={{
-                width: `${Math.min(
-                  100,
-                  metrics.collectionRate ?? ((metrics.totalDealValue ?? 0) > 0 ? ((metrics.totalReceived ?? 0) / (metrics.totalDealValue ?? 1)) * 100 : 0)
-                )}%`,
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <span className="text-xs font-semibold text-amber-600 uppercase tracking-wider block">
-            Outstanding
-          </span>
-          <span className="mt-1 text-lg sm:text-2xl font-bold text-amber-700 block">
-            {formatCurrency(metrics.totalOutstanding)}
-          </span>
-          <span className="mt-1 text-xs text-amber-600/80 block font-medium">
-            Pending collections
-          </span>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <span className="text-xs font-semibold text-rose-600 uppercase tracking-wider block">
-            Overdue Amount
-          </span>
-          <span className="mt-1 text-lg sm:text-2xl font-bold text-rose-700 block">
-            {formatCurrency(metrics.overdueAmount)}
-          </span>
-          <span className="mt-1 text-xs text-rose-600/80 block font-medium">
-            Past due date
-          </span>
-        </div>
       </div>
 
       {/* ─── FILTERS AND SEARCH ───────────────────────────────────────────── */}
@@ -968,33 +970,21 @@ export function DealsWorkspace({ initialDeals = [], initialMetrics }: DealsWorks
             const isPaid = deal.paymentStatus === "Paid";
             const isOverdue = deal.paymentStatus === "Overdue";
 
+            const percent = deal.finalAmount > 0 ? Math.min(100, Math.round(((deal.totalReceived ?? 0) / deal.finalAmount) * 100)) : 0;
+
             return (
               <div
                 key={deal.id}
-                className={`rounded-2xl border shadow-sm transition-all hover:shadow-md ${
-                  isOverdue
-                    ? "border-rose-200 bg-rose-50/30"
-                    : isPaid
-                      ? "border-emerald-200 bg-emerald-50/20"
-                      : "border-slate-200 bg-white"
-                }`}
+                className="group rounded-2xl border border-border bg-card p-4 sm:p-5 card-surface card-hover transition-all"
               >
                 {/* Deal card header */}
-                <div className="p-4 sm:p-5">
+                <div>
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                        isCrm ? "bg-blue-100" : "bg-purple-100"
-                      }`}>
-                        {isCrm ? (
-                          <UserCheck className="text-blue-600" size={20} />
-                        ) : (
-                          <Store className="text-purple-600" size={20} />
-                        )}
-                      </div>
+                    <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                      <DealRing pct={percent} danger={isOverdue} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h3 className="text-sm sm:text-base font-bold text-slate-900 truncate">
+                          <h3 className="text-sm sm:text-base font-bold text-foreground truncate">
                             {cleanLeadName(isCrm ? deal.lead?.name || deal.clientNameSnapshot : deal.clientNameSnapshot)}
                           </h3>
                           {renderSourceBadge(deal)}
