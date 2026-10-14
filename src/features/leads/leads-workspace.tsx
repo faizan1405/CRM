@@ -171,7 +171,10 @@ export function LeadsWorkspace({ initialLeads, initialError, onStructureLead }: 
   }, [sortParam]);
 
   useEffect(() => {
-    if (selectedParam && navigation) navigation.openLead(selectedParam, actionParam === "activity" || actionParam === "followups" ? actionParam : null);
+    if (selectedParam && navigation) {
+      const validAction = (actionParam === "status" || actionParam === "note" || actionParam === "activity" || actionParam === "followups") ? actionParam : null;
+      navigation.openLead(selectedParam, validAction);
+    }
   }, [selectedParam, actionParam, navigation]);
 
   const {

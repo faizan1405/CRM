@@ -7,12 +7,16 @@ const protectedRoutes = [
   '/leads',
   '/follow-ups',
   '/pipeline',
+  '/deals',
   '/settings',
   '/analytics',
   '/notifications',
   '/daily-briefing',
   '/whatsapp-templates',
   '/personal-notes',
+  '/recently-deleted',
+  '/sales-assets',
+  '/guide',
 ];
 
 export async function proxy(request: NextRequest) {

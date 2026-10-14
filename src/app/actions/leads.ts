@@ -1,6 +1,6 @@
 "use server";
 
-import { LeadStatus as PrismaLeadStatus, QuickStatus as PrismaQuickStatus, Prisma, ActivityType } from "@prisma/client";
+import { LeadStatus as PrismaLeadStatus, QuickStatus as PrismaQuickStatus, LeadLossReason as PrismaLeadLossReason, Prisma, ActivityType } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -766,8 +766,23 @@ export async function changeLeadStatus(
 
       const updatePayload: Prisma.LeadUpdateInput = { status: databaseStatus };
 
+      let createdLossEventId: string | undefined;
       if (databaseStatus === PrismaLeadStatus.LOST) {
         updatePayload.nextFollowUpDate = null;
+        if (lossReasonInput) {
+          const rawReason = lossReasonInput.toUpperCase().replace(/\s+/g, "_");
+          const prismaReason = (rawReason in PrismaLeadLossReason ? rawReason : "OTHER") as PrismaLeadLossReason;
+          const lossEvent = await tx.leadLossEvent.create({
+            data: {
+              leadId,
+              reason: prismaReason,
+              note: lossNoteInput?.trim() || null,
+              lostAt: new Date(),
+              createdByUserId: validUserId,
+            },
+          });
+          createdLossEventId = lossEvent.id;
+        }
         const pendingFollowUps = await tx.followUp.findMany({
           where: { leadId, status: "PENDING" },
         });
@@ -845,7 +860,7 @@ export async function changeLeadStatus(
               metadata: {
                 oldStatus: oldLead.status,
                 newStatus: databaseStatus,
-                ...(lossReasonInput ? { lossReason: lossReasonInput, lossNote: lossNoteInput } : {}),
+                ...(lossReasonInput ? { lossReason: lossReasonInput, lossNote: lossNoteInput, lossEventId: createdLossEventId } : {}),
               },
               createdByUserId: validUserId,
             },

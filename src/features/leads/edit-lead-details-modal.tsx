@@ -29,6 +29,7 @@ export function EditLeadDetailsModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [duplicateCandidate, setDuplicateCandidate] = useState<DuplicateLeadCandidate | null>(null);
   const { showToast, showUndoToast } = useToast();
+  const formRef = useRef<HTMLFormElement>(null);
 
   const [phone, setPhone] = useState(lead.phone || "");
   const [email, setEmail] = useState(lead.email || "");
@@ -161,6 +162,19 @@ export function EditLeadDetailsModal({
           <button
             type="submit"
             form="edit-lead-details-form"
+            onClick={(e) => {
+              if (formRef.current) {
+                if (!formRef.current.checkValidity()) {
+                  formRef.current.reportValidity();
+                  return;
+                }
+                e.preventDefault();
+                void handleSubmit({
+                  preventDefault: () => {},
+                  currentTarget: formRef.current,
+                } as unknown as React.FormEvent<HTMLFormElement>);
+              }
+            }}
             disabled={saving}
             className="min-h-11 rounded-xl bg-blue-600 px-5 text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 active:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
           >
@@ -169,7 +183,7 @@ export function EditLeadDetailsModal({
         </div>
       }
     >
-      <form id="edit-lead-details-form" onSubmit={handleSubmit} className="space-y-4">
+      <form ref={formRef} id="edit-lead-details-form" onSubmit={handleSubmit} className="space-y-4">
         {errorMessage && (
           <div
             role="alert"

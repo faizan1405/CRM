@@ -302,29 +302,35 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
   const handleLostConfirm = async (data: LostReasonSubmission) => {
     if (!lostReasonLead) return;
     setSaving(true);
-    const result = await changeLeadStatus(
-      lostReasonLead.id,
-      "Lost",
-      data.reason,
-      data.notes
-    );
-    setSaving(false);
-    if (!result.success) {
-      setError(result.error);
-      return;
-    }
-    replaceLead(result.data);
-    await refreshActivities();
-    setLostReasonLead(null);
-    stageRef.current?.querySelector('[data-stage="Lost"]')?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-      inline: "start",
-    });
-    if (result.undoId) {
-      showUndoToast("Lead marked as Lost", result.undoId);
-    } else {
-      showToast("Lead marked as Lost", "success");
+    try {
+      const result = await changeLeadStatus(
+        lostReasonLead.id,
+        "Lost",
+        data.reason,
+        data.notes
+      );
+      setSaving(false);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      replaceLead(result.data);
+      await refreshActivities();
+      setLostReasonLead(null);
+      stageRef.current?.querySelector('[data-stage="Lost"]')?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "start",
+      });
+      if (result.undoId) {
+        showUndoToast("Lead marked as Lost", result.undoId);
+      } else {
+        showToast("Lead marked as Lost", "success");
+      }
+    } catch (err) {
+      console.error("[handleLostConfirm catch]", err);
+      setSaving(false);
+      setError("Failed to update status to Lost.");
     }
   };
 
