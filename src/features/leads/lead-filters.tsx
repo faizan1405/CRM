@@ -135,6 +135,8 @@ export function LeadFilters({
             aria-hidden="true"
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle"
           />
+          {/* Mobile viewport zoom prevention: */}
+          {/* text-base text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:text-sm */}
           <input
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
