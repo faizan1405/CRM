@@ -33,7 +33,7 @@ export function RevenueHeroCard({
         <div className="flex flex-wrap items-start justify-between gap-4 pb-0">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="eyebrow">Revenue · {monthName}</span>
+              <span className="eyebrow">Total Won Revenue</span>
               <Link
                 href="/analytics"
                 className="text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground"

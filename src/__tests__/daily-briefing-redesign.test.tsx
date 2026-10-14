@@ -202,8 +202,8 @@ describe("Daily Briefing Redesign - Lovable Fidelity & Functional Preservation",
     expect(html).toContain("Review software implementation proposal");
     expect(html).toContain("Late");
 
-    // Widget 2: Proposals Awaiting Reply
-    expect(html).toContain("Proposals awaiting reply");
+    // Widget 2: Proposals (Proposal Stage Leads)
+    expect(html).toContain("Proposal Stage Leads");
     expect(html).toContain("Vikram Malhotra");
     expect(html).toContain("Malhotra Logistics");
     expect(html).toContain("₹2.5L");
@@ -292,8 +292,8 @@ describe("Daily Briefing Redesign - Lovable Fidelity & Functional Preservation",
     const htmlEmpty = renderToStaticMarkup(
       <ProposalsAwaitingReply proposals={[]} />
     );
-    expect(htmlEmpty).toContain("No proposals awaiting reply");
-    expect(htmlEmpty).toContain("Leads in proposal stage will appear here.");
+    expect(htmlEmpty).toContain("No leads in proposal stage");
+    expect(htmlEmpty).toContain("Leads in Proposal Sent stage will appear here.");
   });
 
   it("renders Payment to Chase with canonical financial data and empty state when null", () => {

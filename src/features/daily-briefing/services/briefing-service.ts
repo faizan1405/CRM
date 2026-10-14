@@ -1,6 +1,12 @@
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { requestGroqJson, AIConfigError, AIServiceError } from "@/lib/ai/groq-client";
+import {
+  calculateCollected,
+  calculateDealOutstanding,
+  derivePaymentStatus,
+  decimalToNumber,
+} from "@/lib/financial/calculations";
 import type {
   DailyBriefingPayload,
   BriefingSummaryStats,
@@ -303,10 +309,11 @@ export async function getDailySalesBriefingData(options?: {
     }
   }
 
-  // 5. Authentic Today's Call List (overdue or scheduled for today)
+  // 5. Authentic Today's Call List (overdue or scheduled for today, restricted strictly to CALL follow-ups)
   const todayCalls: BriefingCallItem[] = pendingFollowUps
     .filter((f) => {
       if (!f.lead) return false;
+      if (String(f.type).toUpperCase() !== "CALL") return false;
       const isPast = f.scheduledAt.getTime() < now.getTime();
       const isToday = getIndiaDateKey(f.scheduledAt) === todayDateStr;
       return isPast || isToday;
@@ -335,7 +342,7 @@ export async function getDailySalesBriefingData(options?: {
     })
     .slice(0, 10);
 
-  // 6. Authentic Proposals Awaiting Reply (leads with PROPOSAL_SENT status)
+  // 6. Authentic Proposal Stage Leads (leads with PROPOSAL_SENT status)
   const awaitingProposals: BriefingProposalItem[] = activeLeads
     .filter((l) => l.status === "PROPOSAL_SENT")
     .map((l) => {
@@ -357,16 +364,16 @@ export async function getDailySalesBriefingData(options?: {
         clientName: l.name,
         companyName: l.business || null,
         quotedAmountFormatted: formatted,
-        statusLabel: "Proposal Sent",
+        statusLabel: "Proposal Stage",
         daysAgo,
       };
     })
     .slice(0, 5);
 
-  // 7. Authentic Payment To Chase (from confirmed/completed deals with overdue/pending due date or outstanding balance)
+  // 7. Authentic Payment To Chase (from confirmed/completed deals with genuine unpaid balances)
   let paymentToChase: BriefingPaymentItem | null = null;
   try {
-    const candidateDeal = await db.deal.findFirst({
+    const candidateDeals = await db.deal.findMany({
       where: {
         status: { in: ["CONFIRMED", "COMPLETED"] },
         lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null },
@@ -379,41 +386,77 @@ export async function getDailySalesBriefingData(options?: {
         { nextPaymentDueDate: "asc" },
         { updatedAt: "desc" },
       ],
+      take: 25,
     });
 
-    if (candidateDeal) {
-      const totalPaid = candidateDeal.payments.reduce((acc, p) => acc + Number(p.amount), 0);
-      const outstanding = Math.max(0, Number(candidateDeal.finalAmount) - totalPaid);
-      const nextDueAmount = candidateDeal.nextPaymentDueAmount
-        ? Number(candidateDeal.nextPaymentDueAmount)
-        : 0;
+    const eligibleDeals = candidateDeals
+      .map((d) => {
+        const collected = calculateCollected(d.payments || []);
+        const outstandingDecimal = calculateDealOutstanding(d.finalAmount, collected);
+        const outstanding = decimalToNumber(outstandingDecimal);
+        if (outstanding <= 0) return null;
 
-      if (outstanding > 0 || nextDueAmount > 0) {
-        const amount = outstanding > 0 ? outstanding : nextDueAmount;
-        const isOverdue = candidateDeal.nextPaymentDueDate
-          ? candidateDeal.nextPaymentDueDate.getTime() < now.getTime()
-          : false;
+        const paymentStatus = derivePaymentStatus(
+          d.finalAmount,
+          collected,
+          d.nextPaymentDueDate,
+          todayDateStr
+        );
+        const isOverdue = paymentStatus === "Overdue";
 
-        const dueDateFormatted = candidateDeal.nextPaymentDueDate
+        // Amount to chase is the remaining unpaid obligation, capped to avoid showing already paid amounts
+        const nextDueNum = d.nextPaymentDueAmount ? decimalToNumber(d.nextPaymentDueAmount) : 0;
+        const amount = nextDueNum > 0 && nextDueNum <= outstanding ? nextDueNum : outstanding;
+
+        const dueDateFormatted = d.nextPaymentDueDate
           ? `due ${new Intl.DateTimeFormat("en-IN", {
               timeZone: "Asia/Kolkata",
               day: "numeric",
               month: "short",
-            }).format(candidateDeal.nextPaymentDueDate)}`
+            }).format(d.nextPaymentDueDate)}`
           : "Outstanding balance";
 
-        paymentToChase = {
-          id: candidateDeal.id,
-          dealId: candidateDeal.id,
-          leadId: candidateDeal.leadId,
-          clientName: candidateDeal.lead?.name || candidateDeal.clientNameSnapshot || "Client",
-          companyName: candidateDeal.lead?.business || candidateDeal.companyNameSnapshot || null,
+        return {
+          id: d.id,
+          dealId: d.id,
+          leadId: d.leadId,
+          clientName: d.lead?.name || d.clientNameSnapshot || "Client",
+          companyName: d.lead?.business || d.companyNameSnapshot || null,
           amount,
           amountFormatted: `₹${amount.toLocaleString("en-IN")}`,
           dueDateFormatted,
           isOverdue,
+          nextPaymentDueDate: d.nextPaymentDueDate,
+          outstanding,
         };
+      })
+      .filter((d): d is NonNullable<typeof d> => d !== null);
+
+    // Prioritize overdue payments first (most urgent due date first), then upcoming due dates, then highest outstanding
+    eligibleDeals.sort((a, b) => {
+      if (a.isOverdue && !b.isOverdue) return -1;
+      if (!a.isOverdue && b.isOverdue) return 1;
+      if (a.nextPaymentDueDate && b.nextPaymentDueDate) {
+        return a.nextPaymentDueDate.getTime() - b.nextPaymentDueDate.getTime();
       }
+      if (a.nextPaymentDueDate && !b.nextPaymentDueDate) return -1;
+      if (!a.nextPaymentDueDate && b.nextPaymentDueDate) return 1;
+      return b.outstanding - a.outstanding;
+    });
+
+    if (eligibleDeals.length > 0) {
+      const top = eligibleDeals[0];
+      paymentToChase = {
+        id: top.id,
+        dealId: top.dealId,
+        leadId: top.leadId,
+        clientName: top.clientName,
+        companyName: top.companyName,
+        amount: top.amount,
+        amountFormatted: top.amountFormatted,
+        dueDateFormatted: top.dueDateFormatted,
+        isOverdue: top.isOverdue,
+      };
     }
   } catch {
     // If deal query fails or table empty, gracefully keep null

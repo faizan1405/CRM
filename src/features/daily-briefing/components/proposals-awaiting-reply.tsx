@@ -16,7 +16,7 @@ export function ProposalsAwaitingReply({
 }: ProposalsAwaitingReplyProps) {
   return (
     <section
-      aria-label="Proposals Awaiting Reply"
+      aria-label="Proposal Stage Leads"
       className={`rounded-2xl border border-slate-200 dark:border-border bg-white dark:bg-card p-4 sm:p-5 shadow-xs ${className}`}
     >
       {/* Header */}
@@ -26,7 +26,7 @@ export function ProposalsAwaitingReply({
             <FileText size={13} />
           </span>
           <h2 className="text-sm font-semibold tracking-tight text-foreground">
-            Proposals awaiting reply
+            Proposal Stage Leads
           </h2>
         </div>
         <span className="rounded-full bg-slate-100 dark:bg-muted px-2 py-0.5 text-xs font-semibold tabular text-slate-700 dark:text-muted-foreground">
@@ -41,10 +41,10 @@ export function ProposalsAwaitingReply({
             <FileText size={18} />
           </div>
           <p className="mt-2 text-xs font-semibold text-foreground">
-            No proposals awaiting reply
+            No leads in proposal stage
           </p>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            Leads in proposal stage will appear here.
+            Leads in Proposal Sent stage will appear here.
           </p>
         </div>
       ) : (

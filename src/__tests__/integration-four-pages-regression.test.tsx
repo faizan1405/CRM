@@ -172,7 +172,7 @@ describe("Four Redesign Pages Unified Integration Test", () => {
         revenueTrend={mockDashboardData.revenueTrend}
       />
     );
-    expect(heroHtml).toContain("Revenue");
+    expect(heroHtml).toContain("Total Won Revenue");
     expect(heroHtml).toContain("Open Pipeline");
 
     const kpiHtml = renderToStaticMarkup(<KPICards data={mockDashboardData.kpis} />);
@@ -266,7 +266,7 @@ describe("Four Redesign Pages Unified Integration Test", () => {
     );
     expect(workspaceHtml).toContain("Rahul Sharma");
     expect(workspaceHtml).toContain("Today&#x27;s Call List");
-    expect(workspaceHtml).toContain("Proposals awaiting reply");
+    expect(workspaceHtml).toContain("Proposal Stage Leads");
     expect(workspaceHtml).toContain("Payment to Chase");
   });
 
