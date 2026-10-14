@@ -9,6 +9,14 @@ import { FollowUpPerformance } from "@/features/analytics/components/follow-up-p
 import { RevenueTrend } from "@/features/analytics/components/revenue-trend";
 import { inr, inrCompact } from "@/lib/crm/format";
 import type { CoreMetrics, FollowUpPerformanceData, FunnelStage } from "@/features/analytics/types";
+import {
+  calculateTotalContractedDealValue,
+  calculateDealsTotalCollected,
+  calculateTotalOutstanding,
+  calculateCollectionRate,
+  calculateMoneyReceived,
+  decimalToNumber,
+} from "@/lib/financial/calculations";
 
 describe("Analytics Data Integrity & Canonical Accuracy", () => {
   // ─── 1. Money Received must not derive from arbitrary percentages of won revenue ─
@@ -243,6 +251,238 @@ describe("Analytics Data Integrity & Canonical Accuracy", () => {
     const htmlRev = renderToStaticMarkup(<RevenueTrend data={[]} kpis={zeroKpis} />);
     expect(htmlRev).not.toContain("NaN");
     expect(htmlRev).not.toContain("Infinity");
-    expect(htmlRev).toContain("no contracted deals");
+    expect(htmlRev).toContain("no active deals");
+  });
+
+  // ─── 8. Financial Analytics Consistency & Matching Deal Populations ───────────
+  describe("Requirement 8: Financial Analytics Consistency & Matching Populations", () => {
+    it("8a: Payments this week against deals won last month calculate consistent matching overall collection", () => {
+      // Deal won last month (contracted = 100,000)
+      const deals = [
+        {
+          id: "deal-prior-month",
+          finalAmount: 100000,
+          payments: [
+            // Payment made this week
+            { id: "p-this-week", amount: 40000 },
+          ],
+        },
+      ];
+
+      // In this week's cohort ("7d"):
+      // No newly won deals this week => wonRevenue = 0
+      const wonRevenue = 0;
+      // Payment received this week => moneyReceived = 40,000
+      const moneyReceived = 40000;
+
+      // Overall collection derives from matching active deals
+      const totalContracted = decimalToNumber(calculateTotalContractedDealValue(deals));
+      const totalCollected = decimalToNumber(calculateDealsTotalCollected(deals));
+      const totalOutstanding = decimalToNumber(calculateTotalOutstanding(deals));
+      const collectionRate = decimalToNumber(calculateCollectionRate(totalCollected, totalContracted));
+
+      expect(totalContracted).toBe(100000);
+      expect(totalCollected).toBe(40000);
+      expect(totalOutstanding).toBe(60000);
+      expect(collectionRate).toBe(40.0);
+      // Contracted equals Collected + Outstanding
+      expect(totalContracted).toBe(totalCollected + totalOutstanding);
+
+      // Verify KPI and RevenueTrend presentation
+      const kpis: CoreMetrics = {
+        totalLeads: 5,
+        newLeads: 2,
+        contactedLeads: 2,
+        qualifiedLeads: 1,
+        proposalSent: 0,
+        wonLeads: 0, // 0 won leads in this period
+        lostLeads: 0,
+        winRate: 0,
+        lostRate: 0,
+        wonRevenue, // 0
+        moneyReceived, // 40,000
+        totalContractedDealValue: totalContracted,
+        totalReceivedAllTime: totalCollected,
+        totalOutstanding,
+        collectionRate,
+        openPipelineValue: 50000,
+        avgWonDeal: 0,
+        followUpsCreated: 4,
+        followUpsCompleted: 2,
+        overdueFollowUps: 0,
+      };
+
+      const html = renderToStaticMarkup(<RevenueTrend data={[]} kpis={kpis} />);
+      // Must display 40.0% overall collection without NaN or error
+      expect(html).toContain("40.0%");
+      expect(html).toContain("overall collected");
+      expect(html).toContain("₹1,00,000"); // Total contracted
+      expect(html).toContain("₹40,000"); // Total collected
+      expect(html).toContain("₹60,000"); // Outstanding balance
+    });
+
+    it("8b: No deals and no payments produces 0 collection rate and clean empty state", () => {
+      const deals: any[] = [];
+      const totalContracted = decimalToNumber(calculateTotalContractedDealValue(deals));
+      const totalCollected = decimalToNumber(calculateDealsTotalCollected(deals));
+      const totalOutstanding = decimalToNumber(calculateTotalOutstanding(deals));
+      const collectionRate = decimalToNumber(calculateCollectionRate(totalCollected, totalContracted));
+
+      expect(totalContracted).toBe(0);
+      expect(totalCollected).toBe(0);
+      expect(totalOutstanding).toBe(0);
+      expect(collectionRate).toBe(0);
+
+      const kpis: CoreMetrics = {
+        totalLeads: 0,
+        newLeads: 0,
+        qualifiedLeads: 0,
+        proposalSent: 0,
+        wonLeads: 0,
+        lostLeads: 0,
+        winRate: 0,
+        lostRate: 0,
+        wonRevenue: 0,
+        moneyReceived: 0,
+        totalContractedDealValue: 0,
+        totalReceivedAllTime: 0,
+        totalOutstanding: 0,
+        collectionRate: 0,
+        openPipelineValue: 0,
+        avgWonDeal: 0,
+        followUpsCreated: 0,
+        followUpsCompleted: 0,
+        overdueFollowUps: 0,
+      };
+
+      const htmlRev = renderToStaticMarkup(<RevenueTrend data={[]} kpis={kpis} />);
+      expect(htmlRev).toContain("no active deals");
+      expect(htmlRev).toContain("—");
+
+      const htmlKpi = renderToStaticMarkup(<AnalyticsKpis data={kpis} completionRate={0} />);
+      expect(htmlKpi).toContain("— overall collection");
+    });
+
+    it("8c: Partial payments correctly calculate remaining balance and overall collection percentage", () => {
+      const deals = [
+        {
+          id: "deal-1",
+          finalAmount: 50000,
+          payments: [{ id: "p1", amount: 20000 }],
+        },
+        {
+          id: "deal-2",
+          finalAmount: 30000,
+          payments: [{ id: "p2", amount: 10000 }],
+        },
+      ];
+
+      const totalContracted = decimalToNumber(calculateTotalContractedDealValue(deals));
+      const totalCollected = decimalToNumber(calculateDealsTotalCollected(deals));
+      const totalOutstanding = decimalToNumber(calculateTotalOutstanding(deals));
+      const collectionRate = decimalToNumber(calculateCollectionRate(totalCollected, totalContracted));
+
+      expect(totalContracted).toBe(80000);
+      expect(totalCollected).toBe(30000);
+      expect(totalOutstanding).toBe(50000);
+      expect(collectionRate).toBe(37.5);
+      expect(totalContracted).toBe(totalCollected + totalOutstanding);
+    });
+
+    it("8d: Fully paid deals produce 100% collection rate and 0 outstanding", () => {
+      const deals = [
+        {
+          id: "deal-1",
+          finalAmount: 60000,
+          payments: [
+            { id: "p1", amount: 30000 },
+            { id: "p2", amount: 30000 },
+          ],
+        },
+        {
+          id: "deal-2",
+          finalAmount: 40000,
+          payments: [{ id: "p3", amount: 40000 }],
+        },
+      ];
+
+      const totalContracted = decimalToNumber(calculateTotalContractedDealValue(deals));
+      const totalCollected = decimalToNumber(calculateDealsTotalCollected(deals));
+      const totalOutstanding = decimalToNumber(calculateTotalOutstanding(deals));
+      const collectionRate = decimalToNumber(calculateCollectionRate(totalCollected, totalContracted));
+
+      expect(totalContracted).toBe(100000);
+      expect(totalCollected).toBe(100000);
+      expect(totalOutstanding).toBe(0);
+      expect(collectionRate).toBe(100.0);
+    });
+
+    it("8e: Periods with payments but no newly won deals do not divide period payments by 0", () => {
+      // In selected period: 0 won deals, 25,000 received
+      const wonRevenue = 0;
+      const moneyReceived = 25000;
+
+      // Existing active deals: 50,000 total contracted, 25,000 collected
+      const totalContracted = 50000;
+      const totalCollected = 25000;
+      const collectionRate = decimalToNumber(calculateCollectionRate(totalCollected, totalContracted));
+
+      expect(collectionRate).toBe(50.0);
+
+      const kpis: CoreMetrics = {
+        totalLeads: 2,
+        newLeads: 1,
+        qualifiedLeads: 0,
+        proposalSent: 0,
+        wonLeads: 0,
+        lostLeads: 0,
+        winRate: 0,
+        lostRate: 0,
+        wonRevenue,
+        moneyReceived,
+        totalContractedDealValue: totalContracted,
+        totalReceivedAllTime: totalCollected,
+        totalOutstanding: 25000,
+        collectionRate,
+        openPipelineValue: 10000,
+        avgWonDeal: 0,
+        followUpsCreated: 1,
+        followUpsCompleted: 1,
+        overdueFollowUps: 0,
+      };
+
+      const html = renderToStaticMarkup(<RevenueTrend data={[]} kpis={kpis} />);
+      expect(html).not.toContain("NaN");
+      expect(html).toContain("50.0%");
+      expect(html).toContain("overall collected");
+    });
+
+    it("8f: Overall collection calculations strictly enforce matching deal populations", () => {
+      // Deal A is eligible active deal; Deal B is eligible active deal
+      const activeDeals = [
+        {
+          id: "deal-a",
+          finalAmount: 40000,
+          payments: [{ id: "pa", amount: 15000 }],
+        },
+        {
+          id: "deal-b",
+          finalAmount: 60000,
+          payments: [{ id: "pb", amount: 25000 }],
+        },
+      ];
+
+      const contracted = decimalToNumber(calculateTotalContractedDealValue(activeDeals));
+      const collected = decimalToNumber(calculateDealsTotalCollected(activeDeals));
+      const outstanding = decimalToNumber(calculateTotalOutstanding(activeDeals));
+      const rate = decimalToNumber(calculateCollectionRate(collected, contracted));
+
+      expect(contracted).toBe(100000);
+      expect(collected).toBe(40000);
+      expect(outstanding).toBe(60000);
+      expect(rate).toBe(40.0);
+      // Denominator and numerator share exact same population
+      expect(contracted).toBe(collected + outstanding);
+    });
   });
 });

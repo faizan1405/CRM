@@ -130,20 +130,26 @@ function RevenueBreakdown({ k }: { k: CoreMetrics }) {
     {
       label: "Won deal value",
       v: k.wonRevenue,
-      note: "Finalized contract value of leads won in range",
+      note: "Finalized contract value of leads won in range (Period)",
       color: "var(--primary)",
-    },
-    {
-      label: "Open pipeline",
-      v: k.openPipelineValue,
-      note: "Current snapshot of active stages (all-time)",
-      color: "var(--chart-4)",
     },
     {
       label: "Money received",
       v: k.moneyReceived ?? 0,
-      note: "Cash collected in selected period",
+      note: "Cash collected in selected period (Period)",
       color: "var(--chart-2)",
+    },
+    {
+      label: "Open pipeline",
+      v: k.openPipelineValue,
+      note: "Current snapshot of active stages (Current snapshot)",
+      color: "var(--chart-4)",
+    },
+    {
+      label: "Outstanding balance",
+      v: k.totalOutstanding ?? 0,
+      note: "Current unpaid balance across active deals (Current snapshot)",
+      color: "var(--chart-5)",
     },
   ];
   const max = Math.max(...rows.map((r) => r.v), 1);
@@ -152,7 +158,7 @@ function RevenueBreakdown({ k }: { k: CoreMetrics }) {
     <AnalyticsCard>
       <CardHead
         title="Revenue breakdown"
-        subtitle="Separate measures. They don't add up."
+        subtitle="Distinct measures across period and current scopes. They don't add up."
       />
       <div className="space-y-3">
         {rows.map((r, i) => (
@@ -211,15 +217,12 @@ export function RevenueTrend({
   const totalDeals = data.reduce((sum, point) => sum + point.leadCount, 0);
   const est = data.filter((p) => p.isEstimated).length;
 
-  const contracted = kpis ? kpis.wonRevenue : total;
-  const received = kpis?.moneyReceived ?? 0;
-  const outstanding = kpis?.totalOutstanding ?? Math.max(0, contracted - received);
-
-  // When contracted is 0, collection rate is not applicable
-  const hasContracted = contracted > 0;
-  const collectionRate = hasContracted
-    ? Math.min(100, (received / contracted) * 100)
-    : 0;
+  // All-time collection metrics for active deals (matching deal populations)
+  const totalContracted = kpis?.totalContractedDealValue ?? 0;
+  const totalCollected = kpis?.totalReceivedAllTime ?? 0;
+  const outstanding = kpis?.totalOutstanding ?? Math.max(0, totalContracted - totalCollected);
+  const hasContracted = totalContracted > 0;
+  const collectionRate = kpis?.collectionRate ?? (hasContracted ? (totalCollected / totalContracted) * 100 : 0);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -258,33 +261,33 @@ export function RevenueTrend({
         <AnalyticsCard>
           <CardHead
             title="Collection overview"
-            subtitle="Contracted in range vs money received"
+            subtitle="Overall collections across active deals"
           />
           <div className="flex items-baseline justify-between">
             <span className="tabular text-[26px] font-semibold tracking-tight text-foreground">
               {hasContracted ? `${collectionRate.toFixed(1)}%` : "—"}
             </span>
             <span className="text-[12px] text-muted-foreground">
-              {hasContracted ? "collected" : "no contracted deals"}
+              {hasContracted ? "overall collected" : "no active deals"}
             </span>
           </div>
           <div
             className="mt-3 flex h-2.5 overflow-hidden rounded-full bg-warning-soft"
             role="img"
-            aria-label={`${inr(received)} received of ${inr(contracted)}`}
+            aria-label={`${inr(totalCollected)} received of ${inr(totalContracted)}`}
           >
             <motion.div
               className="h-full rounded-full bg-primary"
               initial={{ width: 0 }}
-              animate={{ width: `${hasContracted ? collectionRate : 0}%` }}
+              animate={{ width: `${hasContracted ? Math.min(100, collectionRate) : 0}%` }}
               transition={{ duration: 0.9, ease: EASE }}
             />
           </div>
           <dl className="mt-3.5 space-y-1.5 text-[12.5px]">
             {[
-              ["Contracted (in range)", contracted, "bg-foreground/70"],
-              ["Money received (in range)", received, "bg-primary"],
-              ["Outstanding (all active deals)", outstanding, "bg-warning"],
+              ["Total contracted", totalContracted, "bg-foreground/70"],
+              ["Total collected", totalCollected, "bg-primary"],
+              ["Outstanding balance", outstanding, "bg-warning"],
             ].map(([l, v, cls]) => (
               <div
                 key={l as string}

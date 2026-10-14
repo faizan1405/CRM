@@ -149,9 +149,12 @@ export function AnalyticsKpis({
       icon: Wallet,
       value: k.moneyReceived ?? 0,
       format: fmtInr,
-      sub: `${(k.collectionRate ?? 0).toFixed(1)}% collected · ${inrCompact(
-        k.totalOutstanding ?? 0
-      )} all-time outstanding`,
+      sub:
+        (k.totalContractedDealValue ?? 0) > 0
+          ? `${(k.collectionRate ?? 0).toFixed(1)}% overall collection · ${inrCompact(
+              k.totalOutstanding ?? 0
+            )} outstanding`
+          : `— overall collection · ${inrCompact(k.totalOutstanding ?? 0)} outstanding`,
       info: {
         meaning:
           "Actual cash payment transactions recorded in the CRM within the selected date range.",
@@ -162,7 +165,11 @@ export function AnalyticsKpis({
       // Genuine non-temporal visual: animated collection rate progress ring (no fake time series)
       visual: (
         <Ring
-          value={k.collectionRate ? Math.min(1, Math.max(0, k.collectionRate / 100)) : 0}
+          value={
+            (k.totalContractedDealValue ?? 0) > 0 && k.collectionRate
+              ? Math.min(1, Math.max(0, k.collectionRate / 100))
+              : 0
+          }
           color="var(--chart-2)"
         />
       ),
@@ -304,14 +311,14 @@ export function AnalyticsKpis({
           },
         },
         {
-          label: "Collection Rate",
+          label: "Overall Collection Rate",
           value: k.collectionRate ?? 0,
-          format: fmtPct(1),
+          format: (n: number) => ((k.totalContractedDealValue ?? 0) > 0 ? `${n.toFixed(1)}%` : "—"),
           info: {
-            meaning: "Share of contracted deal value received as payments.",
-            formula: "Money Received ÷ Total Contracted Deal Value × 100",
-            scope: "Collections vs active deals",
-            kind: "Period metric",
+            meaning: "Overall percentage of contracted deal value collected across all active deals.",
+            formula: "Total Collected All-Time ÷ Total Contracted Deal Value × 100",
+            scope: "Current all-time snapshot",
+            kind: "Current snapshot",
           },
         },
       ],
