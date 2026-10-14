@@ -243,7 +243,30 @@ export async function getStaleLeads() {
 /**
  * Count total stale leads without N+1 queries.
  */
-export async function getStaleLeadsCount(): Promise<number> {
+export async function getStaleLeadsCount(now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+  try {
+    const res = await db.$queryRaw<Array<{ count: number }>>`
+      SELECT COUNT(*)::int as count FROM "Lead" l
+      WHERE l."isWaste" = false 
+        AND l."deletedAt" IS NULL 
+        AND l."mergedIntoLeadId" IS NULL
+        AND l.status IN ('NEW', 'CONTACTED', 'QUALIFIED', 'PROPOSAL_SENT')
+        AND (l."lastContactDate" IS NULL OR l."lastContactDate" <= ${cutoff})
+        AND l."createdAt" <= ${cutoff}
+        AND NOT EXISTS (
+          SELECT 1 FROM "LeadActivity" a 
+          WHERE a."leadId" = l.id 
+            AND a."createdAt" > ${cutoff}
+        )
+    `;
+    if (res && res[0] && typeof res[0].count === "number") {
+      return res[0].count;
+    }
+  } catch (_e) {
+    // Graceful fallback to application filter if query fails
+  }
+
   const activeLeads = await db.lead.findMany({
     where: {
       isWaste: false,
@@ -266,6 +289,5 @@ export async function getStaleLeadsCount(): Promise<number> {
     },
   });
 
-  const now = new Date();
   return activeLeads.filter((lead) => calculateLeadStaleness(lead, now).isStale).length;
 }
