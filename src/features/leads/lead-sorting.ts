@@ -26,10 +26,32 @@ export function sortLeads<
     name?: string | null;
     isPinned?: boolean;
     createdAt?: string;
+    quotedAmount?: number | null;
+    dealValue?: number | null;
+    budget?: number | null;
+    nextFollowUpDate?: string | null;
     staleInfo?: { inactivityDays?: number };
   }
 >(leads: T[], sortBy: LeadSortOption): T[] {
   return [...leads].sort((a, b) => {
+    // Value sorting: highest quoted / deal / budget first
+    if (sortBy === "value") {
+      const valA = a.dealValue ?? a.quotedAmount ?? a.budget ?? 0;
+      const valB = b.dealValue ?? b.quotedAmount ?? b.budget ?? 0;
+      const diff = Number(valB) - Number(valA);
+      if (diff !== 0) return diff;
+      return a.id.localeCompare(b.id);
+    }
+
+    // Follow-up sorting: earliest next follow-up date first
+    if (sortBy === "followup") {
+      const dateA = a.nextFollowUpDate ?? "9999-99-99";
+      const dateB = b.nextFollowUpDate ?? "9999-99-99";
+      const diff = dateA.localeCompare(dateB);
+      if (diff !== 0) return diff;
+      return a.id.localeCompare(b.id);
+    }
+
     // Explicit name sorting: NO pinned bias
     if (sortBy === "name_asc") {
       const cmp = compareLeadNames(a.name, b.name);
@@ -64,7 +86,7 @@ export function sortLeads<
 
 /**
  * Parses URL query param string into a valid LeadSortOption.
- * Supports "name-asc", "name_asc", "name-desc", "name_desc", "stale", "most_stale", etc.
+ * Supports "name-asc", "name_asc", "name-desc", "name_desc", "stale", "most_stale", "value", "followup", etc.
  */
 export function parseSortParam(param: string | null): LeadSortOption {
   if (!param) return "default";
@@ -72,6 +94,8 @@ export function parseSortParam(param: string | null): LeadSortOption {
   if (normalized === "name-asc" || normalized === "name_asc") return "name_asc";
   if (normalized === "name-desc" || normalized === "name_desc") return "name_desc";
   if (normalized === "stale" || normalized === "most_stale" || normalized === "most-stale") return "most_stale";
+  if (normalized === "value") return "value";
+  if (normalized === "followup" || normalized === "follow-up") return "followup";
   return "default";
 }
 
@@ -83,5 +107,7 @@ export function sortOptionToQueryParam(option: LeadSortOption): string | null {
   if (option === "name_asc") return "name-asc";
   if (option === "name_desc") return "name-desc";
   if (option === "most_stale") return "stale";
+  if (option === "value") return "value";
+  if (option === "followup") return "followup";
   return null;
 }

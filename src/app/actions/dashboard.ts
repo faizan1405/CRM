@@ -10,9 +10,15 @@ import { getStaleLeadsCount } from "@/lib/stale-leads";
 import {
   calculateWonDealValue,
   calculateOpenPipelineValue,
+  calculateDealsTotalCollected,
+  calculateTotalOutstanding,
+  calculateCollected,
+  derivePaymentStatus,
+  getOpportunityValue,
   decimalToNumber,
   toDecimal,
 } from "@/lib/financial/calculations";
+import { Prisma } from "@prisma/client";
 
 class UserFacingError extends Error {}
 
@@ -30,6 +36,7 @@ export type PriorityItem = {
 };
 
 export type DashboardData = {
+  userName?: string;
   kpis: {
     totalLeads: number;
     newLeads: number;
@@ -39,6 +46,12 @@ export type DashboardData = {
     wonRevenue: number;
     pinnedLeads: number;
     staleLeads: number;
+    activeLeads?: number;
+    winRate?: number;
+    lostLeads?: number;
+    collectedRevenue?: number;
+    outstandingRevenue?: number;
+    overdueDealsCount?: number;
   };
   needsAttention: {
     overdueFollowUps: number;
@@ -55,17 +68,43 @@ export type DashboardData = {
     won: number;
     lost: number;
   };
+  pipelineStageValues?: {
+    new: number;
+    contacted: number;
+    qualified: number;
+    proposal: number;
+    won: number;
+    lost: number;
+    total: number;
+  };
+  pinnedLeadsList?: Array<{
+    id: string;
+    name: string;
+    business: string;
+    value: number;
+    status: string;
+  }>;
+  revenueTrend?: Array<{
+    month: string;
+    revenue: number;
+  }>;
   revenue: {
     won: number;
     openPipeline: number;
     avgWonDeal: number;
+    collected?: number;
+    outstanding?: number;
   };
   todayFollowUps: Array<{
     id: string;
     leadId: string;
     leadName: string;
+    phone?: string;
+    business?: string;
     type: string;
     time: string;
+    note?: string;
+    isOverdue?: boolean;
   }>;
   recentActivity: Array<{
     activityId: string;
@@ -110,7 +149,10 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
       overdueFollowUpsList,
       recentActivities,
       activeLeadsWithAI,
-      staleLeadsCount
+      staleLeadsCount,
+      pinnedLeadsListRaw,
+      activeDealsWithPayments,
+      userRecord,
     ] = await Promise.all([
       db.lead.count({ where: { isPinned: true, isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
       db.lead.groupBy({ by: ["status"], _count: true, where: { isWaste: false, deletedAt: null, mergedIntoLeadId: null } }),
@@ -133,7 +175,7 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
           mergedIntoLeadId: true,
           createdAt: true,
           updatedAt: true,
-          deals: { select: { finalAmount: true, status: true } },
+          deals: { select: { id: true, finalAmount: true, status: true, createdAt: true } },
         },
       }),
       db.followUp.count({ where: { status: FollowUpStatus.PENDING, scheduledAt: { lt: startOfTodayIST }, lead: { status: { not: LeadStatus.LOST }, isWaste: false, deletedAt: null, mergedIntoLeadId: null } } }),
@@ -145,6 +187,7 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
           leadId: true,
           scheduledAt: true,
           type: true,
+          note: true,
           lead: { select: { id: true, name: true, phone: true, business: true, status: true } },
         },
         orderBy: { scheduledAt: "asc" },
@@ -156,6 +199,7 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
           leadId: true,
           scheduledAt: true,
           type: true,
+          note: true,
           lead: { select: { id: true, name: true, phone: true, business: true, status: true } },
         },
         orderBy: { scheduledAt: "asc" },
@@ -202,7 +246,39 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
         orderBy: { updatedAt: "desc" },
         take: 25,
       }),
-      getStaleLeadsCount()
+      getStaleLeadsCount(),
+      db.lead.findMany({
+        where: { isPinned: true, isWaste: false, deletedAt: null, mergedIntoLeadId: null },
+        select: {
+          id: true,
+          name: true,
+          business: true,
+          status: true,
+          quotedAmount: true,
+          deals: { select: { finalAmount: true, status: true } },
+        },
+        take: 5,
+        orderBy: { updatedAt: "desc" },
+      }),
+      db.deal.findMany({
+        where: {
+          status: { in: ["CONFIRMED", "COMPLETED"] },
+          lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null },
+        },
+        select: {
+          id: true,
+          finalAmount: true,
+          status: true,
+          nextPaymentDueDate: true,
+          payments: {
+            select: { amount: true },
+          },
+        },
+      }),
+      db.user.findUnique({
+        where: { id: session.id },
+        select: { name: true },
+      }),
     ]);
 
     // Derive proposal and new lead priorities directly from in-memory activeAndWonLeads (eliminating 2 DB round-trips)
@@ -379,9 +455,115 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
       return `${days} days ago`;
     };
 
+    // Calculate genuine extended metrics from active deals and payments
+    const totalReceivedAllTimeDecimal = calculateDealsTotalCollected(activeDealsWithPayments);
+    const collectedRevenue = decimalToNumber(totalReceivedAllTimeDecimal);
+    const outstandingDecimal = calculateTotalOutstanding(activeDealsWithPayments);
+    const outstandingRevenue = decimalToNumber(outstandingDecimal);
+    const overdueDealsCount = activeDealsWithPayments.filter(
+      (d) => derivePaymentStatus(d.finalAmount, calculateCollected(d.payments || []), d.nextPaymentDueDate) === "Overdue"
+    ).length;
+
+    const lostLeadsCount = getCount(LeadStatus.LOST);
+    const closedLeadsCount = getCount(LeadStatus.WON) + lostLeadsCount;
+    const winRate = closedLeadsCount > 0 ? Math.round((getCount(LeadStatus.WON) / closedLeadsCount) * 100) : 0;
+    const activeLeadsCount = totalLeads - getCount(LeadStatus.WON) - lostLeadsCount;
+
+    // Canonical stage financial values for Pipeline Overview
+    const newLeadsStageVal = decimalToNumber(
+      activeAndWonLeads
+        .filter((l) => l.status === LeadStatus.NEW)
+        .reduce((acc, l) => acc.add(getOpportunityValue(l, l.deals)), new Prisma.Decimal(0))
+    );
+    const contactedLeadsStageVal = decimalToNumber(
+      activeAndWonLeads
+        .filter((l) => l.status === LeadStatus.CONTACTED)
+        .reduce((acc, l) => acc.add(getOpportunityValue(l, l.deals)), new Prisma.Decimal(0))
+    );
+    const qualifiedLeadsStageVal = decimalToNumber(
+      activeAndWonLeads
+        .filter((l) => l.status === LeadStatus.QUALIFIED)
+        .reduce((acc, l) => acc.add(getOpportunityValue(l, l.deals)), new Prisma.Decimal(0))
+    );
+    const proposalLeadsStageVal = decimalToNumber(
+      activeAndWonLeads
+        .filter((l) => l.status === LeadStatus.PROPOSAL_SENT)
+        .reduce((acc, l) => acc.add(getOpportunityValue(l, l.deals)), new Prisma.Decimal(0))
+    );
+    const wonLeadsStageVal = wonRevenue;
+
+    const pipelineStageValues = {
+      new: newLeadsStageVal,
+      contacted: contactedLeadsStageVal,
+      qualified: qualifiedLeadsStageVal,
+      proposal: proposalLeadsStageVal,
+      won: wonLeadsStageVal,
+      lost: 0,
+      total: newLeadsStageVal + contactedLeadsStageVal + qualifiedLeadsStageVal + proposalLeadsStageVal + wonLeadsStageVal,
+    };
+
+    // Pinned leads with real opportunity / deal values
+    const pinnedLeadsList = pinnedLeadsListRaw.map((l) => {
+      const isWon = l.status === LeadStatus.WON;
+      let val = 0;
+      if (isWon) {
+        val = (l.deals || []).reduce((sum, d) => {
+          if (d.status !== "NEGOTIATING" && d.status !== "NO_DEAL") {
+            return sum + (Number(d.finalAmount) || 0);
+          }
+          return sum;
+        }, 0);
+      } else {
+        val = decimalToNumber(getOpportunityValue(l, l.deals));
+      }
+      return {
+        id: l.id,
+        name: l.name,
+        business: l.business || "",
+        status: l.status,
+        value: val,
+      };
+    });
+
+    // Real monthly won revenue trend (last 6 months in IST)
+    const monthFormatter = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Kolkata", month: "short" });
+    const yearMonthFormatter = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Kolkata", year: "numeric", month: "numeric" });
+
+    const pastMonths: { key: string; label: string; revenue: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(Date.UTC(y, m - 1 - i, 1));
+      pastMonths.push({
+        key: yearMonthFormatter.format(d),
+        label: monthFormatter.format(d),
+        revenue: 0,
+      });
+    }
+
+    for (const lead of wonLeadsList) {
+      for (const deal of lead.deals || []) {
+        if (deal.status !== "NEGOTIATING" && deal.status !== "NO_DEAL") {
+          const amt = Number(deal.finalAmount) || 0;
+          if (amt > 0) {
+            const dealDate = deal.createdAt || lead.updatedAt;
+            const dealKey = yearMonthFormatter.format(dealDate);
+            const bucket = pastMonths.find((p) => p.key === dealKey);
+            if (bucket) {
+              bucket.revenue += amt;
+            }
+          }
+        }
+      }
+    }
+
+    const revenueTrend = pastMonths.map((p) => ({
+      month: p.label,
+      revenue: p.revenue,
+    }));
+
     return {
       success: true,
       data: {
+        userName: userRecord?.name || "Faizan",
         kpis: {
           totalLeads,
           newLeads: getCount(LeadStatus.NEW),
@@ -391,6 +573,12 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
           wonRevenue,
           pinnedLeads: pinnedLeadsCount,
           staleLeads: staleLeadsCount,
+          activeLeads: activeLeadsCount,
+          winRate,
+          lostLeads: lostLeadsCount,
+          collectedRevenue,
+          outstandingRevenue,
+          overdueDealsCount,
         },
         needsAttention: {
           overdueFollowUps: overdueFollowUpsCount,
@@ -407,17 +595,26 @@ export async function getDashboardData(): Promise<{ success: boolean; data?: Das
           won: getCount(LeadStatus.WON),
           lost: getCount(LeadStatus.LOST),
         },
+        pipelineStageValues,
+        pinnedLeadsList,
+        revenueTrend,
         revenue: {
           won: wonRevenue,
           openPipeline,
           avgWonDeal,
+          collected: collectedRevenue,
+          outstanding: outstandingRevenue,
         },
         todayFollowUps: todayFollowUpsList.map(f => ({
           id: f.id,
           leadId: f.leadId,
           leadName: f.lead?.name || "Unknown Lead",
+          phone: f.lead?.phone || "",
+          business: f.lead?.business || "",
           type: f.type,
           time: formatTimeIST(f.scheduledAt),
+          note: f.note || "",
+          isOverdue: false,
         })),
         recentActivity: recentActivities.map(a => ({
           activityId: a.id,

@@ -1,17 +1,26 @@
-import { Plus, Sunrise, KanbanSquare } from "lucide-react";
+import { Plus, Sunrise } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { inrCompact } from "@/lib/crm/format";
 
 export function DashboardHeader({
   followUpsCount = 0,
   openPipelineValue = 0,
+  waitingToCollect = 0,
+  userName = "Faizan",
 }: {
   followUpsCount?: number;
   openPipelineValue?: number;
+  waitingToCollect?: number;
+  userName?: string;
 }) {
   const now = new Date();
   const hour = parseInt(
-    new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Kolkata", hour: "numeric", hour12: false }).format(now),
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      hour: "numeric",
+      hour12: false,
+    }).format(now),
     10
   );
 
@@ -26,18 +35,21 @@ export function DashboardHeader({
     month: "long",
   }).format(now);
 
+  const amountWaitingStr = waitingToCollect > 0 ? inrCompact(waitingToCollect) : inrCompact(openPipelineValue);
+
   return (
     <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         <div className="eyebrow mb-1.5">{dateStr}</div>
-        <h1 className="text-[24px] font-semibold leading-tight sm:text-[30px] text-foreground tracking-tight">
-          {greeting}, Faizan
+        <h1 className="text-[24px] font-semibold leading-tight tracking-tight text-foreground sm:text-[30px]">
+          {greeting}, {userName}
         </h1>
         <p className="mt-1.5 text-[13.5px] text-muted-foreground">
           <span className="font-medium text-foreground">
             {followUpsCount} {followUpsCount === 1 ? "follow-up" : "follow-ups"}
           </span>{" "}
-          need you today. Here&apos;s your daily sales command center.
+          ({followUpsCount} scheduled today) need you today, and{" "}
+          <span className="font-medium text-foreground">{amountWaitingStr}</span> is waiting to be collected.
         </p>
       </div>
 
@@ -48,10 +60,10 @@ export function DashboardHeader({
             <span>Briefing</span>
           </Link>
         </Button>
-        <Button asChild>
+        <Button asChild className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium">
           <Link href="/leads?new=true">
             <Plus className="h-4 w-4" />
-            <span>Add Lead</span>
+            <span>New lead</span>
           </Link>
         </Button>
       </div>

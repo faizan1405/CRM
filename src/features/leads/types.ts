@@ -11,7 +11,7 @@ export type LeadStatus = (typeof leadStatuses)[number];
 
 export type QuickStatusType = "NONE" | "CONTACTED" | "INTERESTED" | "CALL_NOT_PICK" | "CALL_AGAIN";
 
-export type LeadSortOption = "default" | "name_asc" | "name_desc" | "most_stale";
+export type LeadSortOption = "default" | "name_asc" | "name_desc" | "most_stale" | "value" | "followup";
 
 export type Lead = {
   id: string;

@@ -18,7 +18,7 @@ export function PipelineSummary({ stats }: { stats: Record<string, number> }) {
       {Object.entries(stats).map(([label, value]) => (
         <div
           key={label}
-          className="card-surface flex flex-col px-3.5 py-2.5 min-w-[105px] flex-1 sm:flex-none"
+          className="card-surface flex flex-col px-3.5 py-2.5 min-w-[105px] flex-1 sm:flex-none border border-border/80 shadow-[var(--shadow-card)]"
         >
           <p className="eyebrow truncate">{label}</p>
           <p className="mt-1 text-xl font-semibold tracking-tight text-foreground tabular">{value}</p>
@@ -31,7 +31,7 @@ export function PipelineSummary({ stats }: { stats: Record<string, number> }) {
 export function PipelineEmptyState({ status }: { status: LeadStatus }) {
   return (
     <div
-      className="flex flex-col items-center justify-center gap-1.5 py-8 text-[12.5px] text-subtle rounded-xl border border-dashed border-border"
+      className="flex flex-col items-center justify-center gap-1.5 py-8 text-[12px] text-muted-foreground rounded-xl border border-dashed border-border/70 bg-background/30"
       aria-label={`No leads in ${status}`}
     >
       <span>No leads in this stage</span>
@@ -50,12 +50,12 @@ export function PipelineColumnHeader({
 }) {
   const accent = statusAccent[status] || { dot: "bg-subtle", swatch: "bg-subtle" };
   return (
-    <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-border bg-card/60">
+    <div className="flex items-center justify-between gap-2 px-3 pb-2.5 pt-2 border-b border-border/50">
       <div className="flex items-center gap-2 min-w-0">
         <span className={cn("size-2 rounded-sm shrink-0", accent.dot)} aria-hidden="true" />
-        <h3 className="font-semibold text-foreground text-[13px] truncate">{status}</h3>
+        <h3 className="font-semibold text-foreground text-[12.5px] truncate">{status}</h3>
         <span
-          className="flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular"
+          className="font-normal text-muted-foreground text-[12px] tabular"
           aria-label={`${count} leads`}
         >
           {count}
