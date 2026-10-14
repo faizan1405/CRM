@@ -378,15 +378,31 @@ export async function getDailySalesBriefingData(options?: {
         status: { in: ["CONFIRMED", "COMPLETED"] },
         lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null },
       },
-      include: {
-        lead: true,
-        payments: true,
+      select: {
+        id: true,
+        leadId: true,
+        finalAmount: true,
+        nextPaymentDueAmount: true,
+        nextPaymentDueDate: true,
+        clientNameSnapshot: true,
+        companyNameSnapshot: true,
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            business: true,
+          },
+        },
+        payments: {
+          select: {
+            amount: true,
+          },
+        },
       },
       orderBy: [
         { nextPaymentDueDate: "asc" },
         { updatedAt: "desc" },
       ],
-      take: 25,
     });
 
     const eligibleDeals = candidateDeals

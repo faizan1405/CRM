@@ -11,6 +11,8 @@ import {
   decimalToNumber,
 } from "@/lib/financial/calculations";
 import type { BriefingProposalItem, BriefingPaymentItem, BriefingCallItem } from "@/features/daily-briefing/types";
+import { db } from "@/lib/db";
+import { getDailySalesBriefingData } from "@/features/daily-briefing/services/briefing-service";
 
 // Mock whatsapp-context
 vi.mock("@/components/whatsapp-context", () => ({
@@ -247,5 +249,119 @@ describe("Final Pre-Merge Corrections — PR #13 Verification", () => {
       expect(html).toContain("Overdue");
       expect(html).not.toContain("Paid Client");
     });
+
+    it("service-level: getDailySalesBriefingData excludes fully paid deals, prioritizes overdue obligations, and processes candidates beyond the 25th deal without limit", async () => {
+      // Mock 30 candidate deals returned by db.deal.findMany
+      // Deals 0 to 24 (25 deals): fully paid deals
+      const candidateDeals = [];
+      for (let i = 0; i < 25; i++) {
+        candidateDeals.push({
+          id: `deal-paid-${i}`,
+          leadId: `lead-paid-${i}`,
+          finalAmount: 100000,
+          nextPaymentDueAmount: null,
+          nextPaymentDueDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // Past due date, but fully paid
+          clientNameSnapshot: `Paid Client ${i}`,
+          companyNameSnapshot: `Paid Company ${i}`,
+          lead: {
+            id: `lead-paid-${i}`,
+            name: `Paid Client ${i}`,
+            business: `Paid Company ${i}`,
+          },
+          payments: [{ amount: 100000, deletedAt: null }],
+        });
+      }
+
+      // Deal 25 (26th deal): Has upcoming unpaid balance (due in 5 days, NOT overdue)
+      candidateDeals.push({
+        id: "deal-25-upcoming",
+        leadId: "lead-25",
+        finalAmount: 60000,
+        nextPaymentDueAmount: 30000,
+        nextPaymentDueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+        clientNameSnapshot: "Upcoming Client 25",
+        companyNameSnapshot: "Upcoming Corp 25",
+        lead: {
+          id: "lead-25",
+          name: "Upcoming Client 25",
+          business: "Upcoming Corp 25",
+        },
+        payments: [{ amount: 30000, deletedAt: null }], // 30000 outstanding
+      });
+
+      // Deal 26 (27th deal): fully paid
+      candidateDeals.push({
+        id: "deal-26-fully-paid",
+        leadId: "lead-26",
+        finalAmount: 50000,
+        nextPaymentDueAmount: null,
+        nextPaymentDueDate: null,
+        clientNameSnapshot: "Paid Client 26",
+        companyNameSnapshot: "Paid Corp 26",
+        lead: {
+          id: "lead-26",
+          name: "Paid Client 26",
+          business: "Paid Corp 26",
+        },
+        payments: [{ amount: 50000, deletedAt: null }],
+      });
+
+      // Deal 27 (28th deal - well beyond previous 25 limit!): Has genuine OVERDUE unpaid balance
+      candidateDeals.push({
+        id: "deal-27-overdue-beyond-25",
+        leadId: "lead-27",
+        finalAmount: 200000,
+        nextPaymentDueAmount: 80000,
+        nextPaymentDueDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // Overdue by 2 days
+        clientNameSnapshot: "Deep Overdue Client 27",
+        companyNameSnapshot: "Deep Corp 27",
+        lead: {
+          id: "lead-27",
+          name: "Deep Overdue Client 27",
+          business: "Deep Corp 27",
+        },
+        payments: [{ amount: 50000, deletedAt: null }], // 150000 outstanding, next due 80000
+      });
+
+      // Spy on db methods
+      const dealSpy = vi.spyOn(db.deal, "findMany").mockResolvedValueOnce(candidateDeals as any);
+      const leadSpy = vi.spyOn(db.lead, "findMany").mockResolvedValueOnce([]);
+      const followUpSpy = vi.spyOn(db.followUp, "findMany").mockResolvedValueOnce([]);
+      const briefingSpy = vi.spyOn(db.dailySalesBriefing, "findUnique").mockResolvedValueOnce({
+        id: "briefing-test",
+        userId: "test-user",
+        briefingDate: "2026-10-14",
+        summary: "Test summary",
+        metadata: { keyPoints: [], recommendation: "Follow up" },
+        generatedAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any);
+
+      const result = await getDailySalesBriefingData({ userId: "test-user" });
+
+      // 1. Verify findMany query structure: MUST NOT have 'take' limitation
+      expect(dealSpy).toHaveBeenCalledTimes(1);
+      const queryArgs = dealSpy.mock.calls[0][0];
+      expect(queryArgs).toBeDefined();
+      expect(queryArgs).not.toHaveProperty("take");
+      expect(queryArgs?.where?.status).toEqual({ in: ["CONFIRMED", "COMPLETED"] });
+      expect(queryArgs?.select?.finalAmount).toBe(true);
+      expect(queryArgs?.select?.payments).toBeDefined();
+
+      // 2. Verify Payment to Chase is correctly populated from deal #28
+      expect(result.paymentToChase).not.toBeNull();
+      expect(result.paymentToChase?.dealId).toBe("deal-27-overdue-beyond-25");
+      expect(result.paymentToChase?.clientName).toBe("Deep Overdue Client 27");
+      expect(result.paymentToChase?.amount).toBe(80000);
+      expect(result.paymentToChase?.isOverdue).toBe(true);
+
+      // Restore spies
+      dealSpy.mockRestore();
+      leadSpy.mockRestore();
+      followUpSpy.mockRestore();
+      briefingSpy.mockRestore();
+    });
   });
 });
+
