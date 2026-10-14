@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowRight, Phone, MessageCircle } from "lucide-react";
 import { cleanLeadName } from "@/features/leads/formatters";
