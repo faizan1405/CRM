@@ -7,6 +7,9 @@ import type {
   BriefingActionItem,
   AiBriefingData,
   BriefingPriority,
+  BriefingCallItem,
+  BriefingProposalItem,
+  BriefingPaymentItem,
 } from "../types";
 
 /**
@@ -300,11 +303,130 @@ export async function getDailySalesBriefingData(options?: {
     }
   }
 
+  // 5. Authentic Today's Call List (overdue or scheduled for today)
+  const todayCalls: BriefingCallItem[] = pendingFollowUps
+    .filter((f) => {
+      if (!f.lead) return false;
+      const isPast = f.scheduledAt.getTime() < now.getTime();
+      const isToday = getIndiaDateKey(f.scheduledAt) === todayDateStr;
+      return isPast || isToday;
+    })
+    .map((f) => {
+      const isOverdue = f.scheduledAt.getTime() < now.getTime();
+      const timeFormatted = isOverdue
+        ? "Late"
+        : new Intl.DateTimeFormat("en-IN", {
+            timeZone: "Asia/Kolkata",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+          }).format(f.scheduledAt);
+
+      return {
+        id: f.id,
+        leadId: f.lead.id,
+        leadName: f.lead.name,
+        phone: f.lead.phone,
+        context: f.note || f.lead.business || `${f.type} follow-up`,
+        timeFormatted,
+        isOverdue,
+        scheduledAt: f.scheduledAt.toISOString(),
+      };
+    })
+    .slice(0, 10);
+
+  // 6. Authentic Proposals Awaiting Reply (leads with PROPOSAL_SENT status)
+  const awaitingProposals: BriefingProposalItem[] = activeLeads
+    .filter((l) => l.status === "PROPOSAL_SENT")
+    .map((l) => {
+      const val = l.quotedAmount ? Number(l.quotedAmount) : l.budget ? Number(l.budget) : 0;
+      const daysAgo = Math.max(
+        0,
+        Math.floor((now.getTime() - new Date(l.updatedAt).getTime()) / (24 * 60 * 60 * 1000))
+      );
+      const formatted =
+        val > 0
+          ? val >= 100000
+            ? `₹${(val / 100000).toFixed(1)}L`
+            : `₹${val.toLocaleString("en-IN")}`
+          : "Quoted";
+
+      return {
+        id: l.id,
+        leadId: l.id,
+        clientName: l.name,
+        companyName: l.business || null,
+        quotedAmountFormatted: formatted,
+        statusLabel: "Proposal Sent",
+        daysAgo,
+      };
+    })
+    .slice(0, 5);
+
+  // 7. Authentic Payment To Chase (from confirmed/completed deals with overdue/pending due date or outstanding balance)
+  let paymentToChase: BriefingPaymentItem | null = null;
+  try {
+    const candidateDeal = await db.deal.findFirst({
+      where: {
+        status: { in: ["CONFIRMED", "COMPLETED"] },
+        lead: { isWaste: false, deletedAt: null, mergedIntoLeadId: null },
+      },
+      include: {
+        lead: true,
+        payments: true,
+      },
+      orderBy: [
+        { nextPaymentDueDate: "asc" },
+        { updatedAt: "desc" },
+      ],
+    });
+
+    if (candidateDeal) {
+      const totalPaid = candidateDeal.payments.reduce((acc, p) => acc + Number(p.amount), 0);
+      const outstanding = Math.max(0, Number(candidateDeal.finalAmount) - totalPaid);
+      const nextDueAmount = candidateDeal.nextPaymentDueAmount
+        ? Number(candidateDeal.nextPaymentDueAmount)
+        : 0;
+
+      if (outstanding > 0 || nextDueAmount > 0) {
+        const amount = outstanding > 0 ? outstanding : nextDueAmount;
+        const isOverdue = candidateDeal.nextPaymentDueDate
+          ? candidateDeal.nextPaymentDueDate.getTime() < now.getTime()
+          : false;
+
+        const dueDateFormatted = candidateDeal.nextPaymentDueDate
+          ? `due ${new Intl.DateTimeFormat("en-IN", {
+              timeZone: "Asia/Kolkata",
+              day: "numeric",
+              month: "short",
+            }).format(candidateDeal.nextPaymentDueDate)}`
+          : "Outstanding balance";
+
+        paymentToChase = {
+          id: candidateDeal.id,
+          dealId: candidateDeal.id,
+          leadId: candidateDeal.leadId,
+          clientName: candidateDeal.lead?.name || candidateDeal.clientNameSnapshot || "Client",
+          companyName: candidateDeal.lead?.business || candidateDeal.companyNameSnapshot || null,
+          amount,
+          amountFormatted: `₹${amount.toLocaleString("en-IN")}`,
+          dueDateFormatted,
+          isOverdue,
+        };
+      }
+    }
+  } catch {
+    // If deal query fails or table empty, gracefully keep null
+  }
+
   return {
     briefingDate: todayDateStr,
     summaryStats,
     priorityActions,
     aiBriefing,
+    todayCalls,
+    awaitingProposals,
+    paymentToChase,
   };
 }
 

@@ -47,11 +47,53 @@ export interface AiBriefingData {
   generatedAt?: string;
 }
 
+export interface BriefingCallItem {
+  id: string;
+  leadId: string;
+  leadName: string;
+  phone?: string;
+  context?: string;
+  timeFormatted: string;
+  isOverdue: boolean;
+  scheduledAt: string;
+}
+
+export interface BriefingProposalItem {
+  id: string;
+  leadId: string;
+  clientName: string;
+  companyName?: string | null;
+  quotedAmountFormatted: string;
+  statusLabel: string;
+  daysAgo?: number;
+}
+
+export interface BriefingPaymentItem {
+  id: string;
+  dealId: string;
+  leadId?: string | null;
+  clientName: string;
+  companyName?: string | null;
+  amount: number;
+  amountFormatted: string;
+  dueDateFormatted?: string;
+  isOverdue: boolean;
+}
+
+export interface BriefingHeroProps {
+  stats: BriefingSummaryStats;
+  onResetActions?: () => void;
+  className?: string;
+}
+
 export interface DailyBriefingPayload {
   briefingDate: string; // YYYY-MM-DD
   summaryStats: BriefingSummaryStats;
   priorityActions: BriefingActionItem[];
   aiBriefing: AiBriefingData;
+  todayCalls?: BriefingCallItem[];
+  awaitingProposals?: BriefingProposalItem[];
+  paymentToChase?: BriefingPaymentItem | null;
 }
 
 export interface DailyBriefingActionResult<T> {
@@ -59,3 +101,4 @@ export interface DailyBriefingActionResult<T> {
   data?: T;
   error?: string;
 }
+
