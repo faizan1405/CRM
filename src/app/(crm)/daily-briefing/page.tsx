@@ -17,9 +17,6 @@ export default async function DailyBriefingPage() {
       initialStats={payload?.summaryStats}
       initialActions={payload?.priorityActions}
       initialAiBriefing={payload?.aiBriefing}
-      initialCalls={payload?.todayCalls}
-      initialProposals={payload?.awaitingProposals}
-      initialPayment={payload?.paymentToChase}
     />
   );
 }
