@@ -106,7 +106,7 @@ const cards: CardDef[] = [
 
 export function AnalyticsKpis({ data }: { data: AnalyticsKpiData }) {
   return (
-    <section aria-label="Key performance indicators" className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-4">
+    <section aria-label="Key performance indicators" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {cards.map(({ key, label, icon: Icon, tone, format, note, href, isCurrency }) => {
         const rawVal = Number(data[key]) || 0;
         const formatted = format(rawVal);
@@ -117,20 +117,20 @@ export function AnalyticsKpis({ data }: { data: AnalyticsKpiData }) {
             href={href}
             aria-label={`View ${label}`}
             key={key}
-            className="group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 min-w-0 rounded-2xl border border-slate-200/90 bg-white p-4 sm:p-4.5 shadow-sm"
+            className="group press min-w-0 rounded-2xl border border-border bg-card p-4 sm:p-5 card-surface card-hover transition-all cursor-pointer"
           >
-            <div className={`mb-3.5 grid size-9 place-items-center rounded-xl border ${tone} shadow-2xs`}>
-              <Icon aria-hidden="true" size={17} strokeWidth={2} />
+            <div className={`mb-3 grid size-8 place-items-center rounded-lg border ${tone}`}>
+              <Icon aria-hidden="true" size={15} strokeWidth={2} />
             </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>
+            <p className="eyebrow truncate">{label}</p>
             <p
-              className="mt-1 break-all text-[clamp(1.1rem,1.5vw,1.5rem)] font-bold tracking-tight text-slate-950 leading-tight"
+              className="mt-2 text-[20px] font-semibold tabular text-foreground sm:text-[24px] truncate"
               title={formatted}
               aria-label={formatted}
             >
               {displayVal}
             </p>
-            <p className="mt-1 text-xs text-slate-500">{rawVal === 0 ? "No data yet" : note}</p>
+            <p className="mt-1 text-xs text-muted-foreground truncate">{rawVal === 0 ? "No data yet" : note}</p>
             {isCurrency && rawVal > 0 ? (
               <p className="sr-only">Compact value: {compactNumber.format(rawVal)}</p>
             ) : null}

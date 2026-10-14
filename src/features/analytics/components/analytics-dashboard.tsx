@@ -51,15 +51,13 @@ export function AnalyticsDashboard({
     "Historical stage tracking began after some existing leads were created, so older funnel data may be incomplete.";
 
   return (
-    <div className="space-y-5 pb-10 sm:space-y-6">
+    <div className="space-y-6 pb-12 sm:space-y-7">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">
-            Performance & diagnosis
-          </p>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Sales Analytics</h1>
-          <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-500">
-            See where deals slow down, what drives revenue, and where your team needs to follow through.
+        <div className="min-w-0">
+          <p className="eyebrow text-primary">Sales Intelligence</p>
+          <h1 className="mt-1 text-[26px] font-semibold tracking-tight sm:text-[30px] text-foreground">Performance & Analytics</h1>
+          <p className="mt-1 text-[13.5px] text-muted-foreground">
+            Understand your conversion funnel, actual collections, follow-through discipline, and where deals are lost.
           </p>
         </div>
         <AnalyticsDateFilter selected={selectedRange} />
@@ -68,9 +66,9 @@ export function AnalyticsDashboard({
       {showCoverageWarning ? (
         <div
           role="note"
-          className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-5 text-amber-900"
+          className="flex items-start gap-2.5 rounded-xl border border-dashed border-border/80 bg-muted/40 px-4 py-3 text-[12.5px] text-muted-foreground"
         >
-          <Info aria-hidden="true" className="mt-0.5 shrink-0 text-amber-600" size={17} />
+          <Info aria-hidden="true" className="mt-0.5 shrink-0 text-muted-foreground" size={15} />
           <p>{warningText}</p>
         </div>
       ) : null}
