@@ -68,37 +68,31 @@ export function PriorityActionItem({
   return (
     <ActionCard onActivate={item.leadId ? () => onOpenLead(item) : undefined}
       aria-label={`${rankIndex}. ${item.title} - ${item.priority} priority`}
-      className={`group relative rounded-xl border transition-all duration-150 ${
+      className={`group relative rounded-2xl border transition-all duration-200 card-surface ${
         item.isDone
-          ? "border-slate-200 bg-slate-50/70 opacity-70"
-          : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs"
+          ? "border-border/60 bg-muted/40 opacity-70"
+          : "border-border bg-card card-hover"
       }`}
     >
-      <div className="p-3.5 sm:p-4">
+      <div className="p-4 sm:p-5">
         {/* Top bar: Rank, Title, Priority, Opportunity Value */}
-        <div className="flex items-start justify-between gap-2.5">
-          <div className="flex items-start gap-2.5 min-w-0 flex-1">
-            {/* Rank badge */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3.5 min-w-0 flex-1">
+            {/* Rank number in Lovable big tabular font */}
             <span
               aria-hidden="true"
-              className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold sm:size-7 sm:text-sm ${
-                item.isDone
-                  ? "bg-slate-200 text-slate-600"
-                  : item.priority === "Critical"
-                  ? "bg-rose-600 text-white"
-                  : item.priority === "Important"
-                  ? "bg-amber-500 text-white"
-                  : "bg-blue-600 text-white"
+              className={`text-[24px] sm:text-[28px] font-semibold leading-none tracking-tight tabular shrink-0 select-none ${
+                item.isDone ? "text-muted-foreground/40" : "text-border group-hover:text-foreground/40 transition-colors"
               }`}
             >
-              {rankIndex}
+              {String(rankIndex).padStart(2, "0")}
             </span>
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 <h3
-                  className={`text-sm font-semibold tracking-tight text-slate-900 sm:text-base ${
-                    item.isDone ? "line-through text-slate-500" : ""
+                  className={`text-[14.5px] font-semibold tracking-tight text-foreground sm:text-base ${
+                    item.isDone ? "line-through text-muted-foreground" : ""
                   }`}
                 >
                   {item.title}
@@ -106,7 +100,7 @@ export function PriorityActionItem({
 
                 {/* Priority Badge */}
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${priority.bg} ${priority.text} ${priority.border}`}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium border ${priority.bg} ${priority.text} ${priority.border}`}
                 >
                   <span
                     aria-hidden="true"
@@ -117,20 +111,20 @@ export function PriorityActionItem({
 
                 {/* Value pill if available */}
                 {item.formattedValue && (
-                  <span className="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700 border border-emerald-200/80">
+                  <span className="inline-flex items-center rounded-md bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-accent-foreground tabular">
                     {item.formattedValue}
                   </span>
                 )}
               </div>
 
               {/* Subtitle & context */}
-              <p className="mt-0.5 text-xs font-medium text-slate-600 sm:text-sm">
+              <p className="mt-1 text-xs font-medium text-foreground/80 sm:text-sm">
                 {item.subtitle}
               </p>
 
               {/* Description */}
               {item.description && (
-                <p className="mt-1 text-xs text-slate-500 line-clamp-2 sm:line-clamp-1">
+                <p className="mt-1 text-xs text-muted-foreground line-clamp-2 sm:line-clamp-1">
                   {item.description}
                 </p>
               )}
@@ -155,18 +149,18 @@ export function PriorityActionItem({
         </div>
 
         {/* Action button bar */}
-        <div className="mt-3.5 flex flex-wrap items-center justify-between gap-1.5 border-t border-slate-100 pt-2.5 sm:gap-2">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
           {/* Left: Quick contact actions */}
-          <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             {/* Open Lead */}
             <button
               type="button"
               disabled={!item.leadId}
               onClick={() => onOpenLead(item)}
               aria-label={`Open lead profile for ${item.leadName || item.title}`}
-              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+              className="press inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-[12px] font-medium text-foreground hover:bg-muted cursor-pointer"
             >
-              <ExternalLink size={13} className="text-slate-500" />
+              <ExternalLink size={12} className="text-muted-foreground" />
               <span>Open Lead</span>
             </button>
 
@@ -180,9 +174,9 @@ export function PriorityActionItem({
                 }
               }}
               aria-label={`Call ${item.leadName || item.title} at ${item.phone || "phone"}`}
-              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/70 px-2.5 text-xs font-medium text-blue-700 hover:bg-blue-100/80 active:bg-blue-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+              className="press inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink px-2.5 text-[12px] font-medium text-ink-foreground hover:opacity-90 cursor-pointer"
             >
-              <Phone size={13} className="text-blue-600" />
+              <Phone size={12} />
               <span>Call</span>
             </a>}
 
@@ -199,9 +193,9 @@ export function PriorityActionItem({
                 }
               }}
               aria-label={`WhatsApp message ${item.leadName || item.title}`}
-              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-2.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100/80 active:bg-emerald-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600"
+              className="press inline-flex h-8 items-center gap-1.5 rounded-lg bg-whatsapp px-2.5 text-[12px] font-medium text-whatsapp-foreground hover:opacity-90 cursor-pointer"
             >
-              <MessageCircle size={13} className="text-emerald-600" />
+              <MessageCircle size={12} />
               <span>WhatsApp</span>
             </button>}
 
@@ -211,9 +205,9 @@ export function PriorityActionItem({
               disabled={!item.leadId}
               onClick={() => onAddFollowUp(item)}
               aria-label={`Add follow-up for ${item.leadName || item.title}`}
-              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 text-xs font-medium text-amber-800 hover:bg-amber-100/80 active:bg-amber-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600"
+              className="press inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-[12px] font-medium text-foreground hover:bg-muted cursor-pointer"
             >
-              <CalendarPlus size={13} className="text-amber-600" />
+              <CalendarPlus size={12} className="text-muted-foreground" />
               <span>Add Follow-up</span>
             </button>
           </div>
@@ -228,20 +222,20 @@ export function PriorityActionItem({
                   ? `Mark ${item.title} as incomplete`
                   : `Mark ${item.title} as completed`
               }
-              className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+              className={`press inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[12px] font-medium cursor-pointer transition-all ${
                 item.isDone
-                  ? "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
-                  : "bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950 shadow-2xs"
+                  ? "border border-border bg-card text-muted-foreground hover:text-foreground"
+                  : "bg-ink text-ink-foreground hover:opacity-90 shadow-sm"
               }`}
             >
               {item.isDone ? (
                 <>
-                  <RotateCcw size={13} />
+                  <RotateCcw size={12} />
                   <span>Undo</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 size={14} className="text-emerald-400" />
+                  <CheckCircle2 size={13} className="text-sidebar-primary" />
                   <span>Mark Done</span>
                 </>
               )}
