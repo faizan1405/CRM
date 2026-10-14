@@ -128,7 +128,7 @@ const mockPipelineLeads: Lead[] = [
     budget: 150000,
     notes: "",
     status: "Lost",
-    quickStatus: "NOT_PICKED",
+    quickStatus: "CALL_NOT_PICK",
     quotedAmount: 64000,
     lastContactDate: null,
     nextFollowUpDate: null,
