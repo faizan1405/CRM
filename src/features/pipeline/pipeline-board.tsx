@@ -1,10 +1,8 @@
 "use client";
 
-
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { statusFromDatabase, type DatabaseLeadStatus } from "@/features/leads/types";
-import { useCallback, useMemo, useState } from "react";
 import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea/dnd";
 import { changeLeadStatus, createLead, deleteLead, getLead, togglePinLead, updateLead } from "@/app/actions/leads";
 import { scheduleLeadFollowUp } from "@/app/actions/follow-ups";
@@ -26,6 +24,8 @@ import { FollowUpForm } from "@/features/followups/follow-up-form";
 import type { NewFollowUpInput } from "@/features/followups/types";
 import { getFollowUpSuggestion, type FollowUpSuggestion } from "@/lib/follow-up-suggestions";
 import { inrCompact } from "@/lib/crm/format";
+import { formatCurrency } from "@/features/leads/formatters";
+import { ChevronLeft, ChevronRight, ChevronDown, PieChart } from "lucide-react";
 
 const COLUMNS: LeadStatus[] = [
   "New",
@@ -44,12 +44,13 @@ function PipelineAnalyticsSection({
   grouped: Record<LeadStatus, Lead[]>;
 }) {
   return (
-    <div className="flex flex-col lg:flex-row items-start lg:items-stretch gap-4 sm:gap-6 w-full">
-      <div className="shrink-0 flex items-center self-center lg:self-auto">
+    <div className="flex flex-col xl:flex-row items-start xl:items-center gap-6 w-full">
+      <div className="shrink-0 flex items-center self-center xl:self-auto">
         <PipelineDonutGraph leads={leads} grouped={grouped} />
       </div>
       <div className="flex-1 min-w-0 flex flex-col gap-4 overflow-hidden w-full">
         <PipelineSummary leads={leads} grouped={grouped} />
+        <PipelineConversion leads={leads} grouped={grouped} />
       </div>
     </div>
   );
@@ -77,6 +78,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       return updated || prev;
     });
   }, [initialLeads]);
+
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -94,6 +96,9 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     canScroll: true,
   });
 
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -104,6 +109,8 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       const { scrollLeft, scrollWidth, clientWidth } = el;
       if (scrollWidth <= clientWidth || clientWidth === 0) {
         setScrollProgress({ leftPercent: 0, widthPercent: 100, canScroll: false });
+        setCanScrollLeft(false);
+        setCanScrollRight(false);
         return;
       }
 
@@ -118,6 +125,9 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
         widthPercent,
         canScroll: true,
       });
+
+      setCanScrollLeft(scrollLeft > 10);
+      setCanScrollRight(scrollLeft < maxScroll - 10);
     };
 
     const onScroll = () => {
@@ -149,6 +159,16 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     };
   }, [leads]);
 
+  const scrollBoard = useCallback((direction: "left" | "right") => {
+    const el = stageRef.current;
+    if (!el) return;
+    const scrollAmount = el.clientWidth * 0.75;
+    el.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth",
+    });
+  }, []);
+
   const {
     activities,
     filter: activityFilter,
@@ -174,6 +194,12 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
       }
     });
     return map;
+  }, [leads]);
+
+  const openValue = useMemo(() => {
+    return leads
+      .filter((l) => l.status !== "Won" && l.status !== "Lost")
+      .reduce((sum, l) => sum + (l.quotedAmount ?? l.budget ?? 0), 0);
   }, [leads]);
 
   const replaceLead = useCallback((updatedLead: Lead) => {
@@ -332,20 +358,23 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
     if (!deleteTarget || saving) return;
     setSaving(true);
     try {
-    const result = await deleteLead(deleteTarget.id);
-    if (!result.success) {
-      setError(result.error);
-      return;
+      const result = await deleteLead(deleteTarget.id);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      setLeads((current) => current.filter((l) => l.id !== result.data.id));
+      setSelectedLead(null);
+      setDeleteTarget(null);
+      setError(null);
+      if (result.undoId) {
+        showUndoToast("Lead moved to Recently Deleted", result.undoId);
+      }
+    } catch {
+      setError("Could not delete this lead. Please retry.");
+    } finally {
+      setSaving(false);
     }
-    setLeads((current) => current.filter((l) => l.id !== result.data.id));
-    setSelectedLead(null);
-    setDeleteTarget(null);
-    setError(null);
-    if (result.undoId) {
-      showUndoToast("Lead moved to Recently Deleted", result.undoId);
-    }
-    } catch { setError("Could not delete this lead. Please retry."); }
-    finally { setSaving(false); }
   };
 
   const handleSaveLead = async (formData: FormData) => {
@@ -414,38 +443,73 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
 
   return (
     <div className="flex flex-col min-w-0 w-full pb-8 sm:pb-4">
+      {/* Header bar matching Lovable aesthetic */}
+      <header className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="truncate text-[22px] font-semibold leading-tight sm:text-[26px] text-foreground">
+            Sales Pipeline
+          </h1>
+          <p className="mt-1 text-[13px] text-muted-foreground">
+            Open value <span className="font-medium text-foreground tabular">{formatCurrency(openValue)}</span> · drag cards between stages on desktop
+          </p>
+        </div>
+
+        {/* Desktop Stage Navigation Controls */}
+        <div className="hidden sm:flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => scrollBoard("left")}
+            disabled={!canScrollLeft}
+            aria-label="Scroll pipeline stages left"
+            className="press flex h-8 w-8 items-center justify-center rounded-lg border border-border/80 bg-card text-muted-foreground hover:bg-muted hover:text-foreground shadow-[var(--shadow-card)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            title="Previous stages"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => scrollBoard("right")}
+            disabled={!canScrollRight}
+            aria-label="Scroll pipeline stages right"
+            className="press flex h-8 w-8 items-center justify-center rounded-lg border border-border/80 bg-card text-muted-foreground hover:bg-muted hover:text-foreground shadow-[var(--shadow-card)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            title="Next stages"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      </header>
+
       {error && (
-        <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm font-medium text-red-800 shadow-sm border border-red-200 flex justify-between">
-          {error}
-          <button type="button" onClick={() => setError(null)} className="font-semibold hover:opacity-70">
+        <div className="mb-4 rounded-xl bg-destructive/10 p-4 text-sm font-medium text-destructive border border-destructive/20 flex justify-between items-center shadow-sm">
+          <span>{error}</span>
+          <button type="button" onClick={() => setError(null)} className="font-semibold hover:opacity-70 cursor-pointer">
             Dismiss
           </button>
         </div>
       )}
 
       {/* Mobile Analytics (Collapsible Accordion) */}
-      <details className="mb-4 sm:hidden shrink-0 group rounded-xl border border-[var(--border)] bg-white overflow-hidden [&_summary::-webkit-details-marker]:hidden">
-        <summary className="flex cursor-pointer items-center justify-between px-4 py-3 font-semibold text-slate-900 select-none hover:bg-slate-50 active:bg-slate-100">
-          <div className="flex items-center gap-2">
+      <details className="mb-4 sm:hidden shrink-0 group rounded-xl border border-border/80 bg-card overflow-hidden [&_summary::-webkit-details-marker]:hidden shadow-[var(--shadow-card)]">
+        <summary className="flex cursor-pointer items-center justify-between px-4 py-3 font-semibold text-foreground select-none hover:bg-muted/50 active:bg-muted transition-colors">
+          <div className="flex items-center gap-2 text-[13px]">
+            <PieChart className="h-4 w-4 text-primary" />
             Pipeline Analytics
           </div>
-          <svg className="h-5 w-5 text-slate-400 transition-transform group-open:-rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 group-open:-rotate-180" />
         </summary>
-        <div className="p-4 border-t border-slate-100 hidden group-open:flex">
+        <div className="p-4 border-t border-border/60 flex flex-col gap-4">
           <PipelineAnalyticsSection leads={leads} grouped={grouped} />
         </div>
       </details>
 
-      {/* Desktop Analytics (Always Visible Above Kanban Board) */}
-      <div className="mb-6 hidden sm:flex shrink-0 rounded-xl border border-[var(--border)] bg-white p-4 sm:p-5">
+      {/* Desktop Analytics (Integrated Card Above Kanban Board) */}
+      <div className="mb-6 hidden sm:flex shrink-0 rounded-2xl border border-border/80 bg-card p-5 shadow-[var(--shadow-card)]">
         <PipelineAnalyticsSection leads={leads} grouped={grouped} />
       </div>
 
-      <p className="mb-2 text-xs text-slate-500 hidden sm:block">Drag the grip toward either board edge to reach more stages. You can also change Status in lead details.</p>
-      
       {/* DragDropContext wraps Board Columns */}
       <DragDropContext onDragEnd={onDragEnd}>
-        {/* Every droppable shares one horizontal scroll parent */}
+        {/* Horizontal scroll container displaying 3 columns on desktop, 2 on medium, 1 on mobile */}
         <div
           ref={stageRef}
           aria-label="Pipeline stages"
@@ -460,7 +524,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
               <div
                 key={status}
                 data-stage={status}
-                className="w-[85vw] sm:w-[18rem] lg:w-80 shrink-0 flex flex-col rounded-2xl border border-border bg-muted/40 sm:snap-center overflow-hidden"
+                className="w-[85vw] max-w-[340px] sm:max-w-none sm:w-[calc((100%-1rem)/2)] xl:w-[calc((100%-2rem)/3)] shrink-0 flex flex-col rounded-[16px] border border-border/70 bg-muted/40 p-2 sm:snap-center transition-all duration-200"
               >
                 <PipelineColumnHeader status={status} count={grouped[status].length} totalValue={stageValueStr} />
 
@@ -469,11 +533,11 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`min-h-40 flex-1 rounded-b-2xl p-3 transition-colors duration-200 ${
-                        snapshot.isDraggingOver ? "bg-accent/60 ring-2 ring-inset ring-primary/40" : ""
+                      className={`min-h-[180px] flex-1 rounded-b-xl p-1 transition-colors duration-200 ${
+                        snapshot.isDraggingOver ? "bg-primary/5 ring-2 ring-inset ring-primary/40 rounded-xl" : ""
                       }`}
                     >
-                      <div className="flex flex-col gap-3 min-h-[100px]">
+                      <div className="flex flex-col gap-2.5 min-h-[100px]">
                         {grouped[status].map((lead, index) => (
                           <Draggable key={lead.id} draggableId={lead.id} index={index} disableInteractiveElementBlocking>
                             {(provided, snapshot) => (
@@ -481,7 +545,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
                                 ref={provided.innerRef}
                                 {...provided.draggableProps}
                                 style={provided.draggableProps.style}
-                                className={snapshot.isDragging ? "z-50" : ""}
+                                className={snapshot.isDragging ? "z-50 shadow-2xl scale-[1.02]" : ""}
                               >
                                 <PipelineCard
                                   lead={lead}
@@ -528,24 +592,24 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
                 });
               }
             }}
-            className="relative w-36 h-1 bg-slate-200/90 rounded-full overflow-hidden cursor-pointer"
+            className="relative w-36 h-1 bg-border rounded-full overflow-hidden cursor-pointer"
           >
             <div
               data-testid="pipeline-mobile-scroll-thumb"
-              className="absolute top-0 bottom-0 bg-blue-600 rounded-full"
+              className="absolute top-0 bottom-0 bg-primary rounded-full transition-all duration-75"
               style={{
                 width: `${scrollProgress.widthPercent}%`,
                 left: `${scrollProgress.leftPercent}%`,
               }}
             />
           </div>
-          <span className="text-[10px] font-medium text-slate-400">
+          <span className="text-[10px] font-medium text-muted-foreground">
             Swipe stages horizontally
           </span>
         </div>
       )}
 
-      {selectedLead && <LeadDetailPanel key={selectedLead.id}         lead={selectedLead}
+      {selectedLead && <LeadDetailPanel key={selectedLead.id} lead={selectedLead}
         saving={saving}
         onClose={() => setSelectedLead(null)}
         onEdit={() => {
