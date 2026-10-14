@@ -7,8 +7,7 @@ import { ArrowRight } from "lucide-react";
 export function PipelineConversion({ leads, grouped }: { leads: Lead[]; grouped: Record<LeadStatus, Lead[]> }) {
   const conversions = useMemo(() => {
     const total = leads.length;
-    // For conversions, we should include leads that moved PAST the stage as well, or just use the funnel logic.
-    // Funnel logic:
+    // For conversions, we include leads that moved past the stage as well using strict funnel logic:
     // Total = all leads
     // Contacted or further = Contacted + Qualified + Proposal + Won
     const contactedAndBeyond = grouped["Contacted"].length + grouped["Qualified"].length + grouped["Proposal Sent"].length + grouped["Won"].length;
@@ -24,30 +23,34 @@ export function PipelineConversion({ leads, grouped }: { leads: Lead[]; grouped:
     };
 
     return [
-      { label: "Total → Contacted", rate: rate(contactedAndBeyond, total), color: "text-blue-600", bg: "bg-blue-50" },
-      { label: "Contacted → Qualified", rate: rate(qualifiedAndBeyond, contactedAndBeyond), color: "text-indigo-600", bg: "bg-indigo-50" },
-      { label: "Qualified → Proposal", rate: rate(proposalAndBeyond, qualifiedAndBeyond), color: "text-purple-600", bg: "bg-purple-50" },
-      { label: "Proposal → Won", rate: rate(won, proposalAndBeyond), color: "text-emerald-600", bg: "bg-emerald-50" },
-      { label: "Overall Win Rate", rate: rate(won, total), color: "text-slate-700", bg: "bg-slate-100", highlight: true },
+      { label: "Total → Contacted", rate: rate(contactedAndBeyond, total), color: "text-info" },
+      { label: "Contacted → Qualified", rate: rate(qualifiedAndBeyond, contactedAndBeyond), color: "text-chart-4" },
+      { label: "Qualified → Proposal", rate: rate(proposalAndBeyond, qualifiedAndBeyond), color: "text-chart-2" },
+      { label: "Proposal → Won", rate: rate(won, proposalAndBeyond), color: "text-primary" },
+      { label: "Overall Win Rate", rate: rate(won, total), color: "text-foreground", highlight: true },
     ];
   }, [leads, grouped]);
 
   return (
-    <div className="flex flex-nowrap overflow-x-auto gap-3 pb-2 sm:pb-0 hide-scrollbar" role="region" aria-label="Pipeline conversion analytics">
-      {conversions.map((conv, i) => (
+    <div className="flex flex-nowrap overflow-x-auto gap-2.5 pb-1 sm:pb-0 hide-scrollbar" role="region" aria-label="Pipeline conversion analytics">
+      {conversions.map((conv) => (
         <div
           key={conv.label}
-          className={`shrink-0 flex flex-col justify-center rounded-xl px-4 py-3 border border-slate-100 ${conv.bg} ${conv.highlight ? 'border-slate-300 shadow-sm' : ''}`}
+          className={`shrink-0 flex flex-col justify-center rounded-xl px-3.5 py-2.5 border transition-all ${
+            conv.highlight
+              ? "bg-card border-primary/30 shadow-[var(--shadow-card)] ring-1 ring-inset ring-primary/20"
+              : "bg-muted/40 border-border/70 hover:bg-card hover:shadow-[var(--shadow-card)]"
+          }`}
         >
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wide">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
             {conv.label.split(" → ").map((part, j) => (
               <span key={j} className="flex items-center gap-1.5">
-                {j > 0 && <ArrowRight size={10} className="text-slate-400" />}
+                {j > 0 && <ArrowRight size={10} className="text-muted-foreground/60" />}
                 {part}
               </span>
             ))}
           </div>
-          <p className={`mt-1 text-lg sm:text-xl font-bold tracking-tight ${conv.color}`}>{conv.rate}</p>
+          <p className={`mt-1 text-lg sm:text-xl font-bold tracking-tight tabular ${conv.color}`}>{conv.rate}</p>
         </div>
       ))}
     </div>
