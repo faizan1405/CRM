@@ -35,11 +35,6 @@ export default async function DashboardPage() {
   }
 
   const { data } = result;
-  const currentMonth = new Intl.DateTimeFormat("en-IN", {
-    timeZone: "Asia/Kolkata",
-    month: "long",
-  }).format(new Date());
-
   const todayFollowUpsList = (data.todayFollowUps || []).slice(0, 5);
 
   return (
@@ -55,7 +50,7 @@ export default async function DashboardPage() {
         <Card className="rise flex flex-col justify-between overflow-hidden p-5 sm:p-6">
           <div>
             <div className="flex items-center justify-between">
-              <div className="eyebrow">Revenue · {currentMonth}</div>
+              <div className="eyebrow">Total Won Revenue</div>
               <Link
                 href="/analytics"
                 className="text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground"
