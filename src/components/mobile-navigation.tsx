@@ -2,72 +2,143 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Menu, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { logout } from "@/app/actions/auth";
+import {
+  LayoutGrid,
+  Users,
+  Columns3,
+  CalendarCheck2,
+  Ellipsis,
+  LogOut,
+} from "lucide-react";
+import { useState } from "react";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { crmNavigation } from "@/components/crm-navigation";
-import { LiveClock } from "@/components/live-clock";
-import { GlobalSearch } from "@/components/global-search";
-import { MoreMenuSheet } from "@/components/more-menu-sheet";
+import { logout } from "@/app/actions/auth";
+import { cn } from "@/lib/utils";
+
+type NavItem = {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+};
+
+const mobilePrimary: { href: string; label: string; icon: React.ElementType }[] = [
+  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
+  { href: "/leads", label: "Leads", icon: Users },
+  { href: "/pipeline", label: "Pipeline", icon: Columns3 },
+  { href: "/follow-ups", label: "Follow-ups", icon: CalendarCheck2 },
+];
 
 export function MobileNavigation() {
   const pathname = usePathname();
-  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [more, setMore] = useState(false);
 
-  const primaryItems = [
-    { label: "Dashboard", href: "/dashboard", icon: crmNavigation.find(i => i.href === "/dashboard")?.icon },
-    { label: "Leads", href: "/leads", icon: crmNavigation.find(i => i.href === "/leads")?.icon },
-    { label: "Pipeline", href: "/pipeline", icon: crmNavigation.find(i => i.href === "/pipeline")?.icon },
-    { label: "Follow-ups", href: "/follow-ups", icon: crmNavigation.find(i => i.href === "/follow-ups")?.icon },
-  ];
-
-  // If we are deep inside a lead (e.g. /leads/123), we still want the "Leads" tab active.
   const isActive = (href: string) => {
-    if (href === "/dashboard" && pathname === "/dashboard") return true;
-    if (href !== "/dashboard" && pathname.startsWith(href)) return true;
-    return false;
+    return href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
   };
+
+  const mobileIdx = mobilePrimary.findIndex((p) => isActive(p.href));
+  const activeMobile = mobileIdx === -1 ? (more ? 4 : -1) : mobileIdx;
+
+  const moreItems = crmNavigation.filter(
+    (item) => !mobilePrimary.some((p) => p.href === item.href)
+  );
 
   return (
     <>
-      <nav className="fixed bottom-0 inset-x-0 z-40 flex h-16 items-center justify-around border-t border-slate-200/80 bg-white/95 pb-safe backdrop-blur-md lg:hidden shadow-[0_-2px_10px_rgba(0,0,0,0.03)]">
-        {primaryItems.map((item) => {
-          const active = isActive(item.href);
-          const Icon = item.icon as React.ElementType;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center justify-center w-full h-full space-y-0.5 transition-colors ${
-                active ? "text-blue-600" : "text-slate-500 hover:text-slate-900"
-              }`}
-            >
-              <div className={`flex items-center justify-center w-12 h-7 rounded-full transition-all ${active ? "bg-blue-100/60 text-blue-600" : "transparent"}`}>
-                <Icon size={19} strokeWidth={active ? 2.3 : 1.8} />
-              </div>
-              <span className={`text-[10px] tracking-tight ${active ? "font-bold text-blue-700" : "font-medium"}`}>
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
-        
-        <button
-          onClick={() => setIsMoreOpen(true)}
-          className={`flex flex-col items-center justify-center w-full h-full space-y-0.5 transition-colors ${
-            isMoreOpen ? "text-blue-600" : "text-slate-500 hover:text-slate-900"
-          }`}
-        >
-          <div className="flex items-center justify-center w-12 h-7 rounded-full transition-all transparent">
-            <Menu size={19} strokeWidth={isMoreOpen ? 2.3 : 1.8} />
-          </div>
-          <span className={`text-[10px] tracking-tight ${isMoreOpen ? "font-bold text-blue-700" : "font-medium"}`}>
-            More
-          </span>
-        </button>
+      <nav className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 lg:hidden">
+        <div className="relative mx-auto grid h-[60px] max-w-md grid-cols-5 rounded-2xl bg-ink/95 p-1.5 text-ink-muted shadow-[var(--shadow-float)] backdrop-blur-xl">
+          {activeMobile !== -1 && (
+            <span
+              className="absolute bottom-1.5 top-1.5 rounded-xl bg-ink-line transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+              style={{
+                width: "calc((100% - 0.75rem) / 5)",
+                left: "0.375rem",
+                transform: `translateX(${activeMobile * 100}%)`,
+              }}
+            />
+          )}
+
+          {mobilePrimary.map((item, i) => {
+            const active = activeMobile === i;
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "press relative flex flex-col items-center justify-center gap-0.5",
+                  active ? "text-ink-foreground" : "text-ink-muted hover:text-ink-foreground"
+                )}
+              >
+                <Icon
+                  className={cn("h-[18px] w-[18px]", active ? "text-sidebar-primary" : "")}
+                  strokeWidth={1.9}
+                />
+                <span className="text-[10.5px] font-medium">{item.label}</span>
+              </Link>
+            );
+          })}
+
+          <button
+            onClick={() => setMore(true)}
+            className={cn(
+              "press relative flex flex-col items-center justify-center gap-0.5 cursor-pointer",
+              activeMobile === 4 ? "text-ink-foreground" : "text-ink-muted hover:text-ink-foreground"
+            )}
+            aria-label="More navigation items"
+          >
+            <Ellipsis
+              className={cn("h-[18px] w-[18px]", activeMobile === 4 ? "text-sidebar-primary" : "")}
+            />
+            <span className="text-[10.5px] font-medium">More</span>
+          </button>
+        </div>
       </nav>
 
-      <MoreMenuSheet isOpen={isMoreOpen} onClose={() => setIsMoreOpen(false)} />
+      <Sheet open={more} onOpenChange={setMore}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-[22px] border-0 px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 bg-card"
+        >
+          <div className="mx-auto mb-4 h-1 w-9 rounded-full bg-border" />
+          <SheetTitle className="mb-2 px-2 text-[13px] font-medium text-muted-foreground">
+            More Options
+          </SheetTitle>
+          <div className="divide-y divide-border overflow-hidden rounded-xl bg-muted/60">
+            {moreItems.map((item) => {
+              const active = isActive(item.href);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMore(false)}
+                  className={cn(
+                    "press flex h-12 items-center gap-3 px-4 text-[14px] font-medium transition-colors",
+                    active ? "text-primary bg-accent/40 font-semibold" : "text-foreground hover:bg-muted"
+                  )}
+                >
+                  <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.8} />
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="mt-3">
+            <form action={logout}>
+              <button
+                type="submit"
+                className="press flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-destructive/10 text-[13.5px] font-semibold text-destructive hover:bg-destructive/15 transition-colors cursor-pointer"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
+              </button>
+            </form>
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }
