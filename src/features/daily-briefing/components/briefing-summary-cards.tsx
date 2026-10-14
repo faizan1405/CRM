@@ -121,10 +121,10 @@ export function BriefingSummaryCards({
               }}
               aria-pressed={isSelected}
               aria-label={`${card.label}: ${value}`}
-              className={`group relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all sm:p-3.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 active:scale-[0.98] ${
+              className={`group press relative flex flex-col justify-between rounded-xl border p-3 text-left transition-all sm:p-3.5 cursor-pointer card-surface ${
                 isSelected
-                  ? "border-blue-600 bg-white ring-2 ring-blue-500/20 shadow-sm"
-                  : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs"
+                  ? "border-primary bg-accent/20 ring-2 ring-primary/30 shadow-sm"
+                  : "border-border bg-card card-hover"
               }`}
             >
               {/* Header row with emoji/icon & badge */}
@@ -152,17 +152,17 @@ export function BriefingSummaryCards({
 
               {/* Metric number */}
               <div className="mt-2.5">
-                <div className="truncate text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+                <div className="truncate text-[18px] font-semibold tabular text-foreground sm:text-[22px]">
                   {value}
                 </div>
-                <div className="mt-0.5 truncate text-[11px] font-medium leading-tight text-slate-600 sm:text-xs">
+                <div className="mt-0.5 truncate text-[11px] font-medium leading-tight text-muted-foreground sm:text-xs">
                   {card.label}
                 </div>
               </div>
 
               {/* Subtext info */}
-              <div className="mt-2 hidden border-t border-slate-100 pt-1.5 sm:block">
-                <span className="truncate text-[10px] font-normal text-slate-500">
+              <div className="mt-2 hidden border-t border-border/60 pt-1.5 sm:block">
+                <span className="truncate text-[10.5px] font-normal text-muted-foreground">
                   {card.subtext}
                 </span>
               </div>

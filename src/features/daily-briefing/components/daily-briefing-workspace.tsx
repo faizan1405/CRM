@@ -172,44 +172,46 @@ export function DailyBriefingWorkspace({
     <div className="mx-auto w-full max-w-6xl space-y-5 pb-16">
 
 
-      {/* Briefing Header: Mobile-First, Scan in under 30 seconds */}
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 pb-4">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-blue-700 uppercase tracking-wider">
-              ⚡ HOURLY SALES SCAN
-            </span>
-            <span className="text-xs font-medium text-slate-500">
-              {new Date().toLocaleDateString("en-IN", {
-                weekday: "long",
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </span>
+      {/* Lovable Premium Hero Dark Ink Card */}
+      <section className="rise relative overflow-hidden rounded-[18px] bg-ink px-5 py-7 text-ink-foreground shadow-[var(--shadow-lift)] sm:px-9 sm:py-8">
+        <div className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:radial-gradient(var(--ink-foreground)_1px,transparent_1px)] [background-size:18px_18px]" />
+        <div className="relative">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-sidebar-primary">
+              Daily Briefing · {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
+            </div>
+            <button
+              type="button"
+              onClick={handleResetActions}
+              aria-label="Reset checklist"
+              className="press inline-flex h-7 items-center gap-1.5 rounded-lg border border-ink-line bg-ink-muted/10 px-2.5 text-[11px] font-medium text-ink-muted hover:text-ink-foreground cursor-pointer"
+            >
+              <RotateCcw size={12} />
+              <span>Reset</span>
+            </button>
           </div>
-          <h1 className="mt-1 text-xl font-bold tracking-tight text-slate-950 sm:text-2xl lg:text-3xl">
-            Daily Sales Briefing
+          <h1 className="mt-3 max-w-2xl text-[22px] font-semibold leading-[1.25] tracking-[-0.03em] sm:text-[30px]">
+            {stats.hotLeadsCount} hot leads, {stats.followUpsTodayCount} follow-ups due, {stats.activeOpportunityValueFormatted} in pipeline.
           </h1>
-          <p className="mt-0.5 text-xs text-slate-600 sm:text-sm">
-            What matters today: {stats.hotLeadsCount} hot leads, {stats.followUpsTodayCount} follow-ups, and {stats.activeOpportunityValueFormatted} in active pipeline.
+          <p className="mt-2.5 max-w-xl text-[13.5px] leading-relaxed text-ink-muted">
+            Start with the critical items below — they have the highest impact on closing deals today.
           </p>
+          <dl className="mt-6 grid max-w-lg grid-cols-3 border-t border-ink-line pt-4">
+            <div>
+              <dt className="text-[11.5px] text-ink-muted">Follow-ups</dt>
+              <dd className="mt-0.5 text-[22px] sm:text-[26px] font-semibold tabular">{stats.followUpsTodayCount}</dd>
+            </div>
+            <div className="border-l border-ink-line pl-4 sm:pl-6">
+              <dt className="text-[11.5px] text-ink-muted">Overdue</dt>
+              <dd className="mt-0.5 text-[22px] sm:text-[26px] font-semibold tabular text-destructive">{stats.overdueFollowUpsCount}</dd>
+            </div>
+            <div className="border-l border-ink-line pl-4 sm:pl-6">
+              <dt className="text-[11.5px] text-ink-muted">Hot Leads</dt>
+              <dd className="mt-0.5 text-[22px] sm:text-[26px] font-semibold tabular text-sidebar-primary">{stats.hotLeadsCount}</dd>
+            </div>
+          </dl>
         </div>
-
-        {/* Header Controls */}
-        <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0">
-
-          <button
-            type="button"
-            onClick={handleResetActions}
-            aria-label="Reset checklist"
-            className="inline-flex min-h-[38px] items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-          >
-            <RotateCcw size={13} />
-            <span className="hidden xs:inline">Reset</span>
-          </button>
-        </div>
-      </header>
+      </section>
 
       {/* AI Daily Intelligence Briefing Section */}
       <AiBriefingBanner

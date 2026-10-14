@@ -238,6 +238,18 @@ export function calculateTotalContractedDealValue(deals: DealFinancialRecord[]):
 }
 
 /**
+ * 3d. TOTAL COLLECTED ACROSS DEALS
+ * Sum of all valid active payments across the target deal population.
+ */
+export function calculateDealsTotalCollected(deals: DealFinancialRecord[]): Prisma.Decimal {
+  let total = new Prisma.Decimal(0);
+  for (const deal of deals) {
+    total = total.add(calculateCollected(deal.payments || []));
+  }
+  return total;
+}
+
+/**
  * 4. COLLECTION RATE
  * collectionRate = (Money Received / Contracted Deal Value) * 100
  * If contracted amount <= 0: return 0.

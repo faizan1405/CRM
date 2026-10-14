@@ -9,7 +9,8 @@ import { statusFromDatabase } from "@/features/leads/types";
 import { FollowUpCard } from "./follow-up-card";
 import { FollowUpForm } from "./follow-up-form";
 import { FollowUpEmptyState } from "./empty-state";
-import { PageHeader } from "@/components/page-header";
+import { PageHeader, Segmented } from "@/components/crm/primitives";
+import { Plus } from "lucide-react";
 import type { FollowUp, NewFollowUpInput } from "./types";
 import { scheduleLeadFollowUp, markFollowUpComplete, cancelFollowUp } from "@/app/actions/follow-ups";
 import { togglePinLead } from "@/app/actions/leads";
@@ -250,67 +251,70 @@ export function FollowUpsWorkspace({
     <div className="flex h-full flex-col overflow-hidden pb-4">
       <PageHeader
         title="Follow-ups"
-        description="Keep track of upcoming conversations and next steps."
+        description={
+          <>
+            <span className="font-medium text-destructive">{stats.Overdue} overdue</span> ·{" "}
+            <span className="font-medium text-foreground">{stats.Today} today</span> ·{" "}
+            <span className="text-muted-foreground">{stats.Overdue + stats.Today + stats.Upcoming} pending in total</span>
+          </>
+        }
         actions={
-          <button
-            type="button"
-            onClick={() => { setEditingFollowUp(null); setFormOpen(true); }}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:bg-blue-800"
-          >
-            New Follow-up
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <div
+              className="rounded-[10px] bg-muted p-1"
+              role="tablist"
+              aria-label="Follow-up status tabs"
+            >
+              <div className="flex gap-1">
+                {TABS.map((tab) => {
+                  const isActive = activeTab === tab.key;
+                  const count =
+                    tab.key === "overdue"
+                      ? stats.Overdue
+                      : tab.key === "today"
+                      ? stats.Today
+                      : stats.Upcoming;
+                  return (
+                    <button
+                      key={tab.key}
+                      role="tab"
+                      aria-selected={isActive}
+                      onClick={() => setActiveTab(tab.key)}
+                      className={`press inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-[13px] font-medium transition-all duration-200 cursor-pointer ${
+                        isActive
+                          ? "bg-card text-foreground shadow-[var(--shadow-card)] font-semibold"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      <span
+                        className={`tabular text-[11.5px] px-1.5 py-0.2 rounded-full ${
+                          tab.key === "overdue" && count > 0
+                            ? "bg-destructive/15 text-destructive font-semibold"
+                            : isActive
+                            ? "bg-accent text-accent-foreground"
+                            : "text-subtle"
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => { setEditingFollowUp(null); setFormOpen(true); }}
+              className="press inline-flex h-9 items-center justify-center gap-1.5 rounded-xl bg-ink px-4 text-[13px] font-medium text-ink-foreground shadow-sm hover:opacity-90 active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <Plus className="h-4 w-4" />
+              <span>New Follow-up</span>
+            </button>
+          </div>
         }
       />
-
-      {/* Tab navigation */}
-      <div
-        className="shrink-0 overflow-x-auto border-b border-slate-200 bg-white"
-        role="tablist"
-        aria-label="Follow-up status tabs"
-      >
-        <div className="flex min-w-max">
-          {TABS.map((tab) => {
-            const isActive = activeTab === tab.key;
-            const count =
-              tab.key === "overdue"
-                ? stats.Overdue
-                : tab.key === "today"
-                ? stats.Today
-                : stats.Upcoming;
-            return (
-              <button
-                key={tab.key}
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setActiveTab(tab.key)}
-                className={`relative flex items-center gap-2 whitespace-nowrap px-5 py-3 text-sm font-medium transition-colors ${
-                  isActive
-                    ? "text-blue-700"
-                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                {tab.label}
-                <span
-                  className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold ${
-                    tab.key === "overdue" && count > 0
-                      ? "bg-red-100 text-red-700"
-                      : isActive
-                        ? count > 0
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-slate-100 text-slate-500"
-                        : "bg-slate-100 text-slate-500"
-                  }`}
-                >
-                  {count}
-                </span>
-                {isActive && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" aria-hidden="true" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       {/* Follow-ups list */}
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto py-4">

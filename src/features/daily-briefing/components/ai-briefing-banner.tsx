@@ -24,24 +24,24 @@ export function AiBriefingBanner({
   return (
     <section
       aria-label="AI Sales Briefing"
-      className={`relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 via-white to-blue-50/50 p-4 shadow-xs sm:p-5 ${className}`}
+      className={`relative overflow-hidden rounded-2xl border border-border bg-card p-4 card-surface sm:p-5 ${className}`}
     >
-      {/* Decorative subtle accent bar */}
+      {/* Decorative emerald accent rail */}
       <div
         aria-hidden="true"
-        className="absolute inset-y-0 left-0 w-1.5 bg-gradient-to-b from-indigo-500 to-blue-600"
+        className="absolute inset-y-0 left-0 w-1 bg-primary"
       />
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 pl-1.5">
         {/* Header row */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-100/90 px-2.5 py-1 text-xs font-semibold text-indigo-800">
-              <Sparkles size={13} className="text-indigo-600" />
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-0.5 text-xs font-semibold text-accent-foreground">
+              <Sparkles size={13} className="text-primary" />
               AI Daily Intelligence
             </span>
             {data?.generatedAt && (
-              <span className="text-[11px] font-medium text-slate-500">
+              <span className="text-[11px] font-medium text-muted-foreground">
                 {data.generatedAt}
               </span>
             )}
@@ -55,7 +55,7 @@ export function AiBriefingBanner({
                 disabled={isLoading}
                 aria-label="Refresh AI briefing"
                 title="Regenerate summary (UI callback only)"
-                className="inline-flex items-center gap-1 rounded-lg border border-indigo-200/80 bg-white/80 px-2.5 py-1.5 text-xs font-medium text-indigo-700 shadow-2xs hover:bg-white hover:text-indigo-900 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-50"
+                className="press inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground hover:bg-muted cursor-pointer disabled:opacity-50"
               >
                 <RefreshCw
                   size={12}
@@ -73,18 +73,18 @@ export function AiBriefingBanner({
         <div className="flex items-start gap-3">
           <div
             aria-hidden="true"
-            className="hidden sm:grid size-8 shrink-0 place-items-center rounded-lg bg-indigo-600 text-white shadow-xs"
+            className="hidden sm:grid size-8 shrink-0 place-items-center rounded-lg bg-ink text-ink-foreground shadow-xs"
           >
             <Bot size={18} />
           </div>
           <div className="flex-1 text-sm sm:text-base">
-            <p className="font-semibold leading-snug text-slate-900">
+            <p className="font-semibold leading-snug text-foreground">
               {data?.summary}
             </p>
 
             {data?.recommendation && (
-              <p className="mt-1.5 text-xs sm:text-sm text-indigo-950/80">
-                <strong className="font-semibold text-indigo-900">
+              <p className="mt-1.5 text-xs sm:text-sm text-muted-foreground">
+                <strong className="font-semibold text-foreground">
                   Recommended action:
                 </strong>{" "}
                 {data.recommendation}

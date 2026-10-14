@@ -33,6 +33,7 @@ import {
   calculateMoneyReceived,
   calculateTotalOutstanding,
   calculateTotalContractedDealValue,
+  calculateDealsTotalCollected,
   calculateCollectionRate,
   getOpportunityValue,
   decimalToNumber,
@@ -339,15 +340,22 @@ export async function calculateSalesAnalytics(
     const openPipelineDecimal = calculateOpenPipelineValue(activeOpportunities);
     const openPipelineValue = decimalToNumber(openPipelineDecimal);
 
-    // ─── 3b. Money Received, Outstanding, and Collection Rate ─────────────────
+    // ─── 3b. Money Received, Outstanding, and Overall Collection Rate ─────────
+    // Period-scoped Money Received: payments recorded within the selected date range
     const moneyReceivedDecimal = calculateMoneyReceived(scopedPayments);
     const moneyReceived = decimalToNumber(moneyReceivedDecimal);
+
+    // Current all-time collection metrics: calculated across the identical set of eligible active deals
+    const totalContractedDecimal = calculateTotalContractedDealValue(activeDealsWithPayments);
+    const totalContractedDealValue = decimalToNumber(totalContractedDecimal);
+
+    const totalReceivedAllTimeDecimal = calculateDealsTotalCollected(activeDealsWithPayments);
+    const totalReceivedAllTime = decimalToNumber(totalReceivedAllTimeDecimal);
 
     const outstandingDecimal = calculateTotalOutstanding(activeDealsWithPayments);
     const totalOutstanding = decimalToNumber(outstandingDecimal);
 
-    const totalContractedDecimal = calculateTotalContractedDealValue(activeDealsWithPayments);
-    const collectionRateDecimal = calculateCollectionRate(moneyReceivedDecimal, totalContractedDecimal);
+    const collectionRateDecimal = calculateCollectionRate(totalReceivedAllTimeDecimal, totalContractedDecimal);
     const collectionRate = decimalToNumber(collectionRateDecimal);
 
     // ─── 4. Overdue Follow-ups & Follow-up Performance ────────────────────────
@@ -617,6 +625,8 @@ export async function calculateSalesAnalytics(
       moneyReceived,
       totalOutstanding,
       collectionRate,
+      totalContractedDealValue,
+      totalReceivedAllTime,
       followUpsCreated,
       followUpsCompleted: fuCompleted,
       overdueFollowUps: overdueCount,
