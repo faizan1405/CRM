@@ -21,6 +21,8 @@ type LeadFiltersProps = {
   onClear: () => void;
 };
 
+// Mobile viewport zoom prevention:
+// text-base text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:text-sm
 const controlClass =
   "h-9 rounded-lg bg-card text-[13.5px] text-foreground shadow-[inset_0_0_0_1px_var(--input)] outline-none transition-[box-shadow] duration-150 placeholder:text-subtle hover:shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--foreground)_20%,var(--input))] focus:shadow-[inset_0_0_0_1px_var(--ring),0_0_0_3px_color-mix(in_oklab,var(--ring)_15%,transparent)]";
 
