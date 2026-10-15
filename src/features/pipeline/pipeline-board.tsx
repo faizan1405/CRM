@@ -25,7 +25,6 @@ import { useLeadActivities } from "@/features/activity/use-activities";
 import { FollowUpForm } from "@/features/followups/follow-up-form";
 import type { NewFollowUpInput } from "@/features/followups/types";
 import { getFollowUpSuggestion, type FollowUpSuggestion } from "@/lib/follow-up-suggestions";
-import { inrCompact } from "@/lib/crm/format";
 
 const COLUMNS: LeadStatus[] = [
   "New",
@@ -453,24 +452,21 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
           style={{ touchAction: "pan-x pan-y", WebkitOverflowScrolling: "touch" }}
         >
           <div className="flex min-h-full w-max min-w-full items-stretch gap-4 pb-6 sm:pb-4 px-4 sm:px-0">
-            {COLUMNS.map((status) => {
-              const stageValueSum = grouped[status].reduce((acc, l) => acc + (l.quotedAmount ?? l.budget ?? 0), 0);
-              const stageValueStr = stageValueSum > 0 ? inrCompact(stageValueSum) : undefined;
-              return (
+            {COLUMNS.map((status) => (
               <div
                 key={status}
                 data-stage={status}
-                className="w-[85vw] sm:w-[18rem] lg:w-80 shrink-0 flex flex-col rounded-2xl border border-border bg-muted/40 sm:snap-center overflow-hidden"
+                className="w-[85vw] sm:w-[18rem] lg:w-80 shrink-0 flex flex-col rounded-xl border border-slate-200 bg-slate-50 sm:snap-center"
               >
-                <PipelineColumnHeader status={status} count={grouped[status].length} totalValue={stageValueStr} />
+                <PipelineColumnHeader status={status} count={grouped[status].length} />
 
                 <Droppable droppableId={status}>
                   {(provided, snapshot) => (
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`min-h-40 flex-1 rounded-b-2xl p-3 transition-colors duration-200 ${
-                        snapshot.isDraggingOver ? "bg-accent/60 ring-2 ring-inset ring-primary/40" : ""
+                      className={`min-h-40 flex-1 rounded-b-xl p-3 transition-colors duration-150 ${
+                        snapshot.isDraggingOver ? "bg-blue-50 ring-2 ring-inset ring-blue-400" : ""
                       }`}
                     >
                       <div className="flex flex-col gap-3 min-h-[100px]">
@@ -502,8 +498,7 @@ export function PipelineBoard({ initialLeads }: { initialLeads: Lead[] }) {
                   )}
                 </Droppable>
               </div>
-            );
-          })}
+            ))}
           </div>
         </div>
       </DragDropContext>

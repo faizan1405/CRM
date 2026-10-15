@@ -6,7 +6,6 @@ import { ToastProvider } from "@/components/toast-provider";
 import { WhatsAppProvider } from "@/components/whatsapp-context";
 import { CallProvider } from "@/components/call-context";
 import { CrmSyncProvider } from "@/components/crm-sync-provider";
-import { Toaster } from "sonner";
 
 export default function CrmLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -15,17 +14,16 @@ export default function CrmLayout({ children }: { children: React.ReactNode }) {
         <CallProvider>
           <LeadNavigationProvider>
             <CrmSyncProvider>
-              <div className="min-h-dvh lg:grid lg:grid-cols-[244px_minmax(0,1fr)]">
+              <div className="min-h-dvh max-w-full overflow-x-clip lg:flex pb-[calc(4rem+env(safe-area-inset-bottom)+1.5rem)] lg:pb-0">
                 <AppSidebar />
-                <div className="min-w-0 flex flex-col">
+                <div className="min-w-0 max-w-full flex-1">
                   <MobileHeader />
-                  <main className="page-enter mx-auto w-full max-w-[1240px] px-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-4 sm:px-6 sm:pt-7 lg:px-10 lg:pb-14 lg:pt-8 flex-1">
+                  <main className="mx-auto w-full max-w-[96rem] min-w-0 px-4 py-4 sm:px-6 sm:py-8 lg:px-10 lg:py-10 xl:px-12 pb-safe">
                     {children}
                   </main>
                 </div>
                 <MobileNavigation />
               </div>
-              <Toaster position="bottom-right" richColors />
             </CrmSyncProvider>
           </LeadNavigationProvider>
         </CallProvider>

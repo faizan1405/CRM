@@ -1,27 +1,28 @@
 "use client";
 
 import type { LeadStatus } from "@/features/leads/types";
-import { cn } from "@/lib/utils";
 
-const statusAccent: Record<LeadStatus, { dot: string; swatch: string }> = {
-  New: { dot: "bg-info", swatch: "bg-info" },
-  Contacted: { dot: "bg-subtle", swatch: "bg-subtle" },
-  Qualified: { dot: "bg-chart-2", swatch: "bg-chart-2" },
-  "Proposal Sent": { dot: "bg-warning", swatch: "bg-warning" },
-  Won: { dot: "bg-primary", swatch: "bg-primary" },
-  Lost: { dot: "bg-destructive", swatch: "bg-destructive" },
+const statusAccent: Record<LeadStatus, { dot: string; border: string }> = {
+  New: { dot: "bg-blue-500", border: "border-l-blue-400" },
+  Contacted: { dot: "bg-slate-400", border: "border-l-slate-400" },
+  Qualified: { dot: "bg-indigo-500", border: "border-l-indigo-400" },
+  "Proposal Sent": { dot: "bg-amber-500", border: "border-l-amber-400" },
+  Won: { dot: "bg-emerald-500", border: "border-l-emerald-400" },
+  Lost: { dot: "bg-rose-500", border: "border-l-rose-400" },
 };
 
 export function PipelineSummary({ stats }: { stats: Record<string, number> }) {
   return (
-    <div className="flex flex-wrap gap-2.5" role="region" aria-label="Pipeline summary">
+    <div className="flex flex-wrap gap-3" role="region" aria-label="Pipeline summary">
       {Object.entries(stats).map(([label, value]) => (
         <div
           key={label}
-          className="card-surface flex flex-col px-3.5 py-2.5 min-w-[105px] flex-1 sm:flex-none"
+          className="flex flex-col rounded-lg bg-white px-4 py-3 shadow-[0_1px_3px_rgba(15,23,42,0.04)] border border-[var(--border)] min-w-[110px] flex-1 sm:flex-none"
         >
-          <p className="eyebrow truncate">{label}</p>
-          <p className="mt-1 text-xl font-semibold tracking-tight text-foreground tabular">{value}</p>
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+            {label}
+          </p>
+          <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
         </div>
       ))}
     </div>
@@ -31,41 +32,28 @@ export function PipelineSummary({ stats }: { stats: Record<string, number> }) {
 export function PipelineEmptyState({ status }: { status: LeadStatus }) {
   return (
     <div
-      className="flex flex-col items-center justify-center gap-1.5 py-8 text-[12.5px] text-subtle rounded-xl border border-dashed border-border"
+      className="flex flex-col items-center justify-center gap-1.5 py-8 text-sm text-slate-400 border-2 border-dashed border-slate-200 rounded-lg"
       aria-label={`No leads in ${status}`}
     >
-      <span>No leads in this stage</span>
+      <span>No leads</span>
     </div>
   );
 }
 
-export function PipelineColumnHeader({
-  status,
-  count,
-  totalValue,
-}: {
-  status: LeadStatus;
-  count: number;
-  totalValue?: string;
-}) {
-  const accent = statusAccent[status] || { dot: "bg-subtle", swatch: "bg-subtle" };
+export function PipelineColumnHeader({ status, count }: { status: LeadStatus; count: number }) {
+  const accent = statusAccent[status];
   return (
-    <div className="flex items-center justify-between gap-2 px-3 py-2.5 border-b border-border bg-card/60">
-      <div className="flex items-center gap-2 min-w-0">
-        <span className={cn("size-2 rounded-sm shrink-0", accent.dot)} aria-hidden="true" />
-        <h3 className="font-semibold text-foreground text-[13px] truncate">{status}</h3>
-        <span
-          className="flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground tabular"
-          aria-label={`${count} leads`}
-        >
-          {count}
-        </span>
+    <div className="flex items-center justify-between gap-2 p-3.5 border-b border-slate-200 bg-slate-100/50">
+      <div className="flex items-center gap-2">
+        <span className={`size-2 rounded-full ${accent.dot}`} aria-hidden="true" />
+        <h3 className="font-semibold text-slate-700 text-sm">{status}</h3>
       </div>
-      {totalValue && (
-        <span className="text-[12px] font-medium text-muted-foreground tabular shrink-0">
-          {totalValue}
-        </span>
-      )}
+      <span
+        className="flex h-6 min-w-[24px] px-1.5 items-center justify-center rounded-full bg-white border border-slate-200 text-xs font-medium text-slate-600 shadow-sm"
+        aria-label={`${count} leads`}
+      >
+        {count}
+      </span>
     </div>
   );
 }

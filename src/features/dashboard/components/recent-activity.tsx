@@ -1,74 +1,47 @@
-import { Plus, Check, MessageSquare, Clock, RefreshCw, Activity, MessageCircle, PencilLine, UserPlus, CalendarCheck2, CalendarX2 } from "lucide-react";
+import { Plus, Check, MessageSquare, Clock, RefreshCw, Activity } from "lucide-react";
 import { ActionCard } from "@/components/action-card";
 import { cleanLeadName } from "@/features/leads/formatters";
 import type { DashboardData } from "@/app/actions/dashboard";
-import { cn } from "@/lib/utils";
 
-export function RecentActivity({ data }: { data: DashboardData["recentActivity"] }) {
+export function RecentActivity({ data }: { data: DashboardData['recentActivity'] }) {
   const getIconInfo = (type: string) => {
     switch (type) {
-      case "LEAD_CREATED":
-        return { icon: UserPlus, color: "text-primary", bg: "bg-success-soft" };
-      case "STATUS_CHANGED":
-        return { icon: RefreshCw, color: "text-info", bg: "bg-info-soft" };
-      case "FOLLOWUP_COMPLETED":
-        return { icon: CalendarCheck2, color: "text-primary", bg: "bg-success-soft" };
-      case "FOLLOWUP_CANCELLED":
-        return { icon: CalendarX2, color: "text-destructive", bg: "bg-danger-soft" };
-      case "NOTE_ADDED":
-        return { icon: MessageSquare, color: "text-chart-2", bg: "bg-muted" };
-      case "WHATSAPP_OPENED":
-        return { icon: MessageCircle, color: "text-whatsapp", bg: "bg-success-soft" };
+      case "LEAD_CREATED": return { icon: Plus, color: "text-blue-500", bg: "bg-blue-50" };
+      case "STATUS_CHANGED": return { icon: RefreshCw, color: "text-cyan-500", bg: "bg-cyan-50" };
+      case "FOLLOWUP_COMPLETED": return { icon: Check, color: "text-green-500", bg: "bg-green-50" };
+      case "NOTE_ADDED": return { icon: MessageSquare, color: "text-purple-500", bg: "bg-purple-50" };
       case "FOLLOWUP_CREATED":
-      case "FOLLOWUP_RESCHEDULED":
-        return { icon: Clock, color: "text-warning", bg: "bg-warning-soft" };
-      default:
-        return { icon: PencilLine, color: "text-muted-foreground", bg: "bg-muted" };
+      case "FOLLOWUP_RESCHEDULED": return { icon: Clock, color: "text-amber-500", bg: "bg-amber-50" };
+      default: return { icon: Activity, color: "text-slate-500", bg: "bg-slate-50" };
     }
   };
 
-  if (!data || data.length === 0) {
-    return (
-      <div className="py-8 text-center text-[13px] text-muted-foreground">
-        No recent activity found. Calls, stage changes and notes will appear here.
-      </div>
-    );
-  }
-
   return (
     <div className="relative">
-      <span className="absolute bottom-4 left-[15px] top-4 w-px bg-border" aria-hidden="true" />
-      <div className="flex flex-col gap-1">
-        {data.map((activity) => {
-          const iconInfo = getIconInfo(activity.type);
-          const Icon = iconInfo.icon;
-          return (
-            <ActionCard
-              key={activity.activityId}
-              href={`/leads?selected=${encodeURIComponent(activity.leadId)}&action=activity`}
-              aria-label={`Open activity for ${cleanLeadName(activity.leadName)}`}
-              className="group relative flex items-start gap-3 rounded-lg p-2.5 transition-colors duration-150 hover:bg-muted/50"
-            >
-              <div
-                className={cn(
-                  "relative z-10 grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-card ring-1 ring-border",
-                  iconInfo.color
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" />
-              </div>
-              <div className="min-w-0 flex-1 pt-0.5 text-[13px]">
-                <p className="leading-snug">
-                  <span className="font-semibold text-foreground hover:underline">
-                    {cleanLeadName(activity.leadName)}
-                  </span>{" "}
-                  <span className="text-muted-foreground">{activity.message}</span>
-                </p>
-                <p className="mt-0.5 text-[11.5px] text-subtle tabular">{activity.createdAt}</p>
-              </div>
-            </ActionCard>
-          );
-        })}
+      {/* Vertical line connecting timeline items */}
+      <div className="absolute bottom-0 left-8 top-4 w-px bg-slate-200" />
+      
+      <div className="flex flex-col gap-2">
+        {data.length === 0 ? (
+          <div className="text-sm text-slate-500 py-4 text-center">No recent activity found.</div>
+        ) : (
+          data.map((activity) => {
+            const iconInfo = getIconInfo(activity.type);
+            return (
+              <ActionCard key={activity.activityId} href={`/leads?selected=${encodeURIComponent(activity.leadId)}&action=activity`} aria-label={`Open activity for ${cleanLeadName(activity.leadName)}`} className="group relative flex items-start gap-3 rounded-lg p-2 transition-colors duration-150 hover:bg-slate-50">
+                <div className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white ${iconInfo.bg} shadow-sm ring-4 ring-white`}>
+                  <iconInfo.icon className={`h-4 w-4 ${iconInfo.color}`} />
+                </div>
+                <div className="min-w-0 flex flex-col pt-1 break-words">
+                  <p className="text-sm font-medium text-slate-900">
+                    {activity.message} <span className="text-slate-500 font-normal">for</span> {cleanLeadName(activity.leadName)}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">{activity.createdAt}</p>
+                </div>
+              </ActionCard>
+            );
+          })
+        )}
       </div>
     </div>
   );

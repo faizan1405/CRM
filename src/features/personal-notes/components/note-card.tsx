@@ -60,12 +60,12 @@ export function NoteCard({
         }
       }}
       aria-label={`Personal note: ${displayTitle}`}
-      className={`group press relative flex flex-col justify-between rounded-2xl border p-4 text-left transition-all duration-200 cursor-pointer outline-none card-surface ${
+      className={`group relative flex flex-col justify-between rounded-2xl border p-4 text-left transition-colors duration-150 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 ${
         isSelected
-          ? "border-primary bg-accent/20 ring-2 ring-primary/30 shadow-sm"
+          ? "border-blue-600 bg-blue-50/40 shadow-sm ring-2 ring-blue-500/20"
           : note.pinned
-          ? "border-border/80 bg-card card-hover"
-          : "border-border bg-card card-hover"
+          ? "border-amber-200/90 bg-amber-50/20 shadow-xs hover:border-amber-300 hover:shadow-md"
+          : "border-slate-200 bg-white shadow-xs hover:border-slate-300 hover:shadow-md"
       } ${className}`}
     >
       {/* Header Row */}
@@ -74,14 +74,14 @@ export function NoteCard({
           <div className="flex items-center gap-2">
             {note.pinned && (
               <span
-                className="inline-flex items-center gap-1 rounded-md bg-accent px-1.5 py-0.5 text-[10px] font-semibold tracking-wider text-accent-foreground"
+                className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-900 border border-amber-200"
                 title="Pinned Note"
               >
-                <Pin size={10} className="fill-primary text-primary" aria-hidden="true" />
+                <Pin size={10} className="fill-amber-700 text-amber-700" aria-hidden="true" />
                 Pinned
               </span>
             )}
-            <h3 className="truncate text-[14px] font-semibold text-foreground">
+            <h3 className="truncate text-sm font-bold text-slate-950">
               {displayTitle}
             </h3>
           </div>
@@ -89,24 +89,24 @@ export function NoteCard({
 
         {/* Action Buttons */}
         <div
-          className="flex shrink-0 items-center gap-0.5"
+          className="flex shrink-0 items-center gap-1"
           onClick={(e) => e.stopPropagation()} // Prevent triggering onOpen
         >
           {/* Pin / Unpin Button */}
           <button
             type="button"
             onClick={() => onTogglePin(note)}
-            className={`grid size-7 place-items-center rounded-lg transition-colors ${
+            className={`grid size-8 place-items-center rounded-lg transition-colors ${
               note.pinned
-                ? "text-primary hover:bg-accent"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "text-amber-600 hover:bg-amber-100"
+                : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
             }`}
             title={note.pinned ? "Unpin note" : "Pin note"}
             aria-label={note.pinned ? `Unpin ${displayTitle}` : `Pin ${displayTitle}`}
           >
             <Pin
-              size={13}
-              className={note.pinned ? "fill-primary text-primary" : ""}
+              size={15}
+              className={note.pinned ? "fill-amber-600 text-amber-600" : ""}
               aria-hidden="true"
             />
           </button>
@@ -115,35 +115,35 @@ export function NoteCard({
           <button
             type="button"
             onClick={() => onEdit(note)}
-            className="grid size-7 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="grid size-8 place-items-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
             title="Edit note"
             aria-label={`Edit ${displayTitle}`}
           >
-            <Edit3 size={13} aria-hidden="true" />
+            <Edit3 size={15} aria-hidden="true" />
           </button>
 
           {/* Delete Button */}
           <button
             type="button"
             onClick={() => onDeleteRequest(note)}
-            className="grid size-7 place-items-center rounded-lg text-muted-foreground hover:bg-danger-soft hover:text-destructive transition-colors"
+            className="grid size-8 place-items-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
             title="Delete note"
             aria-label={`Delete ${displayTitle}`}
           >
-            <Trash2 size={13} aria-hidden="true" />
+            <Trash2 size={15} aria-hidden="true" />
           </button>
         </div>
       </div>
 
       {/* Note Content Preview */}
-      <p className="mt-2.5 line-clamp-3 text-xs text-muted-foreground leading-relaxed break-words whitespace-pre-wrap">
+      <p className="mt-2.5 line-clamp-3 text-xs text-slate-600 leading-relaxed break-words whitespace-pre-wrap">
         {note.content}
       </p>
 
       {/* Tags and Timestamps */}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5 text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1 font-medium">
-          <Clock size={11} aria-hidden="true" />
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100/80 pt-2.5 text-[11px] text-slate-400">
+        <span className="flex items-center gap-1">
+          <Clock size={12} aria-hidden="true" />
           <span>Updated {formatRelativeTime(note.updatedAt || note.createdAt)}</span>
         </span>
 
@@ -152,7 +152,7 @@ export function NoteCard({
             {note.tags.slice(0, 2).map((tag) => (
               <span
                 key={tag}
-                className="rounded-md bg-muted px-1.5 py-0.5 font-medium text-muted-foreground text-[10px]"
+                className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-600 text-[10px]"
               >
                 #{tag}
               </span>
