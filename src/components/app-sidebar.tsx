@@ -2,139 +2,107 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Bell } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { logout } from "@/app/actions/auth";
-import { crmNavigationGroups } from "@/components/crm-navigation";
+import { crmNavigation } from "@/components/crm-navigation";
 import { LiveClock } from "@/components/live-clock";
 import { GlobalSearch } from "@/components/global-search";
 import { CrmRefreshButton } from "@/components/crm-refresh-button";
 import { SyncStatusIndicator } from "@/components/sync-status-indicator";
-import { cn } from "@/lib/utils";
-
-function Logo({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="none" aria-hidden="true">
-      <path d="M4 15c3 0 4-6 8-6s5 6 8 6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-      <path d="M4 9.5c2 0 3-2.5 5-2.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" opacity=".45" />
-    </svg>
-  );
-}
 
 export function AppSidebar() {
   const pathname = usePathname();
 
-  const isActive = (href: string) => {
-    return href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
-  };
-
   return (
-    <aside className="sticky top-0 hidden h-dvh w-[244px] shrink-0 flex-col bg-sidebar text-sidebar-foreground lg:flex select-none">
-      {/* Brand Header */}
-      <div className="flex items-center gap-2.5 px-4 pb-3 pt-5">
-        <Link
-          href="/dashboard"
-          className="group flex items-center gap-2.5 text-sidebar-accent-foreground transition-opacity hover:opacity-95"
-          aria-label="Scale Flow CRM dashboard"
-        >
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground shadow-sm">
-            <Logo className="h-4 w-4" />
-          </span>
-          <span className="text-[14px] font-semibold tracking-tight text-sidebar-accent-foreground">Scale Flow</span>
-        </Link>
-        <span className="rounded border border-sidebar-border px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-sidebar-foreground/70">
-          CRM
-        </span>
-        <div className="ml-auto flex items-center gap-1">
+    <aside className="sticky top-0 hidden h-dvh w-68 shrink-0 flex-col bg-[var(--sidebar)] px-4 py-5 lg:flex">
+      <header className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
           <Link
-            href="/settings?tab=notifications"
-            className="press grid h-7 w-7 place-items-center rounded-lg text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            title="Notifications"
-            aria-label="Notifications"
+            href="/dashboard"
+            className="group flex items-center gap-3 rounded-xl px-1.5 py-1 text-white transition-opacity hover:opacity-95"
+            aria-label="Scale Flow CRM dashboard"
           >
-            <Bell className="h-3.5 w-3.5" />
+            <span className="grid size-9 place-items-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-bold text-white shadow-md shadow-blue-950/40 ring-1 ring-white/20">
+              SF
+            </span>
+            <span className="leading-tight">
+              <span className="block text-[0.95rem] font-bold tracking-tight text-white">Scale Flow</span>
+              <span className="inline-flex items-center gap-1 rounded bg-blue-500/10 px-1.5 py-0.2 text-[10px] font-semibold uppercase tracking-wider text-blue-400 border border-blue-500/20">
+                CRM
+              </span>
+            </span>
           </Link>
           <CrmRefreshButton variant="desktop" />
         </div>
-      </div>
+        <div className="rounded-xl border border-white/5 bg-slate-900/60 p-2.5 shadow-inner flex flex-col gap-1">
+          <LiveClock />
+          <SyncStatusIndicator variant="desktop" />
+        </div>
+        <div className="mt-0.5">
+          <GlobalSearch trigger="desktop" />
+        </div>
+      </header>
 
-      {/* Global Search */}
-      <div className="px-3 pt-1">
-        <GlobalSearch trigger="desktop" />
-      </div>
-
-      {/* Live status rail */}
-      <div className="mx-3 mt-2.5 flex flex-col gap-1 rounded-lg border border-sidebar-border bg-sidebar-accent/30 px-2.5 py-1.5 text-[11.5px]">
-        <LiveClock />
-        <SyncStatusIndicator variant="desktop" />
-      </div>
-
-      {/* Navigation Groups */}
-      <nav aria-label="Primary navigation" className="mt-3.5 flex-1 space-y-4 overflow-y-auto px-3">
-        {crmNavigationGroups.map((group) => (
-          <div key={group.label}>
-            <div className="px-2.5 pb-1 text-[10.5px] font-medium uppercase tracking-[0.08em] text-sidebar-foreground/45">
-              {group.label}
-            </div>
-            <div className="space-y-px">
-              {group.items.map((item) => {
-                const active = isActive(item.href);
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "group relative flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium transition-colors duration-200",
-                      active
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_var(--sidebar-border)]"
-                        : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "absolute -left-3 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-r bg-sidebar-primary transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                        active ? "opacity-100" : "scale-y-0 opacity-0"
-                      )}
-                      aria-hidden="true"
-                    />
-                    <Icon
-                      className={cn(
-                        "h-4 w-4 shrink-0 transition-colors duration-200",
-                        active ? "text-sidebar-primary" : "text-sidebar-foreground/70 group-hover:text-sidebar-accent-foreground"
-                      )}
-                      strokeWidth={1.8}
-                    />
-                    <span className="truncate">{item.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+      <nav aria-label="Primary navigation" className="mt-6 flex flex-1 flex-col gap-1 overflow-y-auto pr-0.5">
+        {crmNavigation.map((item) => {
+          const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={isActive ? "page" : undefined}
+              className={`group relative flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-all duration-150 ${
+                isActive
+                  ? "bg-gradient-to-r from-blue-600/25 to-blue-500/10 text-white font-semibold shadow-sm shadow-black/20"
+                  : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
+              }`}
+            >
+              {isActive && (
+                <span
+                  className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)]"
+                  aria-hidden="true"
+                />
+              )}
+              <Icon
+                aria-hidden="true"
+                className={`shrink-0 transition-colors ${
+                  isActive ? "text-blue-400" : "text-slate-400 group-hover:text-slate-200"
+                }`}
+                size={18}
+                strokeWidth={isActive ? 2.2 : 1.8}
+              />
+              <span className="truncate">{item.label}</span>
+            </Link>
+          );
+        })}
       </nav>
 
-      {/* User & Logout Footer */}
-      <div className="border-t border-sidebar-border p-3">
-        <div className="flex items-center gap-2.5 rounded-lg px-1.5 py-1">
-          <span className="grid h-7 w-7 place-items-center rounded-full bg-sidebar-accent text-[11px] font-semibold text-sidebar-accent-foreground ring-1 ring-sidebar-border">
-            F
-          </span>
-          <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-[13px] font-medium text-sidebar-accent-foreground">Faizan</div>
-            <div className="truncate text-[11.5px] text-sidebar-foreground/60">Scale Flow Admin</div>
+      <div className="border-t border-white/10 pt-3">
+        <div className="flex items-center gap-3 rounded-xl px-2 py-1.5 hover:bg-white/[0.04] transition-colors">
+          <div className="relative shrink-0">
+            <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-slate-700 to-slate-800 text-sm font-bold text-slate-100 ring-1 ring-white/10 shadow-inner">
+              F
+            </span>
+            <span
+              className="absolute bottom-0 right-0 size-2.5 rounded-full bg-emerald-500 ring-2 ring-[var(--sidebar)]"
+              title="Online"
+            />
           </div>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="press grid h-7 w-7 place-items-center rounded-lg text-sidebar-foreground/60 transition-colors hover:bg-rose-500/15 hover:text-rose-400 cursor-pointer"
-              title="Logout"
-              aria-label="Logout"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-            </button>
-          </form>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-slate-100 leading-tight">Faizan</p>
+            <p className="truncate text-[11px] font-medium text-slate-400">Scale Flow Admin</p>
+          </div>
         </div>
+        <form action={logout}>
+          <button
+            type="submit"
+            className="mt-1 flex min-h-9 w-full items-center gap-2.5 rounded-xl px-3 text-xs font-semibold text-slate-400 transition-colors hover:bg-rose-500/10 hover:text-rose-400 cursor-pointer"
+          >
+            <LogOut aria-hidden="true" size={16} strokeWidth={1.8} />
+            <span>Logout</span>
+          </button>
+        </form>
       </div>
     </aside>
   );

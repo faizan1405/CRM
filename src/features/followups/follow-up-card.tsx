@@ -96,52 +96,17 @@ export function FollowUpCard({
     ? (statusFromDatabase[rawLeadStatus as keyof typeof statusFromDatabase] ?? rawLeadStatus)
     : null;
 
-  const railColor = timingKey === "Overdue" ? "bg-destructive" : timingKey === "Today" ? "bg-primary" : "bg-border";
-
   return (
     <ActionCard
       onActivate={onOpenLead}
       aria-label={`Open follow-up context for ${followUp.lead?.name || "lead"}`}
-      className={`group relative overflow-hidden rounded-2xl border border-border bg-card p-4 transition-all duration-200 card-hover ${
+      className={`rounded-2xl border ${status.cardBg} ${status.leftBorder} ${status.hoverBorder} border-slate-200/90 p-4 shadow-sm hover:shadow-md transition-all duration-200 ${
         isPast ? "opacity-95" : ""
       }`}
     >
-      {/* Visual Accent Rail */}
-      <span className={`absolute bottom-0 left-0 top-0 w-1 ${railColor}`} />
-
-      {/* Top: Checkbox, Name, Status badges */}
-      <div className="flex items-start justify-between gap-2.5 pl-2">
-        <div className="flex items-start gap-2.5 min-w-0 flex-1">
-          {onComplete && (
-            followUp.status === "Completed" ? (
-              <button
-                type="button"
-                aria-label="Move back to pending"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onReschedule();
-                }}
-                className="press grid h-6 w-6 shrink-0 place-items-center rounded-full text-muted-foreground ring-1 ring-inset ring-input hover:text-foreground mt-0.5"
-              >
-                <CalendarClock className="h-3 w-3" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                aria-label="Mark completed"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onComplete();
-                }}
-                className="press group/c grid h-6 w-6 shrink-0 place-items-center rounded-full ring-1 ring-inset ring-input transition-all duration-200 hover:bg-accent hover:ring-primary mt-0.5"
-              >
-                <svg className="h-3.5 w-3.5 scale-0 text-primary transition-transform duration-200 group-hover/c:scale-100" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </button>
-            )
-          )}
-
+      {/* Top: Lead name, timing badge, canonical status */}
+      <div className="flex items-start justify-between gap-2.5">
+        <div className="flex items-start gap-1.5 min-w-0 flex-1">
           {onTogglePin && (
             <button
               type="button"
@@ -151,21 +116,20 @@ export function FollowUpCard({
               }}
               aria-label={followUp.lead?.isPinned ? `Unpin ${followUp.lead?.name}` : `Pin ${followUp.lead?.name}`}
               title={followUp.lead?.isPinned ? "Unpin lead" : "Pin lead"}
-              className="press inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10 active:scale-95 transition-all shrink-0 mt-0.5 cursor-pointer"
+              className="inline-flex min-h-[30px] min-w-[30px] items-center justify-center p-1 rounded-md text-slate-300 hover:text-amber-500 hover:bg-amber-50 active:scale-95 transition-all shrink-0 -mt-0.5 cursor-pointer"
             >
               <Star
-                size={14}
-                className={followUp.lead?.isPinned ? "fill-amber-400 text-amber-500" : "text-muted-foreground hover:text-amber-500"}
+                size={16}
+                className={followUp.lead?.isPinned ? "fill-amber-400 text-amber-500" : "text-slate-300 hover:text-amber-500"}
               />
             </button>
           )}
-
           <div className="min-w-0 flex-1">
-            <h3 className="truncate font-semibold text-foreground text-[14.5px] leading-snug">
+            <h3 className="truncate font-semibold text-slate-900 text-[15.5px] leading-snug">
               {cleanLeadName(followUp.lead?.name) || "Unknown"}
             </h3>
             {followUp.lead?.business && (
-              <p className="truncate text-xs text-muted-foreground mt-0.5">
+              <p className="truncate text-xs text-slate-500 mt-0.5">
                 {followUp.lead.business}
               </p>
             )}
@@ -175,23 +139,24 @@ export function FollowUpCard({
         <div className="flex shrink-0 items-center gap-1.5 flex-wrap justify-end">
           {canonicalStatus && (
             <span
-              className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
-                canonicalStatusStyles[canonicalStatus] ?? "bg-muted text-muted-foreground ring-border"
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                canonicalStatusStyles[canonicalStatus] ?? "bg-slate-100 text-slate-700 ring-slate-200"
               }`}
             >
               {canonicalStatus}
             </span>
           )}
           <span
-            className={`inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${status.badgeClass}`}
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${status.badgeClass}`}
           >
             {status.label}
           </span>
         </div>
       </div>
 
-      {/* Middle: Schedule, Type & Phone */}
-      <div className="mt-2.5 flex flex-col gap-2 pl-2">
+      {/* Middle: phone number, follow-up date/time, follow-up type, short latest meaningful note */}
+      <div className="mt-2.5 flex flex-col gap-2">
+        {/* Schedule, Type & Phone */}
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-xs">
           {followUp.lead?.phone ? (
             <a
@@ -200,20 +165,20 @@ export function FollowUpCard({
                 e.stopPropagation();
                 onCall();
               }}
-              className="inline-flex items-center gap-1.5 font-medium text-foreground hover:text-primary transition-colors"
+              className="inline-flex items-center gap-1.5 font-medium text-slate-700 hover:text-blue-600 transition-colors"
               aria-label={`Call ${followUp.lead.phone}`}
             >
-              <Phone aria-hidden="true" size={13} className="text-muted-foreground" />
-              <span className="tabular">{followUp.lead.phone}</span>
+              <Phone aria-hidden="true" size={13} className="text-slate-400" />
+              <span>{followUp.lead.phone}</span>
             </a>
           ) : (
-            <span className="text-muted-foreground text-xs italic">No phone</span>
+            <span className="text-slate-400 text-xs italic">No phone</span>
           )}
 
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <span className="inline-flex items-center gap-1 font-medium text-foreground tabular">
-              <CalendarClock aria-hidden="true" size={13} className="text-muted-foreground" />
-              <span>{formatFollowUpDate(followUp.scheduledAt)} · {formatTime(followUp.scheduledAt)}</span>
+          <div className="flex items-center gap-2 text-slate-600">
+            <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+              <CalendarClock aria-hidden="true" size={13} className="text-slate-400" />
+              <span>{formatFollowUpDate(followUp.scheduledAt)} &middot; {formatTime(followUp.scheduledAt)}</span>
             </span>
             <span
               className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${typeInfo.bg} ${typeInfo.text}`}
@@ -226,7 +191,7 @@ export function FollowUpCard({
 
         {/* Short latest meaningful note */}
         {displayNote ? (
-          <div className="rounded-lg bg-muted/60 border border-border/60 px-2.5 py-1.5 text-xs text-muted-foreground leading-relaxed">
+          <div className="rounded-lg bg-slate-900/[0.03] border border-slate-900/[0.05] px-2.5 py-1.5 text-xs text-slate-600 leading-relaxed">
             <p className="line-clamp-2" title={displayNote}>
               {displayNote}
             </p>
@@ -234,10 +199,10 @@ export function FollowUpCard({
         ) : null}
       </div>
 
-      {/* Bottom Actions: Call, WhatsApp, Reschedule */}
+      {/* Bottom: Call, WhatsApp, Reschedule */}
       {timingKey !== "Cancelled" ? (
         <div
-          className="mt-3 flex items-center gap-2 border-t border-border/60 pt-2.5 pl-2"
+          className="mt-3 flex items-center gap-2 border-t border-slate-100/90 pt-2.5"
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -246,7 +211,7 @@ export function FollowUpCard({
               e.preventDefault();
               onCall();
             }}
-            className="flex-1 press inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-ink px-3 text-[12px] font-medium text-ink-foreground hover:opacity-90 cursor-pointer"
+            className="flex-1 inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl bg-blue-50/80 text-blue-700 text-xs font-semibold hover:bg-blue-100/90 active:bg-blue-200 transition-colors border border-blue-200/60 cursor-pointer"
             aria-label={`Call ${followUp.lead?.name || "lead"}`}
           >
             <Phone aria-hidden="true" size={13} />
@@ -258,7 +223,7 @@ export function FollowUpCard({
               e.preventDefault();
               onWhatsApp();
             }}
-            className="flex-1 press inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-whatsapp px-3 text-[12px] font-medium text-whatsapp-foreground hover:opacity-90 cursor-pointer"
+            className="flex-1 inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl bg-emerald-50/80 text-emerald-700 text-xs font-semibold hover:bg-emerald-100/90 active:bg-emerald-200 transition-colors border border-emerald-200/60 cursor-pointer"
             aria-label={`WhatsApp ${followUp.lead?.name || "lead"}`}
           >
             <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
@@ -272,38 +237,22 @@ export function FollowUpCard({
               e.preventDefault();
               onReschedule();
             }}
-            className="flex-1 press inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-3 text-[12px] font-medium text-foreground hover:bg-muted cursor-pointer"
+            className="flex-1 inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-slate-200/90 bg-white text-slate-700 text-xs font-semibold hover:bg-slate-50 active:bg-slate-100 transition-colors shadow-2xs cursor-pointer"
             aria-label={`Reschedule follow-up for ${followUp.lead?.name || "lead"}`}
           >
-            <CalendarClock aria-hidden="true" size={13} className="text-muted-foreground" />
+            <CalendarClock aria-hidden="true" size={13} className="text-slate-500" />
             <span>Reschedule</span>
           </button>
-          {onCancel && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                onCancel();
-              }}
-              title="Cancel follow-up"
-              className="press grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive cursor-pointer"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          )}
         </div>
       ) : (
-        <div className="mt-3 border-t border-border/60 pt-2.5 pl-2" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-3 border-t border-slate-100/90 pt-2.5" onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
             onClick={(e) => {
               e.preventDefault();
               onOpenLead();
             }}
-            className="w-full press inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-card text-xs font-semibold text-foreground hover:bg-muted"
+            className="w-full inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg border border-slate-200/90 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 active:bg-slate-100 transition-colors shadow-sm"
           >
             Open Lead
           </button>
